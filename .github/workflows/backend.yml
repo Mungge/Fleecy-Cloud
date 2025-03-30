@@ -1,0 +1,40 @@
+name: Backend CI
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - "backend/**" # backend 디렉토리 내의 모든 파일이 변경될 때 실행
+  pull_request:
+    branches:
+      - main
+    paths:
+      - "backend/**" # backend 디렉토리 내의 모든 파일이 변경될 때 실행
+
+jobs:
+  build:
+    name: Build & Verify
+    runs-on: ubuntu-latest
+
+    defaults:
+      run:
+        working-directory: ./backend # backend 디렉토리에서 실행
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3 # Github 저장소 코드를 워크플로우 환경으로 체크아웃
+
+      - name: Set up Go
+        uses: actions/setup-go@v4 # Go 환경 설정
+        with:
+          go-version: "1.23.3" # Go 버전 설정
+          cache: "true" # Go 모듈 캐싱으로 의존성 설치 속도 향상
+          cache-dependency-path: ./backend/go.mod # 캐시할 의존성 경로 설정
+      - name: Install dependencies
+        run: go mod download # Go 모듈 의존성 설치
+
+      - name: Vet
+        run: go vet ./... # Go 코드 정적 분석 도구 실행
+
+      - name: Build
+        run: go build ./... # Go 프로젝트 빌드

@@ -1,0 +1,47 @@
+name: Frontend CI # 워크플로우 이름
+
+# 각 워크 플로우가 실행될 트리거 조건 설정
+on:
+  push:
+    branches:
+      - main # main 브랜치에 푸시될 때 실행
+    paths:
+      - "frontend/**" # frontend 디렉토리 내의 모든 파일이 변경될 때 실행
+  pull_request: # PR이 열리거나 변경되었을 때 실행
+    branches:
+      - main # main 브랜치에 PR이 열리거나 변경될 때 실행
+    paths:
+      - "frontend/**"
+
+jobs: # 워크플로우에서 수행할 작업들의 모음
+  build: # build라는 이름의 job(식별용)
+    runs-on: ubuntu-latest # Github가 제공하는 Ubuntu 가성 머신에서 실행됨
+
+    defaults: # 작업 디렉토리 지정(이후 모든 run은 이 폴더 기준으로 실행됨)
+      run:
+        working-directory: frontend # frontend 디렉토리에서 실행
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3 # Github 저장소 코드를 워크플로우 환경으로 체크아웃
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4 # Node.js 환경 설정
+        with:
+          node-version: "22.11" # Node.js 버전 설정
+          cache: "npm" # npm 캐싱으로 의존성 설치 속도 향상
+          cache-dependency-path: ./frontend/package-lock.json # 캐시할 의존성 경로 설정
+
+      - name: Install dependencies
+        run: npm ci # package-lock.json에 정의된 의존성 설치
+
+      - name: Lint check
+        run: npm run lint # ESLint로 코드 스타일 검사
+
+      - name: Build
+        run: npm run build # 프로젝트 빌드
+
+
+      # 테스트 코드 작성 후 활성화
+      # - name: Run tests
+      #   run: npm test # Jest 등으로 단위/통합 테스트 실행
