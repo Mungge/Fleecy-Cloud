@@ -1,3 +1,6 @@
+// src/components/dashboard/layout/sidebar.tsx 수정본
+// 기존 sidebar.tsx 파일에 다음 변경사항을 적용해야 합니다
+
 import React from "react";
 import {
 	Activity,
@@ -8,6 +11,7 @@ import {
 	Settings,
 	Users,
 	X,
+	Calculator, // 추가: 리소스 추정을 위한 아이콘
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
@@ -52,6 +56,17 @@ const Sidebar: React.FC<SidebarProps> = ({
 						<Activity className="h-5 w-5 mr-2" />
 						{isSidebarOpen && <span>대시보드</span>}
 					</Button>
+
+					{/* Aggregator Menu */}
+					<Button
+						variant={activeTab === "aggregator" ? "secondary" : "ghost"}
+						className="w-full justify-start mb-1"
+						onClick={() => setActiveTab("aggregator")}
+					>
+						<Calculator className="h-5 w-5 mr-2" />
+						{isSidebarOpen && <span>Aggregator</span>}
+					</Button>
+
 					<Button
 						variant={activeTab === "data" ? "secondary" : "ghost"}
 						className="w-full justify-start mb-1"
