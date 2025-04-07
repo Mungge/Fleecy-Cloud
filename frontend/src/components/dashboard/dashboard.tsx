@@ -1,5 +1,6 @@
 "use client";
 
+import dynamic from "next/dynamic";
 import React, { useState } from "react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
@@ -13,7 +14,14 @@ import {
 // 분리된 컴포넌트 import
 import Sidebar from "./layout/sidebar";
 import Header from "./layout/header";
-import OverviewContent from "./overview/overview-content";
+
+const OverviewContent = dynamic(() => import("./overview/overview-content"), {
+	ssr: false,
+});
+const AggregatorContent = dynamic(
+	() => import("./aggregator/aggregator-content"),
+	{ ssr: false }
+);
 
 const Dashboard = () => {
 	const [isSidebarOpen, setIsSidebarOpen] = useState(true);
@@ -38,14 +46,20 @@ const Dashboard = () => {
 				<main className="flex-1 overflow-auto p-6">
 					<Tabs defaultValue="overview" className="space-y-4">
 						<TabsList>
-							<TabsTrigger value="overview">개요</TabsTrigger>
-							<TabsTrigger value="models">모델</TabsTrigger>
-							<TabsTrigger value="resources">자원</TabsTrigger>
-							<TabsTrigger value="activity">활동</TabsTrigger>
+							<TabsTrigger value="overview">Overview</TabsTrigger>
+							<TabsTrigger value="aggregator">Aggregator</TabsTrigger>
+							<TabsTrigger value="models">Models</TabsTrigger>
+							<TabsTrigger value="resources">Resources</TabsTrigger>
+							<TabsTrigger value="activity">Activity</TabsTrigger>
 						</TabsList>
 
 						<TabsContent value="overview">
 							<OverviewContent />
+						</TabsContent>
+
+						{/* Aggregator 탭 콘텐츠 추가 */}
+						<TabsContent value="aggregator">
+							<AggregatorContent />
 						</TabsContent>
 
 						<TabsContent value="models">
