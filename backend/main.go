@@ -6,9 +6,10 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/gorilla/mux"
+	"github.com/Jeon-Jinhyeok/Fleecy-Cloud/handlers"
+	"github.com/gin-contrib/cors"
+	"github.com/gin-gonic/gin"
 	"github.com/prometheus/client_golang/prometheus"
-	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracehttp"
@@ -177,25 +178,25 @@ func main() {
 	}()
 	
 	// 라우터 설정
-	r := mux.NewRouter()
+	router := gin.Default()
+
+	router.Use(cors.New(cors.Config{
+		AllowOrigins: 	 []string{"http://localhost:3001"},
+		AllowMethods:    []string{"GET", "POST", "PUT", "DELETE"},
+		AllowHeaders:    []string{"Origin", "Content-Type", "Authorization", "Accept"},
+		ExposeHeaders:   []string{"Content-Length"},
+		AllowCredentials: true,
+		MaxAge:          12 * time.Hour,
+	}))
 	
-	// 메트릭 엔드포인트
-	r.Handle("/metrics", promhttp.Handler())
-	
-	// API 엔드포인트
-	api := r.PathPrefix("/api").Subrouter()
-	api.Use(metricsMiddleware)
-	
-	// 실제 API 엔드포인트 정의
-	api.HandleFunc("/start-learning", func(w http.ResponseWriter, r *http.Request) {
-		simulateFederatedLearningRound(r.Context())
-		w.WriteHeader(http.StatusOK)
-		w.Write([]byte("Learning round started"))
-	}).Methods("POST")
-	
-	// 서버 시작
-	log.Println("Starting server on :8080")
-	if err := http.ListenAndServe(":8080", r); err != nil {
-		log.Fatalf("Server failed: %v", err)
+	aggregator := router.Group("/aggregator")
+	{
+		aggregator.POST("/estimate", handlers.EstimateHandler)
+		aggregator.POST("/recommend", handlers.RecommendHandler)
+	}
+
+	log.Println("🚀 Server running on :8080")
+	if err := router.Run(":8080"); err != nil{
+		log.Fatalf("❌ Failed to start server: %v", err)
 	}
 }
