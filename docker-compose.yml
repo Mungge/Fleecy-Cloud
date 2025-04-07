@@ -1,6 +1,56 @@
 version: "3.8"
-
 services:
+  # 백엔드 서비스
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    ports:
+      - "8080:8080"
+    environment:
+      - JAEGER_ENDPOINT=http://jaeger:4318
+      - PROMETHEUS_ENDPOINT=http://prometheus:9090
+    networks:
+      - monitoring
+    restart: always
+    depends_on:
+      - jaeger
+      - prometheus
+
+  # 프론트엔드 서비스
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    ports:
+      - "3001:3000" # 3000번 포트는 Grafana가 사용하므로 3001로 매핑
+    environment:
+      - BACKEND_URL=http://backend:8080
+    networks:
+      - monitoring
+    restart: always
+    depends_on:
+      - backend
+
+  # Node Exporter (호스트 시스템 모니터링)
+  node-exporter:
+    image: quay.io/prometheus/node-exporter:latest
+    container_name: node-exporter
+    restart: unless-stopped
+    volumes:
+      - /proc:/host/proc:ro
+      - /sys:/host/sys:ro
+      - /:/rootfs:ro
+    command:
+      - "--path.procfs=/host/proc"
+      - "--path.rootfs=/rootfs"
+      - "--path.sysfs=/host/sys"
+      - "--collector.filesystem.mount-points-exclude=^/(sys|proc|dev|host|etc)($$|/)"
+    ports:
+      - "9101:9100"
+    networks:
+      - monitoring
+
   # Jaeger
   jaeger:
     image: jaegertracing/all-in-one:latest
