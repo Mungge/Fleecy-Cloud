@@ -10,7 +10,7 @@ scrape_configs:
   - job_name: "backend"
     metrics_path: /metrics
     static_configs:
-      - targets: ["backend:8080"] # 백엔드 서비스 이름과 포트를 조정하세요
+      - targets: ["localhost:8080"] # 백엔드 서비스 이름과 포트를 조정하세요
 
   # Node Exporter 설정 (호스트 시스템 메트릭)
   - job_name: "node-exporter"
