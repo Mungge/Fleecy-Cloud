@@ -41,3 +41,14 @@ yarn-error.log*
 next-env.d.ts
 
 */*venv
+
+simulator/results
+simulatore/.venv
+simulator/*/__pycache__/
+simulator/__pycache__
+simulator/*.pyc
+simulator/*.pyo
+simulator/data
+
+simulator/*.png
+simulator/*.sh
