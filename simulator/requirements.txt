@@ -1,0 +1,9 @@
+flwr==1.8.0
+torch==2.2.1
+torchvision==0.17.1
+numpy==1.26.4
+matplotlib==3.8.3
+pandas==2.2.1
+psutil==5.9.8
+scikit-learn==1.4.2
+seaborn==0.12.2

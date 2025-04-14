@@ -1,0 +1,78 @@
+services:
+  server:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: fl-server
+    ports:
+      - "9090:9090" # Flower 서버 포트
+    volumes:
+      - ./results:/app/results # 결과 저장 디렉토리 마운트
+    environment:
+      - AGGREGATOR_TYPE=${AGGREGATOR_TYPE}
+      - NUM_ROUNDS=${NUM_ROUNDS}
+      - MIN_CLIENTS=${MIN_CLIENTS}
+    command: python server.py
+    cpus: 4.0 # CPU 제한 설정
+    mem_limit: 8g # 메모리 제한
+
+  client1:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: fl-client1
+    depends_on:
+      - server
+    volumes:
+      - ./results:/app/results
+    environment:
+      - CLIENT_ID=1
+      - SERVER_ADDRESS=server:9090
+      - DATASET_PARTITION=0
+    command: python client.py
+
+  client2:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: fl-client2
+    depends_on:
+      - server
+    volumes:
+      - ./results:/app/results
+    environment:
+      - CLIENT_ID=2
+      - SERVER_ADDRESS=server:9090
+      - DATASET_PARTITION=1
+    command: python client.py
+
+  client3:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: fl-client3
+    depends_on:
+      - server
+    volumes:
+      - ./results:/app/results
+    environment:
+      - CLIENT_ID=3
+      - SERVER_ADDRESS=server:9090
+      - DATASET_PARTITION=2
+    command: python client.py
+
+  monitoring:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: fl-monitoring
+    depends_on:
+      - server
+      - client1
+      - client2
+      - client3
+    volumes:
+      - ./results:/app/results
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    command: python -m monitoring.monitor
+    privileged: true # Docker 컨테이너 메트릭에 접근하기 위해 필요
