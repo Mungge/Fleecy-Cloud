@@ -8,27 +8,22 @@ import flwr as fl
 from collections import OrderedDict
 from pathlib import Path
 
-from model import Net
+from model import ResNet152Model
 from data_loader import load_cifar10_partition
-from monitoring.monitor import CPUMonitor
 
 # 환경 변수 가져오기
 CLIENT_ID = int(os.environ.get("CLIENT_ID", "0"))
-SERVER_ADDRESS = os.environ.get("SERVER_ADDRESS", "localhost:9090")
+SERVER_ADDRESS = os.environ.get("SERVER_ADDRESS", "localhost:8080")
 DATASET_PARTITION = int(os.environ.get("DATASET_PARTITION", "0"))
 RESULTS_DIR = os.environ.get("RESULTS_DIR", "./results")
 
 # 결과 디렉토리 생성
 Path(RESULTS_DIR).mkdir(parents=True, exist_ok=True)
 
-# CPU 모니터링 인스턴스 초기화
-cpu_monitor = CPUMonitor(
-    container_name=f"fl-client{CLIENT_ID}",
-    output_file=f"{RESULTS_DIR}/client{CLIENT_ID}_cpu.csv"
-)
-
 # 학습 설정
 DEVICE = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
+print(f"Using device: {DEVICE}")
+
 BATCH_SIZE = 32
 EPOCHS = 1  # 클라이언트당 1 에폭만 학습
 
@@ -82,7 +77,7 @@ class FlowerClient(fl.client.NumPyClient):
         self.testloader = testloader
     
     def get_parameters(self, config):
-        """모델 파라미터를 넘파이 배열 형태로 반환"""
+        """모델 파라미터를 numpy 배열 형태로 반환"""
         return [val.cpu().numpy() for _, val in self.net.state_dict().items()]
     
     def set_parameters(self, parameters):
@@ -107,8 +102,6 @@ def main():
     """Flower 클라이언트 시작"""
     print(f"Starting client {CLIENT_ID} - connecting to server at {SERVER_ADDRESS}")
     
-    # CPU 모니터링 시작
-    cpu_monitor.start()
     
     # 데이터셋 로드
     trainloader, testloader = load_cifar10_partition(
@@ -118,7 +111,7 @@ def main():
     )
     
     # 모델 초기화
-    net = Net().to(DEVICE)
+    net = ResNet152Model.to(DEVICE)
     
     # Flower 클라이언트 생성 및 시작
     client = FlowerClient(net, trainloader, testloader)
@@ -127,9 +120,6 @@ def main():
         client=client.to_client(),
         grpc_max_message_length=1024*1024*1024  # 1GB
     )
-    
-    # CPU 모니터링 중지
-    cpu_monitor.stop()
 
 if __name__ == "__main__":
     main()

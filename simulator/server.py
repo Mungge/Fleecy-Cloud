@@ -20,6 +20,8 @@ RESULTS_DIR = os.environ.get("RESULTS_DIR", "./results")
 # 결과 디렉토리 생성
 Path(RESULTS_DIR).mkdir(parents=True, exist_ok=True)
 
+timing_file = f"{RESULTS_DIR}/server_timing_{AGGREGATOR_TYPE}.csv"
+
 # CPU 모니터링 인스턴스 초기화
 cpu_monitor = CPUMonitor(
     container_name="fl-server",
@@ -109,13 +111,21 @@ def main():
     # 서버 전략 설정
     strategy = get_aggregator_strategy()
     
+    start_time = time.time()
     # Flower 서버 설정 및 시작
     fl.server.start_server(
-        server_address="0.0.0.0:9090",
+        server_address="0.0.0.0:8080",
         config=fl.server.ServerConfig(num_rounds=NUM_ROUNDS),
         strategy=strategy,
         grpc_max_message_length=1024*1024*1024,  # 1GB
     )
+    
+    end_time = time.time()
+    elapsed_time = end_time - start_time
+    print(f"Total server time: {elapsed_time:.2f} seconds")
+    
+    with open(f"{RESULTS_DIR}/server_timing_{AGGREGATOR_TYPE}.csv", "a") as f:
+        f.write(f"{AGGREGATOR_TYPE},{NUM_ROUNDS},{MIN_CLIENTS},{elapsed_time:.2f}\n")
     
     # CPU 모니터링 중지
     cpu_monitor.stop()

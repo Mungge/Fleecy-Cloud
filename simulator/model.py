@@ -1,23 +1,16 @@
-import torch
 import torch.nn as nn
-import torch.nn.functional as F
+from torchvision import models
 
-class Net(nn.Module):
-    """간단한 CNN 모델 정의"""
-    def __init__(self):
-        super(Net, self).__init__()
-        self.conv1 = nn.Conv2d(3, 6, 5)
-        self.pool = nn.MaxPool2d(2, 2)
-        self.conv2 = nn.Conv2d(6, 16, 5)
-        self.fc1 = nn.Linear(16 * 5 * 5, 120)
-        self.fc2 = nn.Linear(120, 84)
-        self.fc3 = nn.Linear(84, 10)
-
+class ResNet152Model(nn.Module):
+    """ResNet152"""
+    def __init__(self, num_classes=10):
+        super(ResNet152Model, self).__init__()
+        # 사전 학습된 ResNet152 모델 로드
+        self.model = models.resnet152(weights=None, num_classes=100)
+        
+        # 마지막 fully connected 레이어 변경
+        in_features = self.model.fc.in_features
+        self.model.fc = nn.Linear(in_features, num_classes)
+    
     def forward(self, x):
-        x = self.pool(F.relu(self.conv1(x)))
-        x = self.pool(F.relu(self.conv2(x)))
-        x = x.view(-1, 16 * 5 * 5)
-        x = F.relu(self.fc1(x))
-        x = F.relu(self.fc2(x))
-        x = self.fc3(x)
-        return x
+        return self.model(x)
