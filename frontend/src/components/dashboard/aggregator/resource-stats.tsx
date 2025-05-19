@@ -20,16 +20,16 @@ const ResourceStats: React.FC<ResourceStatsProps> = ({ estimationResult }) => {
 	const chartData = [
 		{
 			name: "리소스 요구사항",
-			RAM: estimationResult.ram_mb,
+			RAM: estimationResult.ram_gb * 10,
 			CPU: estimationResult.cpu_percent,
 			Network: estimationResult.net_mb_per_second * 10, // 시각화를 위해 확대
 		},
 	];
 
-	// 리소스 상태에 따른 색상 (상태에 따라 색상을 다르게 할 수 있습니다)
+	// 리소스 상태에 따른 색상
 	const getStatusColor = (type: string, value: number) => {
 		if (type === "RAM") {
-			return value > 8192 ? "text-yellow-500" : "text-green-500";
+			return value > 8 ? "text-yellow-500" : "text-green-500";
 		} else if (type === "CPU") {
 			return value > 80 ? "text-yellow-500" : "text-green-500";
 		} else {
@@ -49,15 +49,15 @@ const ResourceStats: React.FC<ResourceStatsProps> = ({ estimationResult }) => {
 						<span
 							className={`text-2xl font-bold ${getStatusColor(
 								"RAM",
-								estimationResult.ram_mb
+								estimationResult.ram_gb
 							)}`}
 						>
-							{estimationResult.ram_mb.toLocaleString()}
+							{estimationResult.ram_gb.toLocaleString()}
 						</span>
-						<span className="text-sm ml-1 text-muted-foreground">MB</span>
+						<span className="text-sm ml-1 text-muted-foreground">GB</span>
 					</div>
 					<div className="mt-1 text-xs text-muted-foreground">
-						{estimationResult.ram_mb > 8192
+						{estimationResult.ram_gb > 8
 							? "높은 메모리 요구량"
 							: "적절한 메모리 요구량"}
 					</div>
@@ -120,7 +120,9 @@ const ResourceStats: React.FC<ResourceStatsProps> = ({ estimationResult }) => {
 							<YAxis />
 							<Tooltip
 								formatter={(value, name) => {
-									if (name === "RAM") return `${value.toLocaleString()} MB`;
+									if (name === "RAM") {
+										return `${((value as number) / 10).toLocaleString()} GB`;
+									}
 									if (name === "CPU") return `${value}%`;
 									if (name === "Network")
 										return `${(value as number) / 10} MB/s`;
@@ -128,7 +130,7 @@ const ResourceStats: React.FC<ResourceStatsProps> = ({ estimationResult }) => {
 								}}
 							/>
 							<Legend />
-							<Bar dataKey="RAM" fill="var(--chart-1)" name="RAM (MB)" />
+							<Bar dataKey="RAM" fill="var(--chart-1)" name="RAM (GB)" />
 							<Bar dataKey="CPU" fill="var(--chart-2)" name="CPU (%)" />
 							<Bar
 								dataKey="Network"
