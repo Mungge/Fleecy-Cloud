@@ -14,7 +14,7 @@ import ResourceStats from "./resource-stats";
 import InstanceRecommendations from "./instance-recommendations";
 
 export interface ResourceEstimate {
-	ram_mb: number;
+	ram_gb: number;
 	cpu_percent: number;
 	net_mb_per_second: number;
 }

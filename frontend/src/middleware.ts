@@ -17,6 +17,7 @@ export function middleware(request: NextRequest) {
 	// 로그인된 상태에서 인증 페이지 접근 시도
 	if (token && isAuthPage) {
 		console.log("[Middleware] 인증된 사용자, 대시보드로 리다이렉트");
+
 		return NextResponse.redirect(new URL("/dashboard", request.url));
 	}
 

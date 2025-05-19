@@ -24,10 +24,10 @@ interface ResourceEstimatorFormProps {
 }
 
 interface FormData {
-	max_clients: number;
-	avg_model_size_mb: number;
-	flops: number;
-	upload_freq_min: number;
+	max_clients: string | number;
+	avg_model_size_mb: string | number;
+	flops: string | number;
+	upload_freq_min: string | number;
 	aggregation_type: string;
 }
 
@@ -36,18 +36,18 @@ const ResourceEstimatorForm: React.FC<ResourceEstimatorFormProps> = ({
 	setIsLoading,
 }) => {
 	const [formData, setFormData] = useState<FormData>({
-		max_clients: 0,
-		avg_model_size_mb: 0,
-		flops: 0, // 5 GFLOPs
-		upload_freq_min: 0,
-		aggregation_type: "FedAvg",
+		max_clients: "",
+		avg_model_size_mb: "",
+		flops: "",
+		upload_freq_min: "",
+		aggregation_type: "",
 	});
 
 	const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
 		const { name, value } = e.target;
 		setFormData((prev) => ({
 			...prev,
-			[name]: Number(value),
+			[name]: value,
 		}));
 	};
 
@@ -62,9 +62,17 @@ const ResourceEstimatorForm: React.FC<ResourceEstimatorFormProps> = ({
 		e.preventDefault();
 		setIsLoading(true);
 
+		const numericFormData = {
+			max_clients: Number(formData.max_clients),
+			avg_model_size_mb: Number(formData.avg_model_size_mb),
+			flops: Number(formData.flops),
+			upload_freq_min: Number(formData.upload_freq_min),
+			aggregation_type: formData.aggregation_type || "FedAvg", // 값이 없을 경우 기본값 설정
+		};
+
 		try {
-			// 실제 환경에서는 API 호출
-			const data = await recommendInstances(formData);
+			// API 호출
+			const data = await recommendInstances(numericFormData);
 			onEstimationComplete(data.estimate, data.recommendations);
 			toast.success("리소스 추정이 완료되었습니다.");
 		} catch (error) {
@@ -76,7 +84,7 @@ const ResourceEstimatorForm: React.FC<ResourceEstimatorFormProps> = ({
 				setTimeout(() => {
 					const dummyData = {
 						estimate: {
-							ram_mb: 3200,
+							ram_gb: 3200 / 1024,
 							cpu_percent: 65,
 							net_mb_per_second: 2.8,
 						},

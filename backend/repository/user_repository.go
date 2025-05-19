@@ -68,3 +68,4 @@ func (r *UserRepository) CheckEmailExists(email string) (bool, error) {
 	err := r.db.QueryRow(query, email).Scan(&exists)
 	return exists, err
 }
+

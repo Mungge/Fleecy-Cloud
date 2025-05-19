@@ -61,3 +61,4 @@ func GetUserByEmail(email string) (User, error) {
 
 	return user, err
 }
+

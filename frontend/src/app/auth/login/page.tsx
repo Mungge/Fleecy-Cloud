@@ -53,7 +53,6 @@ export default function LoginPage() {
 			if (!response.ok) {
 				throw new Error(data.error || "로그인에 실패했습니다");
 			}
-
 			// 중복된 쿠키 설정 제거하고 login 함수만 호출
 			login(data.token, data.user);
 
@@ -61,6 +60,7 @@ export default function LoginPage() {
 			router.push("/dashboard");
 		} catch (err) {
 			console.error("로그인 오류:", err);
+
 			setError(err instanceof Error ? err.message : "로그인에 실패했습니다");
 		} finally {
 			setIsLoading(false);
