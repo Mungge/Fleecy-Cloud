@@ -4,7 +4,6 @@ import React, { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Instance } from "./aggregator-content";
 import { Badge } from "@/components/ui/badge";
-import { deployAggregator } from "@/lib/api-service";
 
 interface InstanceRecommendationsProps {
 	recommendations: Instance[];
