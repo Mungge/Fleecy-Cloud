@@ -37,7 +37,7 @@ export default function LoginPage() {
 
 			console.log("Response status:", response.status);
 			const responseText = await response.text();
-			console.log("Response text:", responseText);
+			// Note: Removed logging of raw response text to avoid leaking sensitive information.
 
 			let data;
 			try {
