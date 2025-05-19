@@ -117,7 +117,8 @@ export default function RegisterPage() {
 
 		try {
 			const requestData = { name, email, password };
-			console.log("Request data:", requestData);
+			const sanitizedRequestData = { name, email }; // Exclude password from logs
+			console.log("Request data:", sanitizedRequestData);
 			const response = await fetch(
 				`${process.env.NEXT_PUBLIC_API_URL}/api/auth/register`,
 				{
