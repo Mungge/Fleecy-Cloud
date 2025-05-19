@@ -21,7 +21,8 @@ func EstimateResources(input UserInput) ResourceEstimate {
 	complexityFactor := 1.0 + input.ModelSizeMB/50.0
 
 	// RAM (MB): 클라이언트 수 × 모델 크기 × 복잡도 계수
-	ram := float64(input.MaxClients) * input.ModelSizeMB * complexityFactor
+	ramMB := float64(input.MaxClients) * input.ModelSizeMB * complexityFactor
+	ramGB := ramMB / 1024 // MB → GB
 
 	// CPU (%): 클라이언트 수 × (FLOPs / 1e9) × aggregation 계수
 	cpu := float64(input.MaxClients) * (input.FLOPs / 1e9) * aggWeight
@@ -30,7 +31,7 @@ func EstimateResources(input UserInput) ResourceEstimate {
 	net := float64(input.MaxClients) * input.ModelSizeMB * 2 / float64(input.UploadFreqMin) / 60
 
 	return ResourceEstimate{
-		RAMMB:      int(math.Ceil(ram)),
+		RAMGB:      int(math.Ceil(ramGB)),
 		CPUPercent: int(math.Ceil(cpu * 100)), // 소수 → 정수 %
 		NetMBps:    int(math.Round(net*100) / 100), // 소수 2자리로 반올림 후 정수 변환
 	}

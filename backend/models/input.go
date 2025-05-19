@@ -9,7 +9,7 @@ type UserInput struct {
 }
 
 type ResourceEstimate struct{
-	RAMMB 		int `json:"ram_mb"` // 예측된 RAM 사용량
+	RAMGB		int `json:"ram_gb"` // 예측된 RAM 사용량
 	CPUPercent 	int `json:"cpu_percent"` // 예측된 CPU 사용량
 	NetMBps 	int `json:"net_mb_per_second"`// 
 }

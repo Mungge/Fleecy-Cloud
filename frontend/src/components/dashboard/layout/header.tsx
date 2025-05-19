@@ -11,12 +11,19 @@ import {
 	DropdownMenuSeparator,
 	DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import { useAuth } from "@/contexts/auth-context";
 
 interface HeaderProps {
 	isSidebarOpen: boolean;
 }
 
 const Header: React.FC<HeaderProps> = ({ isSidebarOpen }) => {
+	const { user, logout } = useAuth();
+
+	const handleLogout = () => {
+		logout();
+	};
+
 	return (
 		<header className="h-16 border-b bg-card">
 			<div className="px-6 h-full flex justify-between items-center">
@@ -66,9 +73,13 @@ const Header: React.FC<HeaderProps> = ({ isSidebarOpen }) => {
 						<DropdownMenuTrigger asChild>
 							<Button variant="ghost" className="gap-2">
 								<Avatar className="h-8 w-8">
-									<AvatarFallback>관</AvatarFallback>
+									<AvatarFallback>
+										{user?.name?.[0] || user?.email?.[0] || "사"}
+									</AvatarFallback>
 								</Avatar>
-								{isSidebarOpen && <span>관리자</span>}
+								{isSidebarOpen && (
+									<span>{user?.name || user?.email || "사용자"}</span>
+								)}
 								<ChevronDown className="h-4 w-4 text-muted-foreground" />
 							</Button>
 						</DropdownMenuTrigger>
@@ -78,7 +89,9 @@ const Header: React.FC<HeaderProps> = ({ isSidebarOpen }) => {
 							<DropdownMenuItem>프로필</DropdownMenuItem>
 							<DropdownMenuItem>설정</DropdownMenuItem>
 							<DropdownMenuSeparator />
-							<DropdownMenuItem>로그아웃</DropdownMenuItem>
+							<DropdownMenuItem onClick={handleLogout}>
+								로그아웃
+							</DropdownMenuItem>
 						</DropdownMenuContent>
 					</DropdownMenu>
 				</div>

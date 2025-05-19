@@ -4,14 +4,17 @@ import (
 	"context"
 	"log"
 	"net/http"
+	"os"
 	"time"
 
-	"github.com/Jeon-Jinhyeok/Fleecy-Cloud/handlers"
-	"github.com/gin-contrib/cors"
+	"github.com/Mungge/Fleecy-Cloud/config"
+	"github.com/Mungge/Fleecy-Cloud/handlers"
+	"github.com/Mungge/Fleecy-Cloud/repository"
+	"github.com/Mungge/Fleecy-Cloud/routes"
+
 	"github.com/gin-gonic/gin"
 	"github.com/prometheus/client_golang/prometheus"
 	"go.opentelemetry.io/otel"
-	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracehttp"
 	"go.opentelemetry.io/otel/sdk/resource"
 	sdktrace "go.opentelemetry.io/otel/sdk/trace"
@@ -95,108 +98,90 @@ func initTracer() (*sdktrace.TracerProvider, error) {
 	return tp, nil
 }
 
-// HTTP 미들웨어 - 메트릭 및 트레이싱
-func metricsMiddleware(next http.Handler) http.Handler {
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+// Gin 메트릭 미들웨어
+func ginMetricsMiddleware() gin.HandlerFunc {
+	return func(c *gin.Context) {
 		start := time.Now()
 		
-		ctx, span := otel.Tracer("http").Start(r.Context(), r.URL.Path)
+		ctx, span := otel.Tracer("http").Start(c.Request.Context(), c.Request.URL.Path)
 		defer span.End()
 		
-		// HTTP 요청에 트레이싱 컨텍스트 추가
-		r = r.WithContext(ctx)
+		// 요청에 트레이싱 컨텍스트 추가
+		c.Request = c.Request.WithContext(ctx)
 		
-		// 응답 래핑하여 상태 코드 캡처
-		wrapped := newResponseWriter(w)
-		next.ServeHTTP(wrapped, r)
+		// 다음 핸들러 실행
+		c.Next()
 		
 		// 메트릭 기록
 		duration := time.Since(start).Seconds()
-		httpRequestDuration.WithLabelValues(r.Method, r.URL.Path).Observe(duration)
-		httpRequestsTotal.WithLabelValues(r.Method, r.URL.Path, http.StatusText(wrapped.statusCode)).Inc()
+		httpRequestDuration.WithLabelValues(c.Request.Method, c.Request.URL.Path).Observe(duration)
+		httpRequestsTotal.WithLabelValues(c.Request.Method, c.Request.URL.Path, http.StatusText(c.Writer.Status())).Inc()
 		
 		// 트레이싱에 정보 추가
 		span.SetAttributes(
-			semconv.HTTPMethodKey.String(r.Method),
-			semconv.HTTPURLKey.String(r.URL.String()),
-			semconv.HTTPStatusCodeKey.Int(wrapped.statusCode),
+			semconv.HTTPMethodKey.String(c.Request.Method),
+			semconv.HTTPURLKey.String(c.Request.URL.String()),
+			semconv.HTTPStatusCodeKey.Int(c.Writer.Status()),
 		)
-	})
-}
-
-// HTTP 응답 래퍼
-type responseWriter struct {
-	http.ResponseWriter
-	statusCode int
-}
-
-func newResponseWriter(w http.ResponseWriter) *responseWriter {
-	return &responseWriter{w, http.StatusOK}
-}
-
-func (rw *responseWriter) WriteHeader(code int) {
-	rw.statusCode = code
-	rw.ResponseWriter.WriteHeader(code)
-}
-
-// 연합학습 라운드 시뮬레이션 함수 (예시)
-func simulateFederatedLearningRound(ctx context.Context) {
-	ctx, span := otel.Tracer("federated-learning").Start(ctx, "learning-round")
-	defer span.End()
-
-	start := time.Now()
-
-	// 참여자 수 업데이트 (예시)
-	participants := 5
-	federatedLearningParticipants.Set(float64(participants))
-	span.SetAttributes(attribute.Int("fl.participants", participants))
-
-	// 학습 라운드 실행
-	time.Sleep(2 * time.Second)
-
-	// 라운드 완료
-	federatedLearningRounds.Inc()
-	duration := time.Since(start).Seconds()
-	federatedLearningRoundDuration.Observe(duration)
-
-	span.SetAttributes(
-		attribute.String("fl.round_status", "completed"),
-		attribute.Float64("fl.round_duration_seconds", duration),
-	)
+	}
 }
 
 func main() {
 	// Jaeger 트레이서 초기화
 	tp, err := initTracer()
 	if err != nil {
-		log.Fatalf("Failed to initialize tracer: %v", err)
+		log.Fatalf("Jaeger 트레이서 초기화 실패: %v", err)
 	}
 	defer func() {
 		if err := tp.Shutdown(context.Background()); err != nil {
-			log.Printf("Error shutting down tracer provider: %v", err)
+			log.Printf("트레이서 종료 실패: %v", err)
 		}
 	}()
-	
-	// 라우터 설정
-	router := gin.Default()
 
-	router.Use(cors.New(cors.Config{
-		AllowOrigins: 	 []string{"http://localhost:3001"},
-		AllowMethods:    []string{"GET", "POST", "PUT", "DELETE"},
-		AllowHeaders:    []string{"Origin", "Content-Type", "Authorization", "Accept"},
-		ExposeHeaders:   []string{"Content-Length"},
-		AllowCredentials: true,
-		MaxAge:          12 * time.Hour,
-	}))
-	
-	aggregator := router.Group("/aggregator")
-	{
-		aggregator.POST("/estimate", handlers.EstimateHandler)
-		aggregator.POST("/recommend", handlers.RecommendHandler)
+	// 데이터베이스 연결
+	dbConn, err := config.Connect()
+	if err != nil {
+		log.Fatalf("데이터베이스 연결 실패: %v", err)
 	}
+	defer dbConn.Close()
 
-	log.Println("🚀 Server running on :8080")
-	if err := router.Run(":8080"); err != nil{
-		log.Fatalf("❌ Failed to start server: %v", err)
+	// 리포지토리 초기화
+	userRepo := repository.NewUserRepository(dbConn)
+	cloudRepo := repository.NewCloudRepository(dbConn)
+
+	// 핸들러 초기화
+	authHandler := handlers.NewAuthHandler(
+		userRepo,
+		os.Getenv("GITHUB_CLIENT_ID"),
+		os.Getenv("GITHUB_CLIENT_SECRET"),
+	)
+	cloudHandler := handlers.NewCloudHandler(cloudRepo)
+
+	// Gin 라우터 설정
+	r := gin.Default()
+
+	// CORS 설정
+	r.Use(func(c *gin.Context) {
+		c.Writer.Header().Set("Access-Control-Allow-Origin", "http://localhost:3000")
+		c.Writer.Header().Set("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS")
+		c.Writer.Header().Set("Access-Control-Allow-Headers", "Content-Type, Authorization")
+		c.Writer.Header().Set("Access-Control-Allow-Credentials", "true")
+		
+		if c.Request.Method == "OPTIONS" {
+			c.AbortWithStatus(204)
+			return
+		}
+		c.Next()
+	})
+
+	// 메트릭 미들웨어 적용
+	r.Use(ginMetricsMiddleware())
+
+	// 라우트 설정
+	routes.SetupRoutes(r, authHandler, cloudHandler)
+
+	// 서버 시작
+	if err := r.Run(":8080"); err != nil {
+		log.Fatalf("서버 시작 실패: %v", err)
 	}
 }
