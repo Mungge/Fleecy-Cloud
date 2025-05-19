@@ -28,7 +28,7 @@ type User struct {
 
 func CreateUser(user User) error {
 	query := `
-		INSERT INTO users (name, email, password, created_at, updated_at)
+		INSERT INTO users (name, email, password_hash, created_at, updated_at)
 		VALUES ($1, $2, $3, $4, $5)
 		RETURNING id`
 
