@@ -21,7 +21,7 @@ func RecommendInstance(est ResourceEstimate) []Instance{
 	var result []Instance
 	for _, inst := range candidates{
 		// 조건: RAM >= 예측치 AND vCPU tn x 50% >= CPU 사용량 예측
-		if inst.RAMMB >= est.RAMMB && (inst.VCPU*50 >= est.CPUPercent) {
+		if inst.RAMMB >= est.RAMGB * 1024 && (inst.VCPU*50 >= est.CPUPercent) {
 			result = append(result, inst)
 		}
 	}

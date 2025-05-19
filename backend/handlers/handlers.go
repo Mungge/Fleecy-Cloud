@@ -3,8 +3,7 @@ package handlers
 import (
 	"net/http"
 
-	"github.com/Jeon-Jinhyeok/Fleecy-Cloud/models"
-
+	"github.com/Mungge/Fleecy-Cloud/models"
 	"github.com/gin-gonic/gin"
 )
 
