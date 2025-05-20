@@ -52,3 +52,9 @@ simulator/data
 
 simulator/*.png
 simulator/*.sh
+
+# terraform
+terraform/aws/.terraform/
+
+terraform.tfstate
+terraform.tfstate.*
