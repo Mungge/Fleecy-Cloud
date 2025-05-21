@@ -22,6 +22,7 @@ func SetupRoutes(r *gin.Engine, authHandler *handlers.AuthHandler, cloudHandler 
 		clouds.POST("", cloudHandler.AddCloud)
 		clouds.DELETE("/:id", cloudHandler.DeleteCloud)
 		clouds.POST("/upload", cloudHandler.UploadCloudCredential)
+		clouds.GET("/:id/test", cloudHandler.TestCloudConnectionWithDetails)
 	}
 
 	// 집계자 라우트 그룹

@@ -5,6 +5,7 @@ import (
 	"time"
 
 	"github.com/Mungge/Fleecy-Cloud/models"
+	"github.com/google/uuid"
 )
 
 type CloudRepository struct {
@@ -16,31 +17,36 @@ func NewCloudRepository(db *sql.DB) *CloudRepository {
 }
 
 func (r *CloudRepository) CreateCloudConnection(conn *models.CloudConnection) error {
+	// UUID 생성
+	conn.ID = uuid.New().String()
+	
 	query := `
 		INSERT INTO cloud_connections (
-			user_id, provider, name, region, status,
+			id, user_id, provider, name, zone, region, status,
 			credential_file, created_at, updated_at
 		)
-		VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
-		RETURNING id`
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)`
 
 	now := time.Now()
-	return r.db.QueryRow(
+	_, err := r.db.Exec(
 		query,
+		conn.ID,
 		conn.UserID,
 		conn.Provider,
 		conn.Name,
+		conn.Zone,
 		conn.Region,
 		conn.Status,
 		conn.CredentialFile,
 		now,
 		now,
-	).Scan(&conn.ID)
+	)
+	return err
 }
 
 func (r *CloudRepository) GetCloudConnectionsByUserID(userID int64) ([]*models.CloudConnection, error) {
 	query := `
-		SELECT id, user_id, provider, name, region, status, created_at, updated_at
+		SELECT id, user_id, provider, name, zone, region, status, created_at, updated_at
 		FROM cloud_connections
 		WHERE user_id = $1
 		ORDER BY created_at DESC`
@@ -59,6 +65,7 @@ func (r *CloudRepository) GetCloudConnectionsByUserID(userID int64) ([]*models.C
 			&conn.UserID,
 			&conn.Provider,
 			&conn.Name,
+			&conn.Zone,
 			&conn.Region,
 			&conn.Status,
 			&conn.CreatedAt,
@@ -72,9 +79,9 @@ func (r *CloudRepository) GetCloudConnectionsByUserID(userID int64) ([]*models.C
 	return connections, nil
 }
 
-func (r *CloudRepository) GetCloudConnectionByID(id int64) (*models.CloudConnection, error) {
+func (r *CloudRepository) GetCloudConnectionByID(id string) (*models.CloudConnection, error) {
 	query := `
-		SELECT id, user_id, provider, name, region, status,
+		SELECT id, user_id, provider, name, zone, region, status,
 			   credential_file, created_at, updated_at
 		FROM cloud_connections
 		WHERE id = $1`
@@ -85,6 +92,7 @@ func (r *CloudRepository) GetCloudConnectionByID(id int64) (*models.CloudConnect
 		&conn.UserID,
 		&conn.Provider,
 		&conn.Name,
+		&conn.Zone,
 		&conn.Region,
 		&conn.Status,
 		&conn.CredentialFile,
@@ -100,7 +108,7 @@ func (r *CloudRepository) GetCloudConnectionByID(id int64) (*models.CloudConnect
 	return conn, nil
 }
 
-func (r *CloudRepository) UpdateCloudConnectionStatus(id int64, status string) error {
+func (r *CloudRepository) UpdateCloudConnectionStatus(id string, status string) error {
 	query := `
 		UPDATE cloud_connections
 		SET status = $1, updated_at = $2
@@ -110,7 +118,7 @@ func (r *CloudRepository) UpdateCloudConnectionStatus(id int64, status string) e
 	return err
 }
 
-func (r *CloudRepository) DeleteCloudConnection(id int64) error {
+func (r *CloudRepository) DeleteCloudConnection(id string) error {
 	query := `DELETE FROM cloud_connections WHERE id = $1`
 	_, err := r.db.Exec(query, id)
 	return err

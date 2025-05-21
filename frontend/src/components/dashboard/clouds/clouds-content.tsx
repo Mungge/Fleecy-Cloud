@@ -26,23 +26,35 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import * as z from "zod";
 import { Plus } from "lucide-react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import Cookies from "js-cookie";
 
 interface CloudConnection {
 	id: string;
 	provider: "AWS" | "GCP";
 	name: string;
 	region: string;
-	status: "connected" | "disconnected";
+	zone: string;
+	status: "active" | "inactive";
+}
+
+// GCP 자격 증명 파일 인터페이스 정의
+interface GCPCredentials {
+	project_id: string;
+	private_key: string;
+	client_email: string;
+	[key: string]: string | string[];
 }
 
 const awsSchema = z.object({
 	name: z.string().min(1, "이름을 입력해주세요"),
 	region: z.string().min(1, "리전을 입력해주세요"),
+	zone: z.string().min(1, "영역을 입력해주세요"),
 });
 
 const gcpSchema = z.object({
 	name: z.string().min(1, "이름을 입력해주세요"),
-	projectId: z.string().min(1, "프로젝트 ID를 입력해주세요"),
+	region: z.string().min(1, "리전을 입력해주세요"),
+	zone: z.string().min(1, "영역을 입력해주세요"),
 });
 
 type CloudFormData = z.infer<typeof awsSchema> | z.infer<typeof gcpSchema>;
@@ -55,12 +67,15 @@ const CloudsContent = () => {
 		"AWS"
 	);
 	const [credentialFile, setCredentialFile] = useState<File | null>(null);
+	const [extractedProjectId, setExtractedProjectId] = useState<string>("");
+	const [fileContents, setFileContents] = useState<GCPCredentials | null>(null);
 
 	const awsForm = useForm<z.infer<typeof awsSchema>>({
 		resolver: zodResolver(awsSchema),
 		defaultValues: {
 			name: "",
 			region: "",
+			zone: "",
 		},
 	});
 
@@ -68,7 +83,8 @@ const CloudsContent = () => {
 		resolver: zodResolver(gcpSchema),
 		defaultValues: {
 			name: "",
-			projectId: "",
+			region: "",
+			zone: "",
 		},
 	});
 
@@ -79,14 +95,23 @@ const CloudsContent = () => {
 	const fetchClouds = async () => {
 		try {
 			setIsLoading(true);
-			const response = await fetch("http://localhost:8080/api/clouds");
+			const apiUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8080";
+
+			// 토큰 가져오기
+			const token = Cookies.get("token");
+
+			const response = await fetch(`${apiUrl}/api/clouds`, {
+				headers: {
+					Authorization: token ? `Bearer ${token}` : "",
+				},
+				credentials: "include",
+			});
 
 			if (!response.ok) {
 				throw new Error(`HTTP error! status: ${response.status}`);
 			}
 
 			const result = await response.json();
-			console.log("API 응답:", result); // 디버깅용 로그
 
 			if (!result || typeof result !== "object") {
 				console.error("API 응답이 객체가 아닙니다:", result);
@@ -94,19 +119,19 @@ const CloudsContent = () => {
 				return;
 			}
 
-			if (!result.data) {
-				console.error("API 응답에 data 필드가 없습니다:", result);
+			const cloudsData = result.data
+				? result.data
+				: Array.isArray(result)
+				? result
+				: [];
+
+			if (!Array.isArray(cloudsData)) {
+				console.error("클라우드 데이터가 배열이 아닙니다:", cloudsData);
 				setClouds([]);
 				return;
 			}
 
-			if (!Array.isArray(result.data)) {
-				console.error("API 응답의 data 필드가 배열이 아닙니다:", result.data);
-				setClouds([]);
-				return;
-			}
-
-			setClouds(result.data);
+			setClouds(cloudsData);
 		} catch (error) {
 			console.error("Failed to fetch clouds:", error);
 			setClouds([]);
@@ -115,10 +140,27 @@ const CloudsContent = () => {
 		}
 	};
 
-	const handleFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
+	const handleFileChange = async (
+		event: React.ChangeEvent<HTMLInputElement>
+	) => {
 		const file = event.target.files?.[0];
-		if (file) {
-			setCredentialFile(file);
+		if (!file) return;
+
+		setCredentialFile(file);
+
+		// GCP 자격 증명 파일인 경우 파일 내용 읽기
+		if (selectedProvider === "GCP" && file.type === "application/json") {
+			try {
+				const text = await file.text();
+				const jsonData = JSON.parse(text) as GCPCredentials;
+				setFileContents(jsonData);
+
+				if (jsonData.project_id) {
+					setExtractedProjectId(jsonData.project_id);
+				}
+			} catch (err) {
+				console.error("파일 파싱 실패:", err);
+			}
 		}
 	};
 
@@ -129,30 +171,73 @@ const CloudsContent = () => {
 			}
 
 			const formData = new FormData();
-			formData.append("file", credentialFile);
+			formData.append("credentialFile", credentialFile, credentialFile.name);
 			formData.append("provider", selectedProvider);
 			formData.append("name", data.name);
 
 			if (selectedProvider === "AWS") {
 				formData.append("region", (data as z.infer<typeof awsSchema>).region);
+				formData.append("zone", (data as z.infer<typeof awsSchema>).zone);
 			} else {
-				formData.append(
-					"projectId",
-					(data as z.infer<typeof gcpSchema>).projectId
-				);
+				const gcp = data as z.infer<typeof gcpSchema>;
+
+				// 파일에서 추출한 projectId 사용
+				const projectId = fileContents?.project_id || "";
+				if (!projectId) {
+					throw new Error("프로젝트 ID를 추출할 수 없습니다");
+				}
+
+				formData.append("projectId", projectId);
+				formData.append("region", gcp.region); // 리전 정보
+				formData.append("zone", gcp.zone); // 영역 정보
 			}
 
-			const response = await fetch("http://localhost:8080/api/clouds/upload", {
-				method: "POST",
-				body: formData,
-			});
-
-			if (!response.ok) {
-				throw new Error("자격 증명 파일 업로드 실패");
+			const formDataObj: Record<string, string> = {};
+			for (const pair of formData.entries()) {
+				formDataObj[pair[0]] =
+					pair[1] instanceof File
+						? `(파일: ${pair[1].name})`
+						: (pair[1] as string);
 			}
 
-			setIsDialogOpen(false);
-			fetchClouds();
+			const apiUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8080";
+
+			// 토큰 가져오기
+			const token = Cookies.get("token");
+
+			// 업로드 시도
+			try {
+				const response = await fetch(`${apiUrl}/api/clouds/upload`, {
+					method: "POST",
+					body: formData,
+					headers: {
+						Authorization: token ? `Bearer ${token}` : "",
+					},
+					credentials: "include",
+				});
+
+				// 응답 텍스트 가져오기
+				const responseText = await response.text();
+
+				if (!response.ok) {
+					let errorMessage = "자격 증명 파일 업로드 실패";
+					try {
+						if (responseText && responseText.trim().startsWith("{")) {
+							const errorData = JSON.parse(responseText);
+							errorMessage = errorData.error || errorMessage;
+						}
+					} catch (e) {
+						console.error("응답 파싱 실패:", e);
+					}
+					throw new Error(errorMessage);
+				}
+
+				setIsDialogOpen(false);
+				fetchClouds();
+			} catch (fetchError) {
+				console.error("Fetch 에러:", fetchError);
+				throw fetchError;
+			}
 		} catch (error) {
 			console.error("클라우드 추가 실패:", error);
 		}
@@ -160,8 +245,17 @@ const CloudsContent = () => {
 
 	const handleDeleteCloud = async (id: string) => {
 		try {
-			const response = await fetch(`http://localhost:8080/api/clouds/${id}`, {
+			const apiUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8080";
+
+			// 토큰 가져오기
+			const token = Cookies.get("token");
+
+			const response = await fetch(`${apiUrl}/api/clouds/${id}`, {
 				method: "DELETE",
+				headers: {
+					Authorization: token ? `Bearer ${token}` : "",
+				},
+				credentials: "include",
 			});
 
 			if (response.ok) {
@@ -180,14 +274,14 @@ const CloudsContent = () => {
 					<DialogTrigger asChild>
 						<Button>
 							<Plus className="mr-2 h-4 w-4" />
-							클라우드 추가
+							인증 정보 추가
 						</Button>
 					</DialogTrigger>
 					<DialogContent className="sm:max-w-[425px]">
 						<DialogHeader>
 							<DialogTitle>클라우드 추가</DialogTitle>
 							<DialogDescription>
-								클라우드 제공자를 선택하고 자격 증명 파일을 업로드해주세요.
+								클라우드 제공자를 선택하고 인증 정보를 업로드해주세요.
 							</DialogDescription>
 						</DialogHeader>
 						<Tabs
@@ -225,9 +319,22 @@ const CloudsContent = () => {
 											name="region"
 											render={({ field }) => (
 												<FormItem>
-													<FormLabel>리전</FormLabel>
+													<FormLabel>리전(Region)</FormLabel>
 													<FormControl>
 														<Input placeholder="ap-northeast-2" {...field} />
+													</FormControl>
+													<FormMessage />
+												</FormItem>
+											)}
+										/>
+										<FormField
+											control={awsForm.control}
+											name="zone"
+											render={({ field }) => (
+												<FormItem>
+													<FormLabel>영역(Zone)</FormLabel>
+													<FormControl>
+														<Input placeholder="ap-northeast-2a" {...field} />
 													</FormControl>
 													<FormMessage />
 												</FormItem>
@@ -247,7 +354,7 @@ const CloudsContent = () => {
 													/>
 												</div>
 												<div className="text-sm text-muted-foreground">
-													AWS 자격 증명 파일(.csv)을 업로드해주세요
+													AWS 인증 정보 파일(.csv)을 업로드해주세요
 												</div>
 											</div>
 										</div>
@@ -278,17 +385,36 @@ const CloudsContent = () => {
 										/>
 										<FormField
 											control={gcpForm.control}
-											name="projectId"
+											name="region"
 											render={({ field }) => (
 												<FormItem>
-													<FormLabel>프로젝트 ID</FormLabel>
+													<FormLabel>리전(Region)</FormLabel>
 													<FormControl>
-														<Input placeholder="your-project-id" {...field} />
+														<Input placeholder="us-central1" {...field} />
 													</FormControl>
 													<FormMessage />
 												</FormItem>
 											)}
 										/>
+										<FormField
+											control={gcpForm.control}
+											name="zone"
+											render={({ field }) => (
+												<FormItem>
+													<FormLabel>영역(Zone)</FormLabel>
+													<FormControl>
+														<Input placeholder="us-central1-a" {...field} />
+													</FormControl>
+													<FormMessage />
+												</FormItem>
+											)}
+										/>
+										<div className="mt-2 text-sm">
+											<div>
+												<span className="font-medium">프로젝트 ID:</span>{" "}
+												{extractedProjectId || "파일에서 추출됩니다"}
+											</div>
+										</div>
 										<div className="space-y-4">
 											<div className="text-sm font-medium">
 												서비스 계정 키 파일
@@ -303,7 +429,7 @@ const CloudsContent = () => {
 													/>
 												</div>
 												<div className="text-sm text-muted-foreground">
-													GCP 서비스 계정 키 파일(JSON)을 업로드해주세요
+													GCP 인증 정보 파일(.json)을 업로드해주세요
 												</div>
 											</div>
 										</div>
@@ -327,7 +453,7 @@ const CloudsContent = () => {
 					{clouds.map((cloud) => (
 						<Card key={cloud.id}>
 							<CardHeader>
-								<CardTitle className="flex justify-between items-center">
+								<CardTitle className="font-bold text-xl flex justify-between items-center">
 									<span>{cloud.name}</span>
 									<Button
 										variant="ghost"
@@ -341,22 +467,25 @@ const CloudsContent = () => {
 							<CardContent>
 								<div className="space-y-2">
 									<p>
-										<span className="font-semibold">제공자:</span>{" "}
-										{cloud.provider}
+										<span className="font-semibold">CSP:</span> {cloud.provider}
 									</p>
 									<p>
-										<span className="font-semibold">리전:</span> {cloud.region}
+										<span className="font-semibold">Region:</span>{" "}
+										{cloud.region}
 									</p>
 									<p>
-										<span className="font-semibold">상태:</span>{" "}
+										<span className="font-semibold">Zone:</span> {cloud.zone}
+									</p>
+									<p>
+										<span className="font-semibold">Status:</span>{" "}
 										<span
 											className={`inline-block px-2 py-1 rounded-full text-xs ${
-												cloud.status === "connected"
+												cloud.status === "active"
 													? "bg-green-100 text-green-800"
 													: "bg-red-100 text-red-800"
 											}`}
 										>
-											{cloud.status === "connected" ? "연결됨" : "연결 끊김"}
+											{cloud.status === "active" ? "active" : "inactive"}
 										</span>
 									</p>
 								</div>
