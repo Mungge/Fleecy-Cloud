@@ -4,7 +4,14 @@ import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { usePathname, useRouter } from "next/navigation";
-import { LayoutDashboard, Cloud, Network, Menu } from "lucide-react";
+import {
+	LayoutDashboard,
+	Cloud,
+	Network,
+	Menu,
+	Merge,
+	Globe,
+} from "lucide-react";
 
 interface SidebarProps {
 	isSidebarOpen: boolean;
@@ -20,19 +27,29 @@ export default function Sidebar({
 
 	const routes = [
 		{
-			label: "개요",
+			label: "Overview",
 			icon: LayoutDashboard,
 			href: "/dashboard/overview",
 		},
 		{
-			label: "어그리게이터",
-			icon: Network,
+			label: "집계자",
+			icon: Merge,
 			href: "/dashboard/aggregator",
 		},
 		{
-			label: "클라우드",
+			label: "클라우드 인증 정보",
 			icon: Cloud,
 			href: "/dashboard/clouds",
+		},
+		{
+			label: "연합학습",
+			icon: Network,
+			href: "/dashboard/federated-learning",
+		},
+		{
+			label: "글로벌 모델",
+			icon: Globe,
+			href: "/dashboard/global-models",
 		},
 	];
 
@@ -46,7 +63,10 @@ export default function Sidebar({
 			<Button
 				variant="ghost"
 				size="icon"
-				className="absolute -right-4 top-4 z-50"
+				className={cn(
+					"absolute top-4 z-50",
+					isSidebarOpen ? "-right-1" : "right-3"
+				)}
 				onClick={() => setIsSidebarOpen(!isSidebarOpen)}
 			>
 				<Menu className="h-4 w-4" />
@@ -55,7 +75,7 @@ export default function Sidebar({
 			<ScrollArea className="h-full py-4">
 				<div className="space-y-4 py-4">
 					<div className="px-3 py-2">
-						<div className="space-y-1">
+						<div className="space-y-1 pt-8">
 							{routes.map((route) => (
 								<Button
 									key={route.href}
