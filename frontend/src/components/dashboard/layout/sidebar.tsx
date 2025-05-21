@@ -29,7 +29,7 @@ export default function Sidebar({
 		{
 			label: "Overview",
 			icon: LayoutDashboard,
-			href: "/dashboard/overview",
+			href: "/dashboard",
 		},
 		{
 			label: "집계자",

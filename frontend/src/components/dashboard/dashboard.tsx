@@ -1,6 +1,5 @@
 "use client";
 
-import dynamic from "next/dynamic";
 import React, { useState } from "react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
@@ -11,13 +10,8 @@ import {
 	CardTitle,
 } from "@/components/ui/card";
 
-const OverviewContent = dynamic(() => import("./overview/overview-content"), {
-	ssr: false,
-});
-const AggregatorContent = dynamic(
-	() => import("./aggregator/aggregator-content"),
-	{ ssr: false }
-);
+import OverviewContent from "./overview/overview-content";
+import AggregatorContent from "./aggregator/aggregator-content";
 
 const Dashboard = () => {
 	const [activeTab, setActiveTab] = useState("overview");
