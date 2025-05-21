@@ -3,7 +3,18 @@
 import { useEffect } from "react";
 import { useAuth } from "@/contexts/auth-context";
 import { useRouter } from "next/navigation";
-import OverviewContent from "@/components/dashboard/overview/overview-content";
+import dynamic from "next/dynamic";
+
+const OverviewContent = dynamic(
+	() => import("@/components/dashboard/overview/overview-content"),
+	{
+		loading: () => (
+			<div className="flex min-h-screen items-center justify-center">
+				<p>콘텐츠 로딩 중...</p>
+			</div>
+		),
+	}
+);
 
 export default function DashboardPage() {
 	const { user, loading } = useAuth();
