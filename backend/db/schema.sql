@@ -22,6 +22,18 @@ CREATE TABLE IF NOT EXISTS cloud_connections (
     updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
 );
 
+-- 클라우드 가격 테이블
+CREATE TABLE IF NOT EXISTS cloud_price (
+    id SERIAL PRIMARY KEY,
+    cloud_name TEXT,
+    region_name TEXT,
+    instance_type TEXT,
+    vcpu_count INTEGER,
+    memory_gb INTEGER,
+    operating_system TEXT,
+    on_demand_price NUMERIC
+);
+
 -- 인덱스 생성
 CREATE INDEX IF NOT EXISTS idx_cloud_connections_user_id ON cloud_connections(user_id);
 CREATE INDEX IF NOT EXISTS idx_cloud_connections_provider ON cloud_connections(provider); 
