@@ -3,14 +3,25 @@
 import { useEffect } from "react";
 import { useAuth } from "@/contexts/auth-context";
 import { useRouter } from "next/navigation";
-import Dashboard from "@/components/dashboard/dashboard";
+import dynamic from "next/dynamic";
+
+const OverviewContent = dynamic(
+	() => import("@/components/dashboard/overview/overview-content"),
+	{
+		loading: () => (
+			<div className="flex min-h-screen items-center justify-center">
+				<p>콘텐츠 로딩 중...</p>
+			</div>
+		),
+	}
+);
 
 export default function DashboardPage() {
 	const { user, loading } = useAuth();
 	const router = useRouter();
 
 	useEffect(() => {
-		// 인증이 완료되었고 사용자가 없으면 로그인 페이지로 리다이렉트
+		// 인증이 만료되었고 사용자가 없으면 로그인 페이지로 리다이렉트
 		if (!loading && !user) {
 			router.push("/auth/login");
 		}
@@ -25,8 +36,8 @@ export default function DashboardPage() {
 	}
 
 	if (!user) {
-		return null; // 리다이렉트 중이니 아무것도 표시하지 않음
+		return null;
 	}
 
-	return <Dashboard />;
+	return <OverviewContent />;
 }

@@ -15,6 +15,7 @@ CREATE TABLE IF NOT EXISTS cloud_connections (
     provider VARCHAR(10) NOT NULL CHECK (provider IN ('AWS', 'GCP')),
     name VARCHAR(255) NOT NULL,
     region VARCHAR(50),
+    zone VARCHAR(50),
     status VARCHAR(20) NOT NULL DEFAULT 'disconnected',
     credential_file BYTEA NOT NULL,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
