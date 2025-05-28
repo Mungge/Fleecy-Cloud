@@ -149,7 +149,6 @@ func main() {
 	err = db.AutoMigrate(
 		&models.User{},
 		&models.CloudConnection{},
-		&models.Participant{},
 	)
 	if err != nil {
 		log.Fatalf("데이터베이스 마이그레이션 실패: %v", err)
