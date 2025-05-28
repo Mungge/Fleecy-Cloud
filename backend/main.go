@@ -149,7 +149,6 @@ func main() {
 	err = db.AutoMigrate(
 		&models.User{},
 		&models.CloudConnection{},
-		&models.FederatedLearning{},
 		&models.Participant{},
 	)
 	if err != nil {
