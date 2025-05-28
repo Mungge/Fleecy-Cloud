@@ -9,6 +9,7 @@ import (
 
 	"github.com/Mungge/Fleecy-Cloud/config"
 	"github.com/Mungge/Fleecy-Cloud/handlers"
+	"github.com/Mungge/Fleecy-Cloud/models"
 	"github.com/Mungge/Fleecy-Cloud/repository"
 	"github.com/Mungge/Fleecy-Cloud/routes"
 
@@ -139,15 +140,23 @@ func main() {
 	}()
 
 	// 데이터베이스 연결
-	dbConn, err := config.Connect()
-	if err != nil {
+	if err := config.ConnectDatabase(); err != nil {
 		log.Fatalf("데이터베이스 연결 실패: %v", err)
 	}
-	defer dbConn.Close()
+	db := config.GetDB()
+
+	// 마이그레이션 실행
+	err = db.AutoMigrate(
+		&models.User{},
+		&models.CloudConnection{},
+	)
+	if err != nil {
+		log.Fatalf("데이터베이스 마이그레이션 실패: %v", err)
+	}
 
 	// 리포지토리 초기화
-	userRepo := repository.NewUserRepository(dbConn)
-	cloudRepo := repository.NewCloudRepository(dbConn)
+	userRepo := repository.NewUserRepository(db)
+	cloudRepo := repository.NewCloudRepository(db)
 
 	// 핸들러 초기화
 	authHandler := handlers.NewAuthHandler(

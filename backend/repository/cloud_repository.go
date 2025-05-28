@@ -1,125 +1,51 @@
 package repository
 
 import (
-	"database/sql"
-	"time"
-
 	"github.com/Mungge/Fleecy-Cloud/models"
 	"github.com/google/uuid"
+	"gorm.io/gorm"
 )
 
 type CloudRepository struct {
-	db *sql.DB
+	db *gorm.DB
 }
 
-func NewCloudRepository(db *sql.DB) *CloudRepository {
+func NewCloudRepository(db *gorm.DB) *CloudRepository {
 	return &CloudRepository{db: db}
 }
 
 func (r *CloudRepository) CreateCloudConnection(conn *models.CloudConnection) error {
 	// UUID 생성
 	conn.ID = uuid.New().String()
-	
-	query := `
-		INSERT INTO cloud_connections (
-			id, user_id, provider, name, zone, region, status,
-			credential_file, created_at, updated_at
-		)
-		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)`
-
-	now := time.Now()
-	_, err := r.db.Exec(
-		query,
-		conn.ID,
-		conn.UserID,
-		conn.Provider,
-		conn.Name,
-		conn.Zone,
-		conn.Region,
-		conn.Status,
-		conn.CredentialFile,
-		now,
-		now,
-	)
-	return err
+	return r.db.Create(conn).Error
 }
 
 func (r *CloudRepository) GetCloudConnectionsByUserID(userID int64) ([]*models.CloudConnection, error) {
-	query := `
-		SELECT id, user_id, provider, name, zone, region, status, created_at, updated_at
-		FROM cloud_connections
-		WHERE user_id = $1
-		ORDER BY created_at DESC`
-
-	rows, err := r.db.Query(query, userID)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-
 	var connections []*models.CloudConnection
-	for rows.Next() {
-		conn := &models.CloudConnection{}
-		err := rows.Scan(
-			&conn.ID,
-			&conn.UserID,
-			&conn.Provider,
-			&conn.Name,
-			&conn.Zone,
-			&conn.Region,
-			&conn.Status,
-			&conn.CreatedAt,
-			&conn.UpdatedAt,
-		)
-		if err != nil {
-			return nil, err
-		}
-		connections = append(connections, conn)
-	}
-	return connections, nil
+	err := r.db.Where("user_id = ?", userID).Find(&connections).Error
+	return connections, err
 }
 
 func (r *CloudRepository) GetCloudConnectionByID(id string) (*models.CloudConnection, error) {
-	query := `
-		SELECT id, user_id, provider, name, zone, region, status,
-			   credential_file, created_at, updated_at
-		FROM cloud_connections
-		WHERE id = $1`
-
-	conn := &models.CloudConnection{}
-	err := r.db.QueryRow(query, id).Scan(
-		&conn.ID,
-		&conn.UserID,
-		&conn.Provider,
-		&conn.Name,
-		&conn.Zone,
-		&conn.Region,
-		&conn.Status,
-		&conn.CredentialFile,
-		&conn.CreatedAt,
-		&conn.UpdatedAt,
-	)
-	if err == sql.ErrNoRows {
-		return nil, nil
-	}
+	var conn models.CloudConnection
+	err := r.db.Where("id = ?", id).First(&conn).Error
 	if err != nil {
+		if err == gorm.ErrRecordNotFound {
+			return nil, nil
+		}
 		return nil, err
 	}
-	return conn, nil
+	return &conn, nil
 }
 
 func (r *CloudRepository) UpdateCloudConnectionStatus(id string, status string) error {
-	query := `
-		UPDATE cloud_connections
-		SET status = $1, updated_at = $2
-		WHERE id = $3`
+	return r.db.Model(&models.CloudConnection{}).Where("id = ?", id).Update("status", status).Error
+}
 
-	_, err := r.db.Exec(query, status, time.Now(), id)
-	return err
+func (r *CloudRepository) UpdateCloudConnection(conn *models.CloudConnection) error {
+	return r.db.Save(conn).Error
 }
 
 func (r *CloudRepository) DeleteCloudConnection(id string) error {
-	query := `DELETE FROM cloud_connections WHERE id = $1`
-	_, err := r.db.Exec(query, id)
-	return err
+	return r.db.Delete(&models.CloudConnection{}, "id = ?", id).Error
 }
