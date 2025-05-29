@@ -211,8 +211,8 @@ func main() {
 	// 각 도메인별 라우트 설정
 	routes.SetupCloudRoutes(authorized, cloudHandler)
 	routes.SetupParticipantRoutes(authorized, participantHandler)
-	//routes.SetupFederatedLearningRoutes(authorized, flHandler)
-	//routes.SetupAggregatorRoutes(authorized, aggregatorHandler)
+	routes.SetupFederatedLearningRoutes(authorized, flHandler)
+	routes.SetupAggregatorRoutes(authorized, aggregatorHandler)
 	
 	// VM 라우트 설정 (전체 엔진에 설정, 인증은 내부에서 처리)
 	routes.SetupVirtualMachineRoutes(r, vmRepo, participantRepo)
