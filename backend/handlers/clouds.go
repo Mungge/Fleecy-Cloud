@@ -38,11 +38,7 @@ func NewCloudHandler(cloudRepo *repository.CloudRepository) *CloudHandler {
 // @Router /api/clouds [get]
 func (h *CloudHandler) GetClouds(c *gin.Context) {
 	// 세션에서 사용자 ID 가져오기
-	userID, err := utils.GetUserIDFromContext(c)
-	if err != nil {
-		c.JSON(http.StatusUnauthorized, gin.H{"error": err.Error()})
-		return
-	}
+	userID := utils.GetUserIDFromMiddleware(c)
 
 	connections, err := h.cloudRepo.GetCloudConnectionsByUserID(userID)
 	if err != nil {
@@ -70,12 +66,7 @@ func (h *CloudHandler) AddCloud(c *gin.Context) {
 		return
 	}
 
-	// 세션에서 사용자 ID 가져오기
-	userID, err := utils.GetUserIDFromContext(c)
-	if err != nil {
-		c.JSON(http.StatusUnauthorized, gin.H{"error": err.Error()})
-		return
-	}
+	userID:= utils.GetUserIDFromMiddleware(c)
 	
 	// 사용자 ID 설정
 	cloud.UserID = userID
@@ -110,11 +101,7 @@ func (h *CloudHandler) DeleteCloud(c *gin.Context) {
 	id := c.Param("id")
 	
 	// 세션에서 사용자 ID 가져오기
-	userID, err := utils.GetUserIDFromContext(c)
-	if err != nil {
-		c.JSON(http.StatusUnauthorized, gin.H{"error": err.Error()})
-		return
-	}
+	userID := utils.GetUserIDFromMiddleware(c)
 
 	// 연결 조회
 	conn, err := h.cloudRepo.GetCloudConnectionByID(id)
@@ -291,11 +278,7 @@ func testCloudConnection(ctx context.Context, cloud models.CloudConnection) erro
 // @Router /api/clouds/upload [post]
 func (h *CloudHandler) UploadCloudCredential(c *gin.Context) {
 	// 세션에서 사용자 ID 가져오기
-	userID, err := utils.GetUserIDFromContext(c)
-	if err != nil {
-		c.JSON(http.StatusUnauthorized, gin.H{"error": err.Error()})
-		return
-	}
+	userID := utils.GetUserIDFromMiddleware(c)
 
 	provider := c.PostForm("provider")
 	name := c.PostForm("name")
@@ -413,12 +396,7 @@ func (h *CloudHandler) UploadCloudCredential(c *gin.Context) {
 func (h *CloudHandler) TestCloudConnectionWithDetails(c *gin.Context) {
 	id := c.Param("id")
 	
-	// 세션에서 사용자 ID 가져오기
-	userID, err := utils.GetUserIDFromContext(c)
-	if err != nil {
-		c.JSON(http.StatusUnauthorized, gin.H{"error": err.Error()})
-		return
-	}
+	userID := utils.GetUserIDFromMiddleware(c)
 
 	// 연결 조회
 	conn, err := h.cloudRepo.GetCloudConnectionByID(id)
