@@ -11,6 +11,12 @@ type User struct {
 	Name         string    `json:"name" gorm:"not null"`
 	CreatedAt    time.Time `json:"created_at" gorm:"autoCreateTime"`
 	UpdatedAt    time.Time `json:"updated_at" gorm:"autoUpdateTime"`
+
+	// Releationships
+	CloudConnections   []CloudConnection   `json:"cloud_connections,omitempty" gorm:"foreignKey:UserID;constraint:OnUpdate:CASCADE,OnDelete:CASCADE"`
+	Participants       []Participant       `json:"participants,omitempty" gorm:"foreignKey:UserID;constraint:OnUpdate:CASCADE,OnDelete:CASCADE"`
+	FederatedLearnings []FederatedLearning `json:"federated_learnings,omitempty" gorm:"foreignKey:UserID;constraint:OnUpdate:CASCADE,OnDelete:CASCADE"`
+	Aggregators        []Aggregator        `json:"aggregators,omitempty" gorm:"foreignKey:UserID;constraint:OnUpdate:CASCADE,OnDelete:CASCADE"`
 }
 
 func (User) TableName() string {
