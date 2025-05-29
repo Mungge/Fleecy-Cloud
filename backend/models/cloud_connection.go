@@ -15,6 +15,9 @@ type CloudConnection struct {
 	CredentialFile []byte    `json:"-" gorm:"type:bytea"`
 	CreatedAt      time.Time `json:"created_at" gorm:"autoCreateTime"`
 	UpdatedAt      time.Time `json:"updated_at" gorm:"autoUpdateTime"`
+	
+	// 관계 설정
+	User           *User      `json:"user,omitempty" gorm:"foreignKey:UserID;constraint:OnUpdate:CASCADE,OnDelete:CASCADE"`
 }
 
 func (CloudConnection) TableName() string {
