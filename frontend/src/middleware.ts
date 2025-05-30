@@ -15,8 +15,7 @@ export function redirectMiddleware(request: NextRequest) {
 	}
 
 	// 토큰이 있고 인증 페이지 또는 루트 페이지에 접근하는 경우 대시보드로 리다이렉트
-	const shouldRedirectToDashboard = token && (isAuthPage || isRootPage);
-	if (shouldRedirectToDashboard) {
+	if (token && (isAuthPage || isRootPage)) {
 		console.log("[Middleware] 인증된 사용자, 대시보드로 리다이렉트");
 		return NextResponse.redirect(new URL("/dashboard", request.url));
 	}
