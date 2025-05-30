@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
 
-export function redirectMiddleware(request: NextRequest) {
+export default function redirectMiddleware(request: NextRequest) {
 	const token = request.cookies.get("token");
 	const isAuthPage = request.nextUrl.pathname.startsWith("/auth");
 	const isRootPage = request.nextUrl.pathname === "/";
