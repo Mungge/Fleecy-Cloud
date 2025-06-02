@@ -13,6 +13,7 @@ import (
 	"github.com/Mungge/Fleecy-Cloud/models"
 	"github.com/Mungge/Fleecy-Cloud/repository"
 	"github.com/Mungge/Fleecy-Cloud/routes"
+	"github.com/joho/godotenv"
 
 	"github.com/gin-gonic/gin"
 	"github.com/prometheus/client_golang/prometheus"
@@ -67,6 +68,11 @@ var (
 )
 
 func init() {
+	// .env 파일 로드
+	if err := godotenv.Load(); err != nil {
+		log.Println("No .env file found, using default environment variables")
+	}
+
 	// Prometheus 메트릭 등록
 	prometheus.MustRegister(httpRequestsTotal)
 	prometheus.MustRegister(httpRequestDuration)

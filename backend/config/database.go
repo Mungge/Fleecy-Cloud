@@ -17,7 +17,7 @@ func ConnectDatabase() error {
 		"host=%s user=%s password=%s dbname=%s port=%s sslmode=disable TimeZone=Asia/Seoul",
 		getEnv("DB_HOST", "localhost"),
 		getEnv("DB_USER", "postgres"),
-		getEnv("DB_PASSWORD", "161106"),
+		getEnv("DB_PASSWORD", "123456"),
 		getEnv("DB_NAME", "fleecy_cloud"),
 		getEnv("DB_PORT", "5432"),
 	)
