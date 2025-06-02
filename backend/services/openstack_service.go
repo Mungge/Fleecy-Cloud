@@ -27,25 +27,12 @@ type AuthTokenResponse struct {
 type AuthRequest struct {
 	Auth struct {
 		Identity struct {
-			Methods  []string `json:"methods"`
-			Password struct {
-				User struct {
-					Name     string `json:"name"`
-					Password string `json:"password"`
-					Domain   struct {
-						Name string `json:"name"`
-					} `json:"domain"`
-				} `json:"user"`
-			} `json:"password"`
+			Methods               []string `json:"methods"`
+			ApplicationCredential *struct {
+				ID     string `json:"id"`
+				Secret string `json:"secret"`
+			} `json:"application_credential,omitempty"`
 		} `json:"identity"`
-		Scope struct {
-			Project struct {
-				Name   string `json:"name"`
-				Domain struct {
-					Name string `json:"name"`
-				} `json:"domain"`
-			} `json:"project"`
-		} `json:"scope"`
 	} `json:"auth"`
 }
 
@@ -105,12 +92,22 @@ func NewOpenStackService() *OpenStackService {
 // OpenStack 인증 토큰 획득
 func (s *OpenStackService) GetAuthToken(participant *models.Participant) (string, error) {
 	authReq := AuthRequest{}
-	authReq.Auth.Identity.Methods = []string{"password"}
-	authReq.Auth.Identity.Password.User.Name = participant.OpenStackUsername
-	authReq.Auth.Identity.Password.User.Password = participant.OpenStackPassword
-	authReq.Auth.Identity.Password.User.Domain.Name = participant.OpenStackDomainName
-	authReq.Auth.Scope.Project.Name = participant.OpenStackProjectName
-	authReq.Auth.Scope.Project.Domain.Name = participant.OpenStackDomainName
+	
+	// Application Credential 방식만 지원
+	if participant.OpenStackApplicationCredentialID != "" && participant.OpenStackApplicationCredentialSecret != "" {
+		// Application Credential 방식
+		authReq.Auth.Identity.Methods = []string{"application_credential"}
+		authReq.Auth.Identity.ApplicationCredential = &struct {
+			ID     string `json:"id"`
+			Secret string `json:"secret"`
+		}{
+			ID:     participant.OpenStackApplicationCredentialID,
+			Secret: participant.OpenStackApplicationCredentialSecret,
+		}
+		// Application Credential 방식에서는 scope가 필요하지 않음
+	} else {
+		return "", fmt.Errorf("Application Credential 인증 정보가 필요합니다")
+	}
 
 	jsonData, err := json.Marshal(authReq)
 	if err != nil {
@@ -210,11 +207,6 @@ func (s *OpenStackService) MonitorSpecificVM(participant *models.Participant, vm
 	}
 
 	return monitoringInfo, nil
-}
-
-// VM 모니터링 정보 수집 (기존 호환성을 위해 유지)
-func (s *OpenStackService) MonitorVM(vm *models.VirtualMachine, participant *models.Participant) (*VMMonitoringInfo, error) {
-	return s.MonitorSpecificVM(participant, vm)
 }
 
 // VM 헬스체크 수행 (특정 VirtualMachine 인스턴스 기반)

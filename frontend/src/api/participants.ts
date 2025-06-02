@@ -1,7 +1,6 @@
 import Cookies from "js-cookie";
 import {
 	Participant,
-	CreateParticipantRequest,
 	VMMonitoringInfo,
 	VMHealthCheckResult,
 } from "@/types/federatedLearning";
@@ -18,21 +17,13 @@ const getAuthHeaders = () => {
 	};
 };
 
-// 참여자 업데이트 요청 인터페이스
-export interface UpdateParticipantRequest {
-	name?: string;
-	type?: string;
-	status?: string;
-	metadata?: string;
-
-	// OpenStack 클라우드 관련 필드
-	openstack_endpoint?: string;
-	openstack_username?: string;
-	openstack_password?: string;
-	openstack_project_name?: string;
-	openstack_domain_name?: string;
-	openstack_region?: string;
-}
+// 파일 업로드용 헤더 생성 함수
+const getAuthHeadersForFile = () => {
+	const token = Cookies.get("token");
+	return {
+		Authorization: token ? `Bearer ${token}` : "",
+	};
+};
 
 // 모든 참여자 조회
 export async function getParticipants(): Promise<Participant[]> {
@@ -99,14 +90,14 @@ export async function getParticipant(id: string): Promise<Participant> {
 
 // 참여자 생성
 export async function createParticipant(
-	participantData: CreateParticipantRequest
+	formData: FormData
 ): Promise<Participant> {
 	try {
 		const response = await fetch(`${API_BASE_URL}/api/participants`, {
 			method: "POST",
-			headers: getAuthHeaders(),
+			headers: getAuthHeadersForFile(),
 			credentials: "include",
-			body: JSON.stringify(participantData),
+			body: formData,
 		});
 
 		if (!response.ok) {
@@ -124,14 +115,14 @@ export async function createParticipant(
 // 참여자 업데이트
 export async function updateParticipant(
 	id: string,
-	participantData: UpdateParticipantRequest
+	formData: FormData
 ): Promise<Participant> {
 	try {
 		const response = await fetch(`${API_BASE_URL}/api/participants/${id}`, {
 			method: "PUT",
-			headers: getAuthHeaders(),
+			headers: getAuthHeadersForFile(),
 			credentials: "include",
-			body: JSON.stringify(participantData),
+			body: formData,
 		});
 
 		if (!response.ok) {
@@ -212,31 +203,6 @@ export async function healthCheckVM(
 		return result.data;
 	} catch (error) {
 		console.error("VM 헬스체크 실패:", error);
-		throw error;
-	}
-}
-
-// OpenStack VM 전원 제어 (시작/중지/재부팅)
-export async function vmPowerAction(
-	participantId: string,
-	action: "start" | "stop" | "reboot"
-): Promise<void> {
-	try {
-		const response = await fetch(
-			`${API_BASE_URL}/api/participants/${participantId}/power`,
-			{
-				method: "POST",
-				headers: getAuthHeaders(),
-				credentials: "include",
-				body: JSON.stringify({ action }),
-			}
-		);
-
-		if (!response.ok) {
-			throw new Error(`HTTP error! status: ${response.status}`);
-		}
-	} catch (error) {
-		console.error(`VM ${action} 실패:`, error);
 		throw error;
 	}
 }

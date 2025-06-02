@@ -30,6 +30,7 @@ import {
 	FormMessage,
 } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import {
 	Table,
@@ -63,17 +64,10 @@ import {
 } from "@/api/participants";
 import type { Participant, VMMonitoringInfo } from "@/types/federatedLearning";
 
-// 폼 스키마 정의
+// 폼 스키마 정의 (YAML 파일 업로드 방식으로 변경)
 const participantSchema = z.object({
 	name: z.string().min(1, "이름은 필수입니다"),
 	metadata: z.string().optional(),
-	// OpenStack 관련 필드들
-	openstack_endpoint: z.string().optional(),
-	openstack_username: z.string().optional(),
-	openstack_password: z.string().optional(),
-	openstack_project_name: z.string().optional(),
-	openstack_domain_name: z.string().optional(),
-	openstack_region: z.string().optional(),
 });
 
 type ParticipantFormData = z.infer<typeof participantSchema>;
@@ -96,6 +90,7 @@ export default function ParticipantsContent() {
 	>(new Map());
 	const [monitoringInterval, setMonitoringInterval] =
 		useState<NodeJS.Timeout | null>(null);
+	const [configFile, setConfigFile] = useState<File | null>(null);
 
 	const { toast } = useToast();
 
@@ -104,30 +99,46 @@ export default function ParticipantsContent() {
 		defaultValues: {
 			name: "",
 			metadata: "",
-			openstack_endpoint: "",
-			openstack_username: "",
-			openstack_password: "",
-			openstack_project_name: "",
-			openstack_domain_name: "",
-			openstack_region: "",
 		},
 	});
 
-	// 참여자 목록 로드
+	// 클러스터 목록 로드
 	const loadParticipants = async () => {
 		try {
 			setIsLoading(true);
 			const data = await getParticipants();
 			setParticipants(data);
 		} catch (error) {
-			console.error("참여자 목록 로드 실패:", error);
+			console.error("클러스터 목록 로드 실패:", error);
 			toast({
 				title: "오류",
-				description: "참여자 목록을 불러오는데 실패했습니다.",
+				description: "클러스터 목록을 불러오는데 실패했습니다.",
 				variant: "destructive",
 			});
 		} finally {
 			setIsLoading(false);
+		}
+	};
+
+	// YAML 파일 업로드 처리
+	const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+		if (e.target.files && e.target.files[0]) {
+			const file = e.target.files[0];
+
+			// YAML 파일 확장자 검증
+			if (
+				!file.name.toLowerCase().endsWith(".yaml") &&
+				!file.name.toLowerCase().endsWith(".yml")
+			) {
+				toast({
+					title: "오류",
+					description: "YAML 파일만 업로드 가능합니다.",
+					variant: "destructive",
+				});
+				return;
+			}
+
+			setConfigFile(file);
 		}
 	};
 
@@ -136,24 +147,32 @@ export default function ParticipantsContent() {
 		// eslint-disable-next-line react-hooks/exhaustive-deps
 	}, []); // 컴포넌트 마운트시에만 실행
 
-	// 참여자 생성
+	// 클러스터 생성
 	const handleCreateParticipant = async (data: ParticipantFormData) => {
 		try {
-			await createParticipant(data);
+			// FormData 생성
+			const formData = new FormData();
+			formData.append("name", data.name);
+			if (data.metadata) {
+				formData.append("metadata", data.metadata);
+			}
+
+			// YAML 설정 파일 추가
+			if (configFile) {
+				formData.append("configFile", configFile);
+			}
+			await createParticipant(formData);
+
 			toast({
 				title: "성공",
 				description: "클러스터가 성공적으로 추가되었습니다.",
 			});
+
 			form.reset({
 				name: "",
 				metadata: "",
-				openstack_endpoint: "",
-				openstack_username: "",
-				openstack_password: "",
-				openstack_project_name: "",
-				openstack_domain_name: "",
-				openstack_region: "",
 			});
+			setConfigFile(null);
 			setCreateDialogOpen(false);
 			loadParticipants();
 		} catch (error) {
@@ -171,20 +190,39 @@ export default function ParticipantsContent() {
 		if (!selectedParticipant) return;
 
 		try {
-			await updateParticipant(selectedParticipant.id, data);
+			if (configFile) {
+				const formData = new FormData();
+				formData.append("name", data.name);
+				if (data.metadata) {
+					formData.append("metadata", data.metadata);
+				}
+				formData.append("configFile", configFile);
+
+				await updateParticipant(selectedParticipant.id, formData);
+			} else {
+				// 파일이 없는 경우 FormData만 사용 (name, metadata만)
+				const formData = new FormData();
+				formData.append("name", data.name);
+				if (data.metadata) {
+					formData.append("metadata", data.metadata);
+				}
+				await updateParticipant(selectedParticipant.id, formData);
+			}
+
 			toast({
 				title: "성공",
-				description: "참여자 정보가 성공적으로 수정되었습니다.",
+				description: "클러스터 정보가 성공적으로 수정되었습니다.",
 			});
 			setEditDialogOpen(false);
 			setSelectedParticipant(null);
+			setConfigFile(null);
 			form.reset();
 			loadParticipants();
 		} catch (error) {
 			console.error("참여자 수정 실패:", error);
 			toast({
 				title: "오류",
-				description: "참여자 수정에 실패했습니다.",
+				description: "클러스터 수정에 실패했습니다.",
 				variant: "destructive",
 			});
 		}
@@ -255,12 +293,6 @@ export default function ParticipantsContent() {
 		form.reset({
 			name: participant.name,
 			metadata: participant.metadata || "",
-			openstack_endpoint: participant.openstack_endpoint || "",
-			openstack_username: participant.openstack_username || "",
-			openstack_password: participant.openstack_password || "",
-			openstack_project_name: participant.openstack_project_name || "",
-			openstack_domain_name: participant.openstack_domain_name || "",
-			openstack_region: participant.openstack_region || "",
 		});
 		setEditDialogOpen(true);
 	};
@@ -339,7 +371,7 @@ export default function ParticipantsContent() {
 			<div className="flex items-center justify-between">
 				<div>
 					<h2 className="text-3xl font-bold tracking-tight">
-						학습 클러스터 관리
+						연합학습 클러스터 관리
 					</h2>
 					<p className="text-muted-foreground">
 						연합학습에 클러스터를 관리하세요.
@@ -362,26 +394,16 @@ export default function ParticipantsContent() {
 								form.reset({
 									name: "",
 									metadata: "",
-									openstack_endpoint: "",
-									openstack_username: "",
-									openstack_password: "",
-									openstack_project_name: "",
-									openstack_domain_name: "",
-									openstack_region: "",
 								});
+								setConfigFile(null);
 							}
 							setCreateDialogOpen(open);
 							if (!open) {
 								form.reset({
 									name: "",
 									metadata: "",
-									openstack_endpoint: "",
-									openstack_username: "",
-									openstack_password: "",
-									openstack_project_name: "",
-									openstack_domain_name: "",
-									openstack_region: "",
 								});
+								setConfigFile(null);
 							}
 						}}
 					>
@@ -432,108 +454,40 @@ export default function ParticipantsContent() {
 										)}
 									/>
 
-									{/* OpenStack 설정 */}
+									{/* OpenStack 설정 YAML 파일 업로드 */}
 									<div className="space-y-4 border-t pt-4">
-										<div className="grid grid-cols-2 gap-4">
-											<FormField
-												control={form.control}
-												name="openstack_endpoint"
-												render={({ field }) => (
-													<FormItem>
-														<FormLabel>OpenStack Endpoint</FormLabel>
-														<FormControl>
-															<Input
-																placeholder="https://openstack.example.com:5000/v3"
-																{...field}
-															/>
-														</FormControl>
-														<FormMessage />
-													</FormItem>
-												)}
-											/>
-
-											<FormField
-												control={form.control}
-												name="openstack_region"
-												render={({ field }) => (
-													<FormItem>
-														<FormLabel>Region</FormLabel>
-														<FormControl>
-															<Input placeholder="RegionOne" {...field} />
-														</FormControl>
-														<FormMessage />
-													</FormItem>
-												)}
-											/>
+										<div>
+											<Label className="text-base font-semibold">
+												OpenStack 설정
+											</Label>
+											<p className="text-sm text-muted-foreground mt-1">
+												OpenStack 클러스터 설정이 포함된 YAML 파일을
+												업로드하세요.
+											</p>
 										</div>
 
-										<div className="grid grid-cols-2 gap-4">
-											<FormField
-												control={form.control}
-												name="openstack_username"
-												render={({ field }) => (
-													<FormItem>
-														<FormLabel>Username</FormLabel>
-														<FormControl>
-															<Input placeholder="admin" {...field} />
-														</FormControl>
-														<FormMessage />
-													</FormItem>
-												)}
+										<div className="space-y-2">
+											<Label htmlFor="config-file">
+												설정 파일 (*.yaml, *.yml)
+											</Label>
+											<Input
+												id="config-file"
+												type="file"
+												accept=".yaml,.yml"
+												onChange={handleFileChange}
+												className="cursor-pointer"
 											/>
-
-											<FormField
-												control={form.control}
-												name="openstack_password"
-												render={({ field }) => (
-													<FormItem>
-														<FormLabel>Password</FormLabel>
-														<FormControl>
-															<Input
-																type="password"
-																placeholder="password"
-																{...field}
-															/>
-														</FormControl>
-														<FormMessage />
-													</FormItem>
-												)}
-											/>
-										</div>
-
-										<div className="grid grid-cols-2 gap-4">
-											<FormField
-												control={form.control}
-												name="openstack_project_name"
-												render={({ field }) => (
-													<FormItem>
-														<FormLabel>Project Name</FormLabel>
-														<FormControl>
-															<Input placeholder="admin" {...field} />
-														</FormControl>
-														<FormMessage />
-													</FormItem>
-												)}
-											/>
-
-											<FormField
-												control={form.control}
-												name="openstack_domain_name"
-												render={({ field }) => (
-													<FormItem>
-														<FormLabel>Domain Name</FormLabel>
-														<FormControl>
-															<Input placeholder="Default" {...field} />
-														</FormControl>
-														<FormMessage />
-													</FormItem>
-												)}
-											/>
+											{configFile && (
+												<div className="text-sm text-green-600">
+													선택된 파일: {configFile.name} (
+													{Math.round(configFile.size / 1024)} KB)
+												</div>
+											)}
 										</div>
 									</div>
 
 									<DialogFooter>
-										<Button type="submit">참여자 추가</Button>
+										<Button type="submit">클러스터 추가</Button>
 									</DialogFooter>
 								</form>
 							</Form>
@@ -583,110 +537,41 @@ export default function ParticipantsContent() {
 								)}
 							/>
 
-							{/* OpenStack 설정 */}
+							{/* OpenStack 설정 업데이트 */}
 							<div className="space-y-4 border-t pt-4">
-								<h3 className="text-lg font-semibold">OpenStack 설정</h3>
+								<h3 className="text-lg font-semibold">
+									OpenStack 설정 업데이트
+								</h3>
+								<p className="text-sm text-muted-foreground">
+									기존 설정을 유지하거나 새로운 YAML 파일로 업데이트할 수
+									있습니다.
+								</p>
 
-								<div className="grid grid-cols-2 gap-4">
-									<FormField
-										control={form.control}
-										name="openstack_endpoint"
-										render={({ field }) => (
-											<FormItem>
-												<FormLabel>OpenStack Endpoint</FormLabel>
-												<FormControl>
-													<Input
-														placeholder="https://openstack.example.com:5000/v3"
-														{...field}
-													/>
-												</FormControl>
-												<FormMessage />
-											</FormItem>
-										)}
+								<div className="space-y-2">
+									<Label htmlFor="edit-config-file">
+										새 설정 파일 (선택사항)
+									</Label>
+									<Input
+										id="edit-config-file"
+										type="file"
+										accept=".yaml,.yml"
+										onChange={handleFileChange}
+										className="cursor-pointer"
 									/>
-
-									<FormField
-										control={form.control}
-										name="openstack_region"
-										render={({ field }) => (
-											<FormItem>
-												<FormLabel>Region</FormLabel>
-												<FormControl>
-													<Input placeholder="RegionOne" {...field} />
-												</FormControl>
-												<FormMessage />
-											</FormItem>
-										)}
-									/>
-								</div>
-
-								<div className="grid grid-cols-2 gap-4">
-									<FormField
-										control={form.control}
-										name="openstack_username"
-										render={({ field }) => (
-											<FormItem>
-												<FormLabel>Username</FormLabel>
-												<FormControl>
-													<Input placeholder="admin" {...field} />
-												</FormControl>
-												<FormMessage />
-											</FormItem>
-										)}
-									/>
-
-									<FormField
-										control={form.control}
-										name="openstack_password"
-										render={({ field }) => (
-											<FormItem>
-												<FormLabel>Password</FormLabel>
-												<FormControl>
-													<Input
-														type="password"
-														placeholder="password"
-														{...field}
-													/>
-												</FormControl>
-												<FormMessage />
-											</FormItem>
-										)}
-									/>
-								</div>
-
-								<div className="grid grid-cols-2 gap-4">
-									<FormField
-										control={form.control}
-										name="openstack_project_name"
-										render={({ field }) => (
-											<FormItem>
-												<FormLabel>Project Name</FormLabel>
-												<FormControl>
-													<Input placeholder="admin" {...field} />
-												</FormControl>
-												<FormMessage />
-											</FormItem>
-										)}
-									/>
-
-									<FormField
-										control={form.control}
-										name="openstack_domain_name"
-										render={({ field }) => (
-											<FormItem>
-												<FormLabel>Domain Name</FormLabel>
-												<FormControl>
-													<Input placeholder="Default" {...field} />
-												</FormControl>
-												<FormMessage />
-											</FormItem>
-										)}
-									/>
+									{configFile && (
+										<div className="text-sm text-green-600">
+											선택된 파일: {configFile.name} (
+											{Math.round(configFile.size / 1024)} KB)
+										</div>
+									)}
+									<p className="text-xs text-muted-foreground">
+										파일을 선택하지 않으면 기존 설정이 유지됩니다.
+									</p>
 								</div>
 							</div>
 
 							<DialogFooter>
-								<Button type="submit">참여자 수정</Button>
+								<Button type="submit">클러스터 수정</Button>
 							</DialogFooter>
 						</form>
 					</Form>
@@ -861,10 +746,12 @@ export default function ParticipantsContent() {
 														</AlertDialogTrigger>
 														<AlertDialogContent>
 															<AlertDialogHeader>
-																<AlertDialogTitle>참여자 삭제</AlertDialogTitle>
+																<AlertDialogTitle>
+																	클러스터 삭제
+																</AlertDialogTitle>
 																<AlertDialogDescription>
-																	이 참여자를 삭제하시겠습니까? 이 작업은 되돌릴
-																	수 없습니다.
+																	이 클러스터를 삭제하시겠습니까? 이 작업은
+																	되돌릴 수 없습니다.
 																</AlertDialogDescription>
 															</AlertDialogHeader>
 															<AlertDialogFooter>
@@ -886,7 +773,7 @@ export default function ParticipantsContent() {
 									{participants.length === 0 && (
 										<TableRow>
 											<TableCell colSpan={8} className="text-center py-8">
-												참여자가 없습니다. 새 참여자를 추가해보세요.
+												클러스터가 없습니다. 새 클러스터를 추가해보세요.
 											</TableCell>
 										</TableRow>
 									)}
