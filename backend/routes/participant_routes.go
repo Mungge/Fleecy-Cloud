@@ -15,5 +15,8 @@ func SetupParticipantRoutes(authorized *gin.RouterGroup, participantHandler *han
 		participants.GET("/:id", participantHandler.GetParticipant)
 		participants.PUT("/:id", participantHandler.UpdateParticipant)
 		participants.DELETE("/:id", participantHandler.DeleteParticipant)
+		
+		// 헬스체크 라우트
+		participants.POST("/:id/health-check", participantHandler.HealthCheckParticipant)
 	}
 }

@@ -34,11 +34,9 @@ export interface Participant {
 
 	// OpenStack 클라우드 관련 필드
 	openstack_endpoint?: string;
-	openstack_username?: string;
-	openstack_password?: string;
-	openstack_project_name?: string;
-	openstack_domain_name?: string;
 	openstack_region?: string;
+	openstack_app_credential_id?: string;
+	openstack_app_credential_secret?: string;
 
 	// VM 모니터링 관련 필드
 	vm_status?: string;
@@ -66,11 +64,9 @@ export interface CreateParticipantRequest {
 
 	// OpenStack 클라우드 관련 필드
 	openstack_endpoint?: string;
-	openstack_username?: string;
-	openstack_password?: string;
-	openstack_project_name?: string;
-	openstack_domain_name?: string;
 	openstack_region?: string;
+	openstack_app_credential_id?: string;
+	openstack_app_credential_secret?: string;
 }
 
 // VM 모니터링 정보 인터페이스
