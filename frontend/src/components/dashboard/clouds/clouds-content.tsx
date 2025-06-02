@@ -1,8 +1,9 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
 import { Trash2 } from "lucide-react";
 import {
 	Dialog,
@@ -26,6 +27,16 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import * as z from "zod";
 import { Plus } from "lucide-react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { ScrollArea } from "@/components/ui/scroll-area";
+import {
+	Table,
+	TableBody,
+	TableCell,
+	TableHead,
+	TableHeader,
+	TableRow,
+} from "@/components/ui/table";
+import { useToast } from "@/components/ui/use-toast";
 import Cookies from "js-cookie";
 
 interface CloudConnection {
@@ -69,6 +80,9 @@ const CloudsContent = () => {
 	const [credentialFile, setCredentialFile] = useState<File | null>(null);
 	const [extractedProjectId, setExtractedProjectId] = useState<string>("");
 	const [fileContents, setFileContents] = useState<GCPCredentials | null>(null);
+	const [selectedCloud, setSelectedCloud] = useState<CloudConnection | null>(null);
+	
+	const { toast } = useToast();
 
 	const awsForm = useForm<z.infer<typeof awsSchema>>({
 		resolver: zodResolver(awsSchema),
@@ -234,12 +248,28 @@ const CloudsContent = () => {
 
 				setIsDialogOpen(false);
 				fetchClouds();
+				
+				// 성공 메시지 표시
+				toast({
+					title: "성공",
+					description: "클라우드 연결이 추가되었습니다.",
+				});
 			} catch (fetchError) {
 				console.error("Fetch 에러:", fetchError);
+				toast({
+					title: "오류",
+					description: "클라우드 연결 추가에 실패했습니다.",
+					variant: "destructive",
+				});
 				throw fetchError;
 			}
 		} catch (error) {
 			console.error("클라우드 추가 실패:", error);
+			toast({
+				title: "오류",
+				description: "클라우드 연결 추가에 실패했습니다.",
+				variant: "destructive",
+			});
 		}
 	};
 
@@ -260,24 +290,58 @@ const CloudsContent = () => {
 
 			if (response.ok) {
 				fetchClouds();
+				
+				// 성공 메시지 표시
+				toast({
+					title: "성공",
+					description: "클라우드 연결이 삭제되었습니다.",
+				});
+				
+				// 선택된 클라우드가 삭제된 경우 선택 해제
+				if (selectedCloud?.id === id) {
+					setSelectedCloud(null);
+				}
 			}
 		} catch (error) {
 			console.error("Failed to delete cloud:", error);
+			toast({
+				title: "오류",
+				description: "클라우드 연결 삭제에 실패했습니다.",
+				variant: "destructive",
+			});
+		}
+	};
+
+	// 상태에 따른 배지 색상 설정
+	const getStatusBadge = (status: string) => {
+		switch (status) {
+			case "active":
+				return <Badge className="bg-green-500">활성</Badge>;
+			case "inactive":
+				return <Badge className="bg-gray-500">비활성</Badge>;
+			default:
+				return <Badge>{status}</Badge>;
 		}
 	};
 
 	return (
-		<div className="container mx-auto p-6">
-			<div className="flex justify-between items-center mb-6">
-				<h1 className="text-3xl font-bold">클라우드 인증 정보 관리</h1>
+		<div className="space-y-6">
+			<div className="flex items-center justify-between">
+				<div>
+					<h2 className="text-3xl font-bold tracking-tight">클라우드 인증 정보</h2>
+					<p className="text-muted-foreground">
+						클라우드 제공자의 인증 정보를 관리하세요.
+					</p>
+				</div>
+
 				<Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
 					<DialogTrigger asChild>
-						<Button>
+						<Button className="ml-auto">
 							<Plus className="mr-2 h-4 w-4" />
 							인증 정보 추가
 						</Button>
 					</DialogTrigger>
-					<DialogContent className="sm:max-w-[425px]">
+					<DialogContent className="sm:max-w-[600px] max-h-[85vh] overflow-y-auto">
 						<DialogHeader>
 							<DialogTitle>클라우드 추가</DialogTitle>
 							<DialogDescription>
@@ -299,7 +363,7 @@ const CloudsContent = () => {
 								<Form {...awsForm}>
 									<form
 										onSubmit={awsForm.handleSubmit(onSubmit)}
-										className="space-y-4"
+										className="space-y-6"
 									>
 										<FormField
 											control={awsForm.control}
@@ -368,7 +432,7 @@ const CloudsContent = () => {
 								<Form {...gcpForm}>
 									<form
 										onSubmit={gcpForm.handleSubmit(onSubmit)}
-										className="space-y-4"
+										className="space-y-6"
 									>
 										<FormField
 											control={gcpForm.control}
@@ -448,58 +512,122 @@ const CloudsContent = () => {
 				<div className="flex justify-center items-center py-12">
 					<div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-primary"></div>
 				</div>
-			) : clouds && clouds.length > 0 ? (
-				<div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-					{clouds.map((cloud) => (
-						<Card key={cloud.id}>
-							<CardHeader>
-								<CardTitle className="font-bold text-xl flex justify-between items-center">
-									<span>{cloud.name}</span>
-									<Button
-										variant="ghost"
-										size="icon"
-										onClick={() => handleDeleteCloud(cloud.id)}
-									>
-										<Trash2 className="h-4 w-4" />
-									</Button>
-								</CardTitle>
-							</CardHeader>
-							<CardContent>
-								<div className="space-y-2">
-									<p>
-										<span className="font-semibold">CSP:</span> {cloud.provider}
-									</p>
-									<p>
-										<span className="font-semibold">Region:</span>{" "}
-										{cloud.region}
-									</p>
-									<p>
-										<span className="font-semibold">Zone:</span> {cloud.zone}
-									</p>
-									<p>
-										<span className="font-semibold">Status:</span>{" "}
-										<span
-											className={`inline-block px-2 py-1 rounded-full text-xs ${
-												cloud.status === "active"
-													? "bg-green-100 text-green-800"
-													: "bg-red-100 text-red-800"
-											}`}
-										>
-											{cloud.status === "active" ? "active" : "inactive"}
-										</span>
+			) : (
+				<div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+					{/* 클라우드 연결 목록 */}
+					<Card className="md:col-span-2">
+						<CardHeader>
+							<CardTitle>클라우드 연결 목록</CardTitle>
+							<CardDescription>
+								등록된 클라우드 연결과 상태를 확인하세요.
+							</CardDescription>
+						</CardHeader>
+						<CardContent>
+							<ScrollArea className="h-[calc(100vh-320px)]">
+								<Table>
+									<TableHeader>
+										<TableRow>
+											<TableHead>이름</TableHead>
+											<TableHead>제공자</TableHead>
+											<TableHead>리전</TableHead>
+											<TableHead>상태</TableHead>
+											<TableHead>작업</TableHead>
+										</TableRow>
+									</TableHeader>
+									<TableBody>
+										{clouds && clouds.length > 0 ? (
+											clouds.map((cloud) => (
+												<TableRow
+													key={cloud.id}
+													className={`cursor-pointer hover:bg-muted/50 ${
+														selectedCloud?.id === cloud.id ? "bg-muted" : ""
+													}`}
+													onClick={() => setSelectedCloud(cloud)}
+												>
+													<TableCell className="font-medium">{cloud.name}</TableCell>
+													<TableCell>{cloud.provider}</TableCell>
+													<TableCell>{cloud.region}</TableCell>
+													<TableCell>{getStatusBadge(cloud.status)}</TableCell>
+													<TableCell>
+														<div className="flex space-x-2">
+															<Button
+																variant="ghost"
+																size="icon"
+																onClick={(e) => {
+																	e.stopPropagation();
+																	handleDeleteCloud(cloud.id);
+																}}
+															>
+																<Trash2 className="h-4 w-4" />
+															</Button>
+														</div>
+													</TableCell>
+												</TableRow>
+											))
+										) : (
+											<TableRow>
+												<TableCell colSpan={5} className="text-center py-12 text-muted-foreground">
+													<p>등록된 클라우드 연결이 없습니다.</p>
+													<p className="text-sm mt-2">
+														위의 &apos;인증 정보 추가&apos; 버튼을 클릭하여 새로운 연결을 추가하세요.
+													</p>
+												</TableCell>
+											</TableRow>
+										)}
+									</TableBody>
+								</Table>
+							</ScrollArea>
+						</CardContent>
+					</Card>
+
+					{/* 클라우드 연결 상세 정보 */}
+					<Card>
+						<CardHeader>
+							<CardTitle>연결 상세 정보</CardTitle>
+							<CardDescription>
+								선택한 클라우드 연결의 상세 정보를 확인하세요.
+							</CardDescription>
+						</CardHeader>
+						<CardContent>
+							{selectedCloud ? (
+								<div className="space-y-4">
+									<div>
+										<h3 className="font-semibold text-lg">{selectedCloud.name}</h3>
+										<p className="text-sm text-muted-foreground">{selectedCloud.provider} 클라우드</p>
+									</div>
+									
+									<div className="space-y-3">
+										<div>
+											<span className="text-sm font-medium">제공자:</span>
+											<p className="text-sm">{selectedCloud.provider}</p>
+										</div>
+										
+										<div>
+											<span className="text-sm font-medium">리전:</span>
+											<p className="text-sm">{selectedCloud.region}</p>
+										</div>
+										
+										<div>
+											<span className="text-sm font-medium">영역:</span>
+											<p className="text-sm">{selectedCloud.zone}</p>
+										</div>
+										
+										<div>
+											<span className="text-sm font-medium">상태:</span>
+											<div className="mt-1">{getStatusBadge(selectedCloud.status)}</div>
+										</div>
+									</div>
+								</div>
+							) : (
+								<div className="text-center py-8 text-muted-foreground">
+									<p>클라우드 연결을 선택해주세요</p>
+									<p className="text-sm mt-2">
+										왼쪽 목록에서 클라우드 연결을 클릭하면 상세 정보를 확인할 수 있습니다.
 									</p>
 								</div>
-							</CardContent>
-						</Card>
-					))}
-				</div>
-			) : (
-				<div className="text-center py-12 text-muted-foreground">
-					<p>등록된 클라우드 연결이 없습니다.</p>
-					<p className="text-sm mt-2">
-						위의 &apos;클라우드 추가&apos; 버튼을 클릭하여 새로운 연결을
-						추가하세요.
-					</p>
+							)}
+						</CardContent>
+					</Card>
 				</div>
 			)}
 		</div>
