@@ -7,6 +7,7 @@ import { Github } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { AuthLayout } from "@/components/auth/auth-layout";
 import { useAuth } from "@/contexts/auth-context";
+import { toast } from "sonner";
 
 export default function LoginPage() {
 	const router = useRouter();
@@ -19,6 +20,22 @@ export default function LoginPage() {
 	const handleSubmit = async (e: React.FormEvent) => {
 		e.preventDefault();
 		setError("");
+
+		// 폼 검증
+		if (!email.trim()) {
+			const errorMessage = "이메일을 입력해주세요";
+			setError(errorMessage);
+			toast.error(errorMessage);
+			return;
+		}
+
+		if (!password.trim()) {
+			const errorMessage = "비밀번호를 입력해주세요";
+			setError(errorMessage);
+			toast.error(errorMessage);
+			return;
+		}
+
 		setIsLoading(true);
 
 		try {
@@ -34,10 +51,7 @@ export default function LoginPage() {
 				body: JSON.stringify({ email, password }),
 				credentials: "include",
 			});
-
-			console.log("Response status:", response.status);
 			const responseText = await response.text();
-			// Note: Removed logging of raw response text to avoid leaking sensitive information.
 
 			let data;
 			try {
@@ -49,7 +63,6 @@ export default function LoginPage() {
 					}. 응답 내용: ${responseText.substring(0, 100)}`
 				);
 			}
-
 			if (!response.ok) {
 				throw new Error(data.error || "로그인에 실패했습니다");
 			}
@@ -61,7 +74,10 @@ export default function LoginPage() {
 		} catch (err) {
 			console.error("로그인 오류:", err);
 
-			setError(err instanceof Error ? err.message : "로그인에 실패했습니다");
+			const errorMessage =
+				err instanceof Error ? err.message : "로그인에 실패했습니다";
+			setError(errorMessage);
+			toast.error(errorMessage);
 		} finally {
 			setIsLoading(false);
 		}
@@ -69,6 +85,7 @@ export default function LoginPage() {
 
 	const handleGitHubLogin = () => {
 		const apiUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8080";
+		toast.loading("GitHub으로 로그인 중...");
 		window.location.href = `${apiUrl}/api/auth/github`;
 	};
 
