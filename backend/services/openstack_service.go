@@ -104,9 +104,8 @@ func (s *OpenStackService) GetAuthToken(participant *models.Participant) (string
 			ID:     participant.OpenStackApplicationCredentialID,
 			Secret: participant.OpenStackApplicationCredentialSecret,
 		}
-		// Application Credential 방식에서는 scope가 필요하지 않음
 	} else {
-		return "", fmt.Errorf("Application Credential 인증 정보가 필요합니다")
+		return "", fmt.Errorf("application Credential 인증 정보가 필요합니다")
 	}
 
 	jsonData, err := json.Marshal(authReq)

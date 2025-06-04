@@ -128,7 +128,7 @@ func (h *ParticipantHandler) CreateParticipant(c *gin.Context) {
 		return
 	}
 
-	// 연결 테스트 성공 시 자동으로 활성화
+	// 연결 테스트 성공 시 활성화
 	participant.Status = "active"
 
 	// 테스트 성공 시 DB에 저장
@@ -358,11 +358,11 @@ func (h *ParticipantHandler) HealthCheckParticipant(c *gin.Context) {
 	
 	healthy := err == nil
 	status := "ACTIVE"
-	message := "OpenStack 클라우드가 정상적으로 연결되었습니다"
+	message := fmt.Sprintf("%s 클러스터가 정상적으로 연결되었습니다", participant.Name)
 	
 	if !healthy {
 		status = "ERROR"
-		message = fmt.Sprintf("OpenStack 연결 실패: %v", err)
+		message = fmt.Sprintf("%s OpenStack 연결 실패: %v", participant.Name, err)
 	}
 
 	result := map[string]interface{}{
