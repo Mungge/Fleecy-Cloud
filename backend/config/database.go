@@ -12,7 +12,7 @@ func Connect() (*sql.DB, error) {
 	// 환경 변수에서 데이터베이스 연결 정보 가져오기
 	dbHost := getEnv("DB_HOST", "localhost")
 	dbPort := getEnv("DB_PORT", "5432")
-	dbUser := getEnv("DB_USER", "postgres")
+	dbUser := getEnv("DB_USER", "kimminkyoung")
 	dbPass := getEnv("DB_PASSWORD", "161106")
 	dbName := getEnv("DB_NAME", "fleecy_cloud")
 

@@ -58,5 +58,3 @@ terraform/aws/.terraform/
 
 terraform.tfstate
 terraform.tfstate.*
-
-backend/config/database.go
