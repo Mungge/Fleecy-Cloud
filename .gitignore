@@ -58,3 +58,4 @@ terraform/aws/.terraform/
 
 terraform.tfstate
 terraform.tfstate.*
+terraform/aws/fleecy-cloud-keypair
