@@ -6,6 +6,7 @@ import { Input } from "@/components/ui/input";
 import { Github } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { AuthLayout } from "@/components/auth/auth-layout";
+import { toast } from "sonner";
 
 export default function RegisterPage() {
 	const router = useRouter();
@@ -102,14 +103,47 @@ export default function RegisterPage() {
 		e.preventDefault();
 		setError("");
 
+		// 폼 검증
+		if (!name.trim()) {
+			const errorMessage = "이름을 입력해주세요";
+			setError(errorMessage);
+			toast.error(errorMessage);
+			return;
+		}
+
+		if (!email.trim()) {
+			const errorMessage = "이메일을 입력해주세요";
+			setError(errorMessage);
+			toast.error(errorMessage);
+			return;
+		}
+
+		if (!password.trim()) {
+			const errorMessage = "비밀번호를 입력해주세요";
+			setError(errorMessage);
+			toast.error(errorMessage);
+			return;
+		}
+
+		if (!confirmPassword.trim()) {
+			const errorMessage = "비밀번호 확인을 입력해주세요";
+			setError(errorMessage);
+			toast.error(errorMessage);
+			return;
+		}
+
 		if (password !== confirmPassword) {
-			setError("비밀번호가 일치하지 않습니다");
+			const errorMessage = "비밀번호가 일치하지 않습니다";
+			setError(errorMessage);
+			toast.error(errorMessage);
 			return;
 		}
 
 		const passwordErrors = validatePassword(password);
 		if (passwordErrors.length > 0) {
-			setError(`비밀번호는 ${passwordErrors.join(", ")}해야 합니다`);
+			const errorMessage = `비밀번호는 ${passwordErrors.join(", ")}해야 합니다`;
+			setError(errorMessage);
+			toast.error(errorMessage);
 			return;
 		}
 
@@ -128,18 +162,27 @@ export default function RegisterPage() {
 					credentials: "include",
 				}
 			);
-
 			if (!response.ok) {
 				const data = await response.json();
 				throw new Error(data.error || "회원가입에 실패했습니다");
 			}
 
+			toast.success("회원가입이 완료되었습니다! 로그인 페이지로 이동합니다.");
 			router.push("/auth/login");
 		} catch (err) {
-			setError(err instanceof Error ? err.message : "회원가입에 실패했습니다");
+			const errorMessage =
+				err instanceof Error ? err.message : "회원가입에 실패했습니다";
+			setError(errorMessage);
+			toast.error(errorMessage);
 		} finally {
 			setIsLoading(false);
 		}
+	};
+
+	const handleGitHubLogin = () => {
+		const apiUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8080";
+		toast.loading("GitHub으로 로그인 중...");
+		window.location.href = `${apiUrl}/api/auth/github`;
 	};
 
 	return (
@@ -219,7 +262,6 @@ export default function RegisterPage() {
 						required
 					/>
 				</div>
-
 				<Button
 					type="submit"
 					className="w-full h-12 bg-black text-white hover:bg-gray-800"
@@ -227,7 +269,6 @@ export default function RegisterPage() {
 				>
 					{isLoading ? "가입 중..." : "이메일로 가입하기"}
 				</Button>
-
 				<div className="relative">
 					<div className="absolute inset-0 flex items-center">
 						<span className="w-full border-t border-gray-200" />
@@ -237,12 +278,12 @@ export default function RegisterPage() {
 							또는 다음으로 계속
 						</span>
 					</div>
-				</div>
-
+				</div>{" "}
 				<Button
 					type="button"
 					variant="outline"
 					className="w-full h-12 border-gray-300 flex items-center justify-center gap-2"
+					onClick={handleGitHubLogin}
 				>
 					<Github size={20} />
 					<span>GitHub</span>

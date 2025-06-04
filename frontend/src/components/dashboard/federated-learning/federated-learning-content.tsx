@@ -71,7 +71,7 @@ import {
 } from "@/api/federatedLearning";
 import { getAvailableParticipants } from "@/api/participants";
 import { FederatedLearningJob, Participant } from "@/types/federatedLearning";
-import { useToast } from "@/components/ui/use-toast";
+import { toast } from "sonner";
 
 // 집계 알고리즘 목록
 const AGGREGATION_ALGORITHMS = [
@@ -116,7 +116,6 @@ const FederatedLearningContent = () => {
 	const [createDialogOpen, setCreateDialogOpen] = useState(false);
 	const [isLoading, setIsLoading] = useState(true);
 	const [modelFile, setModelFile] = useState<File | null>(null);
-	const { toast } = useToast();
 
 	// 연합학습 생성 폼
 	const form = useForm<FormValues>({
@@ -138,8 +137,7 @@ const FederatedLearningContent = () => {
 			const jobs = await getFederatedLearnings();
 			setFederatedLearningJobs(jobs);
 		} catch (error) {
-			console.error("연합학습 작업 조회에 실패했습니다:", error);
-			// toast 함수 직접 호출 대신 로컬 상태로 에러 처리
+			toast.error("연합학습 작업 조회에 실패했습니다: " + error);
 			setFederatedLearningJobs([]);
 		} finally {
 			setIsLoading(false);
@@ -152,8 +150,7 @@ const FederatedLearningContent = () => {
 			const participantList = await getAvailableParticipants();
 			setParticipants(participantList);
 		} catch (error) {
-			console.error("참여자 목록 조회에 실패했습니다:", error);
-			// toast 함수 직접 호출 대신 로컬 상태로 에러 처리
+			toast.error("참여자 목록 조회에 실패했습니다: " + error);
 			setParticipants([]);
 		}
 	}, []);
@@ -205,10 +202,7 @@ const FederatedLearningContent = () => {
 			await createFederatedLearning(formData);
 
 			// 성공 메시지 표시
-			toast({
-				title: "성공",
-				description: "연합학습 작업이 생성되었습니다.",
-			});
+			toast.success("연합학습 작업이 생성되었습니다.");
 
 			// 폼 초기화 및 다이얼로그 닫기
 			form.reset();
@@ -218,12 +212,7 @@ const FederatedLearningContent = () => {
 			// 목록 새로고침
 			fetchFederatedLearningJobs();
 		} catch (error) {
-			console.error("연합학습 작업 생성에 실패했습니다:", error);
-			toast({
-				title: "오류",
-				description: "연합학습 작업 생성에 실패했습니다.",
-				variant: "destructive",
-			});
+			toast.error("연합학습 작업 생성에 실패했습니다: " + error);
 		}
 	};
 
@@ -233,10 +222,7 @@ const FederatedLearningContent = () => {
 			await deleteFederatedLearning(id);
 
 			// 성공 메시지 표시
-			toast({
-				title: "성공",
-				description: "연합학습 작업이 삭제되었습니다.",
-			});
+			toast.success("연합학습 작업이 삭제되었습니다.");
 
 			// 목록 새로고침
 			fetchFederatedLearningJobs();
@@ -246,12 +232,8 @@ const FederatedLearningContent = () => {
 				setSelectedJob(null);
 			}
 		} catch (error) {
-			console.error("연합학습 작업 삭제에 실패했습니다:", error);
-			toast({
-				title: "오류",
-				description: "연합학습 작업 삭제에 실패했습니다.",
-				variant: "destructive",
-			});
+			console.error("연합학습 작업 삭제에 실패했습니다: ", error);
+			toast.error("연합학습 작업 삭제에 실패했습니다.");
 		}
 	};
 
