@@ -1,37 +1,42 @@
 package config
 
 import (
-	"database/sql"
 	"fmt"
+	"log"
 	"os"
 
-	_ "github.com/lib/pq"
+	"gorm.io/driver/postgres"
+	"gorm.io/gorm"
+	"gorm.io/gorm/logger"
 )
 
-func Connect() (*sql.DB, error) {
-	// 환경 변수에서 데이터베이스 연결 정보 가져오기
-	dbHost := getEnv("DB_HOST", "localhost")
-	dbPort := getEnv("DB_PORT", "5432")
-	dbUser := getEnv("DB_USER", "kimminkyoung")
-	dbPass := getEnv("DB_PASSWORD", "161106")
-	dbName := getEnv("DB_NAME", "fleecy_cloud")
+var DB *gorm.DB
 
-	// 데이터베이스 연결 문자열 생성
-	connStr := fmt.Sprintf("host=%s port=%s user=%s password=%s dbname=%s sslmode=disable",
-		dbHost, dbPort, dbUser, dbPass, dbName)
+func ConnectDatabase() error {
+	dsn := fmt.Sprintf(
+		"host=%s user=%s password=%s dbname=%s port=%s sslmode=disable TimeZone=Asia/Seoul",
+		getEnv("DB_HOST", "localhost"),
+		getEnv("DB_USER", "postgres"),
+		getEnv("DB_PASSWORD", "123456"),
+		getEnv("DB_NAME", "fleecy_cloud"),
+		getEnv("DB_PORT", "5432"),
+	)
 
-	// 데이터베이스 연결
-	db, err := sql.Open("postgres", connStr)
+	database, err := gorm.Open(postgres.Open(dsn), &gorm.Config{
+		Logger: logger.Default.LogMode(logger.Info),
+	})
+
 	if err != nil {
-		return nil, fmt.Errorf("데이터베이스 연결 실패: %v", err)
+		return fmt.Errorf("failed to connect to database: %w", err)
 	}
 
-	// 연결 테스트
-	if err := db.Ping(); err != nil {
-		return nil, fmt.Errorf("데이터베이스 연결 테스트 실패: %v", err)
-	}
+	DB = database
+	log.Println("Database connected successfully")
+	return nil
+}
 
-	return db, nil
+func GetDB() *gorm.DB {
+	return DB
 }
 
 func getEnv(key, defaultValue string) string {

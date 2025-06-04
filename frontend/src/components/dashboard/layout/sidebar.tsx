@@ -11,6 +11,7 @@ import {
 	Menu,
 	Merge,
 	Globe,
+	Users,
 } from "lucide-react";
 
 interface SidebarProps {
@@ -29,7 +30,7 @@ export default function Sidebar({
 		{
 			label: "Overview",
 			icon: LayoutDashboard,
-			href: "/dashboard/overview",
+			href: "/dashboard",
 		},
 		{
 			label: "집계자",
@@ -40,6 +41,11 @@ export default function Sidebar({
 			label: "클라우드 인증 정보",
 			icon: Cloud,
 			href: "/dashboard/clouds",
+		},
+		{
+			label: "연합학습 클러스터",
+			icon: Users,
+			href: "/dashboard/participants",
 		},
 		{
 			label: "연합학습",

@@ -1,64 +1,25 @@
 package models
 
 import (
-	"database/sql"
 	"time"
-
-	"github.com/Mungge/Fleecy-Cloud/config"
 )
 
-var db *sql.DB
-
-func init() {
-	var err error
-	db, err = config.Connect()
-	if err != nil {
-		panic(err)
-	}
-}
-
 type User struct {
-	ID           int64     `json:"id"`
-	Email        string    `json:"email"`
-	PasswordHash string    `json:"-"`
-	Name         string    `json:"name"`
-	CreatedAt    time.Time `json:"created_at"`
-	UpdatedAt    time.Time `json:"updated_at"`
+	ID           int64     `json:"id" gorm:"primaryKey;autoIncrement"`
+	Email        string    `json:"email" gorm:"uniqueIndex:idx_users_email;not null"`
+	PasswordHash string    `json:"-" gorm:"column:password_hash;not null"`
+	Name         string    `json:"name" gorm:"not null"`
+	CreatedAt    time.Time `json:"created_at" gorm:"autoCreateTime"`
+	UpdatedAt    time.Time `json:"updated_at" gorm:"autoUpdateTime"`
+
+	// Releationships
+	CloudConnections   []CloudConnection   `json:"cloud_connections,omitempty" gorm:"foreignKey:UserID;constraint:OnUpdate:CASCADE,OnDelete:CASCADE"`
+	Participants       []Participant       `json:"participants,omitempty" gorm:"foreignKey:UserID;constraint:OnUpdate:CASCADE,OnDelete:CASCADE"`
+	FederatedLearnings []FederatedLearning `json:"federated_learnings,omitempty" gorm:"foreignKey:UserID;constraint:OnUpdate:CASCADE,OnDelete:CASCADE"`
+	Aggregators        []Aggregator        `json:"aggregators,omitempty" gorm:"foreignKey:UserID;constraint:OnUpdate:CASCADE,OnDelete:CASCADE"`
 }
 
-func CreateUser(user User) error {
-	query := `
-		INSERT INTO users (name, email, password_hash, created_at, updated_at)
-		VALUES ($1, $2, $3, $4, $5)
-		RETURNING id`
-
-	return db.QueryRow(
-		query,
-		user.Name,
-		user.Email,
-		user.PasswordHash,
-		user.CreatedAt,
-		user.UpdatedAt,
-	).Scan(&user.ID)
-}
-
-func GetUserByEmail(email string) (User, error) {
-	var user User
-	query := `SELECT id, name, email, password, created_at, updated_at FROM users WHERE email = $1`
-
-	err := db.QueryRow(query, email).Scan(
-		&user.ID,
-		&user.Name,
-		&user.Email,
-		&user.PasswordHash,
-		&user.CreatedAt,
-		&user.UpdatedAt,
-	)
-
-	if err == sql.ErrNoRows {
-		return User{}, err
-	}
-
-	return user, err
+func (User) TableName() string {
+	return "users"
 }
 

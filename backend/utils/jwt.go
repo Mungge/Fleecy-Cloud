@@ -61,3 +61,11 @@ func GetUserIDFromContext(c *gin.Context) (int64, error) {
 	
 	return 0, fmt.Errorf("인증되지 않은 사용자")
 } 
+
+func GetUserIDFromMiddleware(c *gin.Context) int64 {
+    userIDInterface, exists := c.Get("userID")
+    if !exists {
+        panic("사용자 ID가 Context에 설정되지 않았습니다")
+    }
+    return userIDInterface.(int64)
+}

@@ -1,12 +1,14 @@
 "use client";
 
-import dynamic from "next/dynamic";
-
-const OverviewContent = dynamic(
-	() => import("@/components/dashboard/overview/overview-content"),
-	{ ssr: false }
-);
+import { useEffect } from "react";
+import { useRouter } from "next/navigation";
 
 export default function OverviewPage() {
-	return <OverviewContent />;
+	const router = useRouter();
+
+	useEffect(() => {
+		router.replace("/dashboard");
+	}, [router]);
+
+	return null; // 리다이렉트 중이니 아무것도 표시하지 않음
 }

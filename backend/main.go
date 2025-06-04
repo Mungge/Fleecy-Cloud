@@ -9,8 +9,11 @@ import (
 
 	"github.com/Mungge/Fleecy-Cloud/config"
 	"github.com/Mungge/Fleecy-Cloud/handlers"
+	"github.com/Mungge/Fleecy-Cloud/middlewares"
+	"github.com/Mungge/Fleecy-Cloud/models"
 	"github.com/Mungge/Fleecy-Cloud/repository"
 	"github.com/Mungge/Fleecy-Cloud/routes"
+	"github.com/joho/godotenv"
 
 	"github.com/gin-gonic/gin"
 	"github.com/prometheus/client_golang/prometheus"
@@ -65,6 +68,11 @@ var (
 )
 
 func init() {
+	// .env 파일 로드
+	if err := godotenv.Load(); err != nil {
+		log.Println("No .env file found, using default environment variables")
+	}
+
 	// Prometheus 메트릭 등록
 	prometheus.MustRegister(httpRequestsTotal)
 	prometheus.MustRegister(httpRequestDuration)
@@ -139,15 +147,33 @@ func main() {
 	}()
 
 	// 데이터베이스 연결
-	dbConn, err := config.Connect()
-	if err != nil {
+	if err := config.ConnectDatabase(); err != nil {
 		log.Fatalf("데이터베이스 연결 실패: %v", err)
 	}
-	defer dbConn.Close()
+	db := config.GetDB()
+
+	// 마이그레이션 실행
+	err = db.AutoMigrate(
+		&models.User{},
+		&models.CloudConnection{},
+		&models.FederatedLearning{},
+		&models.Participant{},
+		&models.VirtualMachine{},
+		&models.ParticipantFederatedLearning{},
+		&models.Aggregator{},
+		&models.TrainingRound{},
+	)
+	if err != nil {
+		log.Fatalf("데이터베이스 마이그레이션 실패: %v", err)
+	}
 
 	// 리포지토리 초기화
-	userRepo := repository.NewUserRepository(dbConn)
-	cloudRepo := repository.NewCloudRepository(dbConn)
+	userRepo := repository.NewUserRepository(db)
+	cloudRepo := repository.NewCloudRepository(db)
+	flRepo := repository.NewFederatedLearningRepository(db)
+	participantRepo := repository.NewParticipantRepository(db)
+	aggregatorRepo := repository.NewAggregatorRepository(db)
+	vmRepo := repository.NewVirtualMachineRepository(db)
 
 	// 핸들러 초기화
 	authHandler := handlers.NewAuthHandler(
@@ -156,6 +182,9 @@ func main() {
 		os.Getenv("GITHUB_CLIENT_SECRET"),
 	)
 	cloudHandler := handlers.NewCloudHandler(cloudRepo)
+	flHandler := handlers.NewFederatedLearningHandler(flRepo)
+	participantHandler := handlers.NewParticipantHandler(participantRepo)
+	aggregatorHandler := handlers.NewAggregatorHandler(aggregatorRepo)
 
 	// Gin 라우터 설정
 	r := gin.Default()
@@ -177,8 +206,22 @@ func main() {
 	// 메트릭 미들웨어 적용
 	r.Use(ginMetricsMiddleware())
 
-	// 라우트 설정
-	routes.SetupRoutes(r, authHandler, cloudHandler)
+	// 라우트 설정 - 각 도메인별로 개별 설정
+	// 인증 라우트 (인증 미들웨어 없음)
+	routes.SetupAuthRoutes(r, authHandler)
+
+	// 인증이 필요한 라우트 그룹
+	authorized := r.Group("/api")
+	authorized.Use(middlewares.AuthMiddleware())
+
+	// 각 도메인별 라우트 설정
+	routes.SetupCloudRoutes(authorized, cloudHandler)
+	routes.SetupParticipantRoutes(authorized, participantHandler)
+	routes.SetupFederatedLearningRoutes(authorized, flHandler)
+	routes.SetupAggregatorRoutes(authorized, aggregatorHandler)
+	
+	// VM 라우트 설정 (전체 엔진에 설정, 인증은 내부에서 처리)
+	routes.SetupVirtualMachineRoutes(r, vmRepo, participantRepo)
 
 	// 서버 시작
 	if err := r.Run(":8080"); err != nil {
