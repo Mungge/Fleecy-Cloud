@@ -235,11 +235,54 @@ export default function ParticipantsContent() {
 	// VM 헬스체크
 	const handleHealthCheck = async (participant: Participant) => {
 		try {
-			await healthCheckVM(participant.id);
-			toast.success("헬스체크가 완료되었습니다.");
+			const healthResult = await healthCheckVM(participant.id);
+
+			// 상세한 헬스체크 결과 표시
+			if (healthResult.healthy) {
+				toast.success(
+					<div className="space-y-1">
+						<div className="font-semibold">
+							✅ {participant.name} 헬스체크 성공
+						</div>
+						<div className="text-sm">상태: {healthResult.status}</div>
+						<div className="text-sm">
+							응답시간: {healthResult.response_time_ms}ms
+						</div>
+						<div className="text-sm">{healthResult.message}</div>
+					</div>,
+					{
+						duration: 5000,
+					}
+				);
+			} else {
+				toast.error(
+					<div className="space-y-1">
+						<div className="font-semibold">
+							❌ {participant.name} 헬스체크 실패
+						</div>
+						<div className="text-sm">상태: {healthResult.status}</div>
+						<div className="text-sm">
+							응답시간: {healthResult.response_time_ms}ms
+						</div>
+						<div className="text-sm">{healthResult.message}</div>
+					</div>,
+					{
+						duration: 8000,
+					}
+				);
+			}
 		} catch (error) {
 			console.error("헬스체크 실패:", error);
-			toast.error("헬스체크에 실패했습니다.");
+			toast.error(
+				<div className="space-y-1">
+					<div className="font-semibold">
+						🚨 {participant.name} 헬스체크 오류
+					</div>
+					<div className="text-sm">
+						{error instanceof Error ? error.message : String(error)}
+					</div>
+				</div>
+			);
 		}
 	};
 
