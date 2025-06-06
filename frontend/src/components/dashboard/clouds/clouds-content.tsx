@@ -1,7 +1,13 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
+import {
+	Card,
+	CardContent,
+	CardHeader,
+	CardTitle,
+	CardDescription,
+} from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Trash2 } from "lucide-react";
@@ -36,7 +42,7 @@ import {
 	TableHeader,
 	TableRow,
 } from "@/components/ui/table";
-import { useToast } from "@/components/ui/use-toast";
+import { toast } from "sonner";
 import Cookies from "js-cookie";
 
 interface CloudConnection {
@@ -80,9 +86,9 @@ const CloudsContent = () => {
 	const [credentialFile, setCredentialFile] = useState<File | null>(null);
 	const [extractedProjectId, setExtractedProjectId] = useState<string>("");
 	const [fileContents, setFileContents] = useState<GCPCredentials | null>(null);
-	const [selectedCloud, setSelectedCloud] = useState<CloudConnection | null>(null);
-	
-	const { toast } = useToast();
+	const [selectedCloud, setSelectedCloud] = useState<CloudConnection | null>(
+		null
+	);
 
 	const awsForm = useForm<z.infer<typeof awsSchema>>({
 		resolver: zodResolver(awsSchema),
@@ -248,28 +254,13 @@ const CloudsContent = () => {
 
 				setIsDialogOpen(false);
 				fetchClouds();
-				
-				// 성공 메시지 표시
-				toast({
-					title: "성공",
-					description: "클라우드 연결이 추가되었습니다.",
-				});
+				toast.success("클라우드 연결이 추가되었습니다.");
 			} catch (fetchError) {
-				console.error("Fetch 에러:", fetchError);
-				toast({
-					title: "오류",
-					description: "클라우드 연결 추가에 실패했습니다.",
-					variant: "destructive",
-				});
+				toast.error("클라우드 연결 추가에 실패했습니다: " + fetchError);
 				throw fetchError;
 			}
 		} catch (error) {
-			console.error("클라우드 추가 실패:", error);
-			toast({
-				title: "오류",
-				description: "클라우드 연결 추가에 실패했습니다.",
-				variant: "destructive",
-			});
+			toast.error("클라우드 연결 추가에 실패했습니다: " + error);
 		}
 	};
 
@@ -290,25 +281,15 @@ const CloudsContent = () => {
 
 			if (response.ok) {
 				fetchClouds();
-				
-				// 성공 메시지 표시
-				toast({
-					title: "성공",
-					description: "클라우드 연결이 삭제되었습니다.",
-				});
-				
+				toast.success("클라우드 연결이 삭제되었습니다.");
+
 				// 선택된 클라우드가 삭제된 경우 선택 해제
 				if (selectedCloud?.id === id) {
 					setSelectedCloud(null);
 				}
 			}
 		} catch (error) {
-			console.error("Failed to delete cloud:", error);
-			toast({
-				title: "오류",
-				description: "클라우드 연결 삭제에 실패했습니다.",
-				variant: "destructive",
-			});
+			toast.error("클라우드 연결 삭제에 실패했습니다: " + error);
 		}
 	};
 
@@ -328,7 +309,9 @@ const CloudsContent = () => {
 		<div className="space-y-6">
 			<div className="flex items-center justify-between">
 				<div>
-					<h2 className="text-3xl font-bold tracking-tight">클라우드 인증 정보</h2>
+					<h2 className="text-3xl font-bold tracking-tight">
+						클라우드 인증 정보
+					</h2>
 					<p className="text-muted-foreground">
 						클라우드 제공자의 인증 정보를 관리하세요.
 					</p>
@@ -544,7 +527,9 @@ const CloudsContent = () => {
 													}`}
 													onClick={() => setSelectedCloud(cloud)}
 												>
-													<TableCell className="font-medium">{cloud.name}</TableCell>
+													<TableCell className="font-medium">
+														{cloud.name}
+													</TableCell>
 													<TableCell>{cloud.provider}</TableCell>
 													<TableCell>{cloud.region}</TableCell>
 													<TableCell>{getStatusBadge(cloud.status)}</TableCell>
@@ -566,10 +551,14 @@ const CloudsContent = () => {
 											))
 										) : (
 											<TableRow>
-												<TableCell colSpan={5} className="text-center py-12 text-muted-foreground">
+												<TableCell
+													colSpan={5}
+													className="text-center py-12 text-muted-foreground"
+												>
 													<p>등록된 클라우드 연결이 없습니다.</p>
 													<p className="text-sm mt-2">
-														위의 &apos;인증 정보 추가&apos; 버튼을 클릭하여 새로운 연결을 추가하세요.
+														위의 &apos;인증 정보 추가&apos; 버튼을 클릭하여
+														새로운 연결을 추가하세요.
 													</p>
 												</TableCell>
 											</TableRow>
@@ -592,29 +581,35 @@ const CloudsContent = () => {
 							{selectedCloud ? (
 								<div className="space-y-4">
 									<div>
-										<h3 className="font-semibold text-lg">{selectedCloud.name}</h3>
-										<p className="text-sm text-muted-foreground">{selectedCloud.provider} 클라우드</p>
+										<h3 className="font-semibold text-lg">
+											{selectedCloud.name}
+										</h3>
+										<p className="text-sm text-muted-foreground">
+											{selectedCloud.provider} 클라우드
+										</p>
 									</div>
-									
+
 									<div className="space-y-3">
 										<div>
 											<span className="text-sm font-medium">제공자:</span>
 											<p className="text-sm">{selectedCloud.provider}</p>
 										</div>
-										
+
 										<div>
 											<span className="text-sm font-medium">리전:</span>
 											<p className="text-sm">{selectedCloud.region}</p>
 										</div>
-										
+
 										<div>
 											<span className="text-sm font-medium">영역:</span>
 											<p className="text-sm">{selectedCloud.zone}</p>
 										</div>
-										
+
 										<div>
 											<span className="text-sm font-medium">상태:</span>
-											<div className="mt-1">{getStatusBadge(selectedCloud.status)}</div>
+											<div className="mt-1">
+												{getStatusBadge(selectedCloud.status)}
+											</div>
 										</div>
 									</div>
 								</div>
@@ -622,7 +617,8 @@ const CloudsContent = () => {
 								<div className="text-center py-8 text-muted-foreground">
 									<p>클라우드 연결을 선택해주세요</p>
 									<p className="text-sm mt-2">
-										왼쪽 목록에서 클라우드 연결을 클릭하면 상세 정보를 확인할 수 있습니다.
+										왼쪽 목록에서 클라우드 연결을 클릭하면 상세 정보를 확인할 수
+										있습니다.
 									</p>
 								</div>
 							)}

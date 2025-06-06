@@ -53,7 +53,7 @@ import {
 } from "@/components/ui/alert-dialog";
 import { Progress } from "@/components/ui/progress";
 import { Plus, Edit, Trash2, Activity, CheckCircle } from "lucide-react";
-import { useToast } from "@/components/ui/use-toast";
+import { toast } from "sonner";
 import {
 	createParticipant,
 	getParticipants,
@@ -92,8 +92,6 @@ export default function ParticipantsContent() {
 		useState<NodeJS.Timeout | null>(null);
 	const [configFile, setConfigFile] = useState<File | null>(null);
 
-	const { toast } = useToast();
-
 	const form = useForm<ParticipantFormData>({
 		resolver: zodResolver(participantSchema),
 		defaultValues: {
@@ -110,11 +108,7 @@ export default function ParticipantsContent() {
 			setParticipants(data);
 		} catch (error) {
 			console.error("클러스터 목록 로드 실패:", error);
-			toast({
-				title: "오류",
-				description: "클러스터 목록을 불러오는데 실패했습니다.",
-				variant: "destructive",
-			});
+			toast.error("클러스터 목록을 불러오는데 실패했습니다.");
 		} finally {
 			setIsLoading(false);
 		}
@@ -130,11 +124,7 @@ export default function ParticipantsContent() {
 				!file.name.toLowerCase().endsWith(".yaml") &&
 				!file.name.toLowerCase().endsWith(".yml")
 			) {
-				toast({
-					title: "오류",
-					description: "YAML 파일만 업로드 가능합니다.",
-					variant: "destructive",
-				});
+				toast.error("YAML 파일만 업로드 가능합니다.");
 				return;
 			}
 
@@ -144,8 +134,7 @@ export default function ParticipantsContent() {
 
 	useEffect(() => {
 		loadParticipants();
-		// eslint-disable-next-line react-hooks/exhaustive-deps
-	}, []); // 컴포넌트 마운트시에만 실행
+	}, []);
 
 	// 클러스터 생성
 	const handleCreateParticipant = async (data: ParticipantFormData) => {
@@ -163,10 +152,7 @@ export default function ParticipantsContent() {
 			}
 			await createParticipant(formData);
 
-			toast({
-				title: "성공",
-				description: "클러스터가 성공적으로 추가되었습니다.",
-			});
+			toast.success("클러스터가 성공적으로 추가되었습니다.");
 
 			form.reset({
 				name: "",
@@ -177,11 +163,7 @@ export default function ParticipantsContent() {
 			loadParticipants();
 		} catch (error) {
 			console.error("참여자 생성 실패:", error);
-			toast({
-				title: "오류",
-				description: "클러스터 추가에 실패했습니다.",
-				variant: "destructive",
-			});
+			toast.error("클러스터 추가에 실패했습니다.");
 		}
 	};
 
@@ -208,11 +190,7 @@ export default function ParticipantsContent() {
 				}
 				await updateParticipant(selectedParticipant.id, formData);
 			}
-
-			toast({
-				title: "성공",
-				description: "클러스터 정보가 성공적으로 수정되었습니다.",
-			});
+			toast.success("클러스터 정보가 성공적으로 수정되었습니다.");
 			setEditDialogOpen(false);
 			setSelectedParticipant(null);
 			setConfigFile(null);
@@ -220,11 +198,7 @@ export default function ParticipantsContent() {
 			loadParticipants();
 		} catch (error) {
 			console.error("참여자 수정 실패:", error);
-			toast({
-				title: "오류",
-				description: "클러스터 수정에 실패했습니다.",
-				variant: "destructive",
-			});
+			toast.error("클러스터 수정에 실패했습니다.");
 		}
 	};
 
@@ -232,18 +206,11 @@ export default function ParticipantsContent() {
 	const handleDeleteParticipant = async (id: string) => {
 		try {
 			await deleteParticipant(id);
-			toast({
-				title: "성공",
-				description: "참여자가 성공적으로 삭제되었습니다.",
-			});
+			toast.success("참여자가 성공적으로 삭제되었습니다.");
 			loadParticipants();
 		} catch (error) {
 			console.error("참여자 삭제 실패:", error);
-			toast({
-				title: "오류",
-				description: "참여자 삭제에 실패했습니다.",
-				variant: "destructive",
-			});
+			toast.error("참여자 삭제에 실패했습니다.");
 		}
 	};
 
@@ -258,11 +225,7 @@ export default function ParticipantsContent() {
 			setMonitoringData(monitoring);
 		} catch (error) {
 			console.error("VM 모니터링 실패:", error);
-			toast({
-				title: "오류",
-				description: "VM 모니터링에 실패했습니다.",
-				variant: "destructive",
-			});
+			toast.error("VM 모니터링에 실패했습니다.");
 			setMonitoringData(null);
 		} finally {
 			setIsMonitoringLoading(false);
@@ -272,18 +235,54 @@ export default function ParticipantsContent() {
 	// VM 헬스체크
 	const handleHealthCheck = async (participant: Participant) => {
 		try {
-			await healthCheckVM(participant.id);
-			toast({
-				title: "성공",
-				description: "헬스체크가 완료되었습니다.",
-			});
+			const healthResult = await healthCheckVM(participant.id);
+
+			// 상세한 헬스체크 결과 표시
+			if (healthResult.healthy) {
+				toast.success(
+					<div className="space-y-1">
+						<div className="font-semibold">
+							✅ {participant.name} 헬스체크 성공
+						</div>
+						<div className="text-sm">상태: {healthResult.status}</div>
+						<div className="text-sm">
+							응답시간: {healthResult.response_time_ms}ms
+						</div>
+						<div className="text-sm">{healthResult.message}</div>
+					</div>,
+					{
+						duration: 5000,
+					}
+				);
+			} else {
+				toast.error(
+					<div className="space-y-1">
+						<div className="font-semibold">
+							❌ {participant.name} 헬스체크 실패
+						</div>
+						<div className="text-sm">상태: {healthResult.status}</div>
+						<div className="text-sm">
+							응답시간: {healthResult.response_time_ms}ms
+						</div>
+						<div className="text-sm">{healthResult.message}</div>
+					</div>,
+					{
+						duration: 8000,
+					}
+				);
+			}
 		} catch (error) {
 			console.error("헬스체크 실패:", error);
-			toast({
-				title: "오류",
-				description: "헬스체크에 실패했습니다.",
-				variant: "destructive",
-			});
+			toast.error(
+				<div className="space-y-1">
+					<div className="font-semibold">
+						🚨 {participant.name} 헬스체크 오류
+					</div>
+					<div className="text-sm">
+						{error instanceof Error ? error.message : String(error)}
+					</div>
+				</div>
+			);
 		}
 	};
 
@@ -307,10 +306,7 @@ export default function ParticipantsContent() {
 			}
 			setIsRealtimeEnabled(false);
 			setRealtimeMonitoring(new Map());
-			toast({
-				title: "실시간 모니터링 중지",
-				description: "실시간 모니터링이 중지되었습니다.",
-			});
+			toast("실시간 모니터링이 중지되었습니다.");
 		} else {
 			// 모니터링 시작
 			setIsRealtimeEnabled(true);
@@ -324,7 +320,11 @@ export default function ParticipantsContent() {
 							const monitoring = await monitorVM(participant.id);
 							newMonitoringData.set(participant.id, monitoring);
 						} catch (error) {
-							console.error(`VM 모니터링 실패 (${participant.name}):`, error);
+							toast.error(
+								`VM 모니터링 실패 (${participant.name}): ${
+									error instanceof Error ? error.message : String(error)
+								}`
+							);
 						}
 					})
 				);
@@ -339,12 +339,9 @@ export default function ParticipantsContent() {
 			const interval = setInterval(updateMonitoring, 30000);
 			setMonitoringInterval(interval);
 
-			toast({
-				title: "실시간 모니터링 시작",
-				description: "VM 실시간 모니터링이 시작되었습니다.",
-			});
+			toast("vm 실시간 모니터링이 시작되었습니다.");
 		}
-	}, [isRealtimeEnabled, monitoringInterval, participants, toast]);
+	}, [isRealtimeEnabled, monitoringInterval, participants]);
 
 	// 컴포넌트 언마운트 시 인터벌 정리
 	useEffect(() => {

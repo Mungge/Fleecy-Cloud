@@ -8,7 +8,7 @@ import {
 	ReactNode,
 } from "react";
 import Cookies from "js-cookie";
-
+import { toast } from "sonner";
 import { useRouter } from "next/navigation";
 
 interface User {
@@ -46,6 +46,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 		localStorage.setItem("user", JSON.stringify(userData));
 		// 쿠키도 설정
 		Cookies.set("token", token, { expires: 2 });
+		toast.success(`환영합니다, ${userData.name || userData.email}님!`);
 	};
 
 	const logout = () => {
@@ -53,6 +54,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 		localStorage.removeItem("user");
 		// 쿠키도 삭제
 		Cookies.remove("token");
+		toast.success("로그아웃되었습니다");
 		router.push("/auth/login");
 	};
 
