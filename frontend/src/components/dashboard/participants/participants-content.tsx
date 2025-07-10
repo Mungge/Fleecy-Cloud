@@ -62,7 +62,8 @@ import {
 	monitorVM,
 	healthCheckVM,
 } from "@/api/participants";
-import type { Participant, VMMonitoringInfo } from "@/types/federatedLearning";
+import { Participant } from "@/types/participant";
+import { VMMonitoringInfo } from "@/types/virtual-machine";
 
 // 폼 스키마 정의 (YAML 파일 업로드 방식으로 변경)
 const participantSchema = z.object({

@@ -1,4 +1,4 @@
-import { FederatedLearningJob } from "@/types/federatedLearning";
+import { FederatedLearningJob } from "@/types/federated-learning";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8080";
 

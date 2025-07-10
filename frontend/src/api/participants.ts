@@ -1,9 +1,6 @@
 import Cookies from "js-cookie";
-import {
-	Participant,
-	VMMonitoringInfo,
-	VMHealthCheckResult,
-} from "@/types/federatedLearning";
+import { Participant } from "@/types/participant";
+import { VMMonitoringInfo, VMHealthCheckResult } from "@/types/virtual-machine";
 
 // 기본 API URL
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8080";
