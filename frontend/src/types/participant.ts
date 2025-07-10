@@ -1,28 +1,4 @@
-export interface FederatedLearningJob {
-	id: string;
-	user_id: number;
-	name: string;
-	description?: string;
-	status: string;
-	participants: number;
-	completed_at: string | null;
-	accuracy: number;
-	recall: number;
-	precision: number;
-	f1score: number;
-	rounds: number;
-	algorithm: string;
-	model_type: string;
-	created_at: string;
-	updated_at: string;
-}
-
-export interface CloudParticipant {
-	id: string;
-	name: string;
-	region: string;
-	status: "active" | "inactive";
-}
+// 참여자 관련 타입들
 
 // 연합학습 참여자(OpenStack 클라우드) 인터페이스
 export interface Participant {
@@ -67,34 +43,4 @@ export interface CreateParticipantRequest {
 	openstack_region?: string;
 	openstack_app_credential_id?: string;
 	openstack_app_credential_secret?: string;
-}
-
-// VM 모니터링 정보 인터페이스
-export interface VMMonitoringInfo {
-	instance_id: string;
-	status: string;
-	availability_zone: string;
-	host: string;
-	created_at: string;
-	updated_at: string;
-	cpu_usage: number;
-	memory_usage: number;
-	disk_usage: number;
-	network_in: number;
-	network_out: number;
-
-	// 연합 학습 관련 필드
-	federated_learning_status?: string;
-	current_task_id?: string;
-	task_progress?: number;
-	last_training_time?: string;
-}
-
-// VM 헬스체크 결과 인터페이스
-export interface VMHealthCheckResult {
-	healthy: boolean;
-	status: string;
-	message: string;
-	checked_at: string;
-	response_time_ms: number;
 }
