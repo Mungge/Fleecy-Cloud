@@ -70,7 +70,8 @@ import {
 	deleteFederatedLearning,
 } from "@/api/federatedLearning";
 import { getAvailableParticipants } from "@/api/participants";
-import { FederatedLearningJob, Participant } from "@/types/federatedLearning";
+import { FederatedLearningJob } from "@/types/federated-learning";
+import { Participant } from "@/types/participant";
 import { toast } from "sonner";
 
 // 집계 알고리즘 목록
