@@ -184,7 +184,7 @@ func main() {
 	cloudHandler := handlers.NewCloudHandler(cloudRepo)
 	flHandler := handlers.NewFederatedLearningHandler(flRepo)
 	participantHandler := handlers.NewParticipantHandler(participantRepo)
-	aggregatorHandler := handlers.NewAggregatorHandler(aggregatorRepo)
+	aggregatorHandler := handlers.NewAggregatorHandler(aggregatorRepo, flRepo)
 
 	// Gin 라우터 설정
 	r := gin.Default()
