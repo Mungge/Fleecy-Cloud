@@ -256,12 +256,13 @@ func (h *FederatedLearningHandler) CreateFederatedLearning(c *gin.Context) {
 
 // FederatedLearning 생성 요청 구조 (AggregatorID 기반)
 type CreateFederatedLearningRequest struct {
-	Name         string `json:"name" binding:"required"`
-	Description  string `json:"description"`
-	ModelType    string `json:"modelType" binding:"required"`
-	Algorithm    string `json:"algorithm" binding:"required"`
-	Rounds       int    `json:"rounds" binding:"required"`
-	Participants []struct {
+	CloudConnectionID string `json:"cloudConnectionId" binding:"required"`
+	Name              string `json:"name" binding:"required"`
+	Description       string `json:"description"`
+	ModelType         string `json:"modelType" binding:"required"`
+	Algorithm         string `json:"algorithm" binding:"required"`
+	Rounds            int    `json:"rounds" binding:"required"`
+	Participants      []struct {
 		ID                string `json:"id"`
 		Name              string `json:"name"`
 		Status            string `json:"status"`
