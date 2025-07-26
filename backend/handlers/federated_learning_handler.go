@@ -218,11 +218,16 @@ func (h *FederatedLearningHandler) CreateFederatedLearning(c *gin.Context) {
 		return
 	}
 
+	if request.CloudConnectionID == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "CloudConnectionID가 필요합니다"})
+		return
+	}
+
 	// FederatedLearning 생성
 	federatedLearning := &models.FederatedLearning{
 		ID:                uuid.New().String(),
 		UserID:           userID,
-		CloudConnectionID: "default-openstack", // TODO: 프론트엔드에서 받아야 함
+		CloudConnectionID: request.CloudConnectionID,
 		AggregatorID:     &aggregatorID,
 		Name:             request.Name,
 		Description:      request.Description,
