@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"strings"
 	"time"
 
 	"github.com/gin-gonic/gin"
@@ -104,6 +105,9 @@ func (h *ParticipantHandler) CreateParticipant(c *gin.Context) {
 		return
 	}
 
+	// OpenStack endpoint에서 /identity 부분 제거
+	authURL := strings.TrimSuffix(config.Clouds.OpenStack.Auth.AuthURL, "/identity")
+
 	// 참여자 객체 생성
 	participant := &models.Participant{
 		ID:       uuid.New().String(),
@@ -113,7 +117,7 @@ func (h *ParticipantHandler) CreateParticipant(c *gin.Context) {
 		Metadata: metadata,
 		
 		// OpenStack 관련 필드
-		OpenStackEndpoint:    config.Clouds.OpenStack.Auth.AuthURL,
+		OpenStackEndpoint:    authURL,
 		OpenStackRegion:      config.Clouds.OpenStack.RegionName,
 		OpenStackApplicationCredentialID:     config.Clouds.OpenStack.Auth.ApplicationCredentialID,
 		OpenStackApplicationCredentialSecret: config.Clouds.OpenStack.Auth.ApplicationCredentialSecret,

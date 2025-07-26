@@ -13,12 +13,16 @@ import (
 
 // AggregatorHandler는 Aggregator 관련 API 핸들러입니다
 type AggregatorHandler struct {
-	repo *repository.AggregatorRepository
+	repo   *repository.AggregatorRepository
+	flRepo *repository.FederatedLearningRepository
 }
 
 // NewAggregatorHandler는 새 AggregatorHandler 인스턴스를 생성합니다
-func NewAggregatorHandler(repo *repository.AggregatorRepository) *AggregatorHandler {
-	return &AggregatorHandler{repo: repo}
+func NewAggregatorHandler(repo *repository.AggregatorRepository, flRepo *repository.FederatedLearningRepository) *AggregatorHandler {
+	return &AggregatorHandler{
+		repo:   repo,
+		flRepo: flRepo,
+	}
 }
 
 // GetAggregators godoc
@@ -79,59 +83,6 @@ func (h *AggregatorHandler) GetAggregator(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, aggregator)
-}
-
-// CreateAggregator godoc
-// @Summary 새 Aggregator 생성
-// @Description 새로운 Aggregator 인스턴스를 생성합니다.
-// @Tags aggregators
-// @Accept json
-// @Produce json
-// @Param aggregator body CreateAggregatorRequest true "Aggregator 생성 정보"
-// @Success 201 {object} models.Aggregator
-// @Failure 400 {object} map[string]string
-// @Failure 401 {object} map[string]string
-// @Failure 500 {object} map[string]string
-// @Router /api/aggregators [post]
-func (h *AggregatorHandler) CreateAggregator(c *gin.Context) {
-	userID, err := utils.GetUserIDFromContext(c)
-	if err != nil {
-		c.JSON(http.StatusUnauthorized, gin.H{"error": "인증이 필요합니다"})
-		return
-	}
-
-	var request CreateAggregatorRequest
-	if err := c.ShouldBindJSON(&request); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "잘못된 요청 형식입니다"})
-		return
-	}
-
-	// Aggregator 객체 생성
-	aggregator := &models.Aggregator{
-		ID:                    uuid.New().String(),
-		UserID:               userID,
-		Name:                 request.Name,
-		Status:               "pending",
-		Algorithm:            request.Algorithm,
-		CloudProvider:        request.CloudProvider,
-		Region:               request.Region,
-		InstanceType:         request.InstanceType,
-		ParticipantCount:     request.Participants,
-		Rounds:               request.Rounds,
-		CurrentRound:         0,
-		EstimatedCost:        request.EstimatedCost,
-		CPUSpecs:             request.CPUSpecs,
-		MemorySpecs:          request.MemorySpecs,
-		StorageSpecs:         request.StorageSpecs,
-		Configuration:        request.Configuration,
-	}
-
-	if err := h.repo.CreateAggregator(aggregator); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Aggregator 생성 실패"})
-		return
-	}
-
-	c.JSON(http.StatusCreated, aggregator)
 }
 
 // UpdateAggregatorStatus godoc
@@ -338,24 +289,109 @@ func (h *AggregatorHandler) DeleteAggregator(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"message": "Aggregator가 삭제되었습니다"})
 }
 
-// Request/Response structures
-type CreateAggregatorRequest struct {
-	Name                  string                 `json:"name" binding:"required"`
-	Algorithm             string                 `json:"algorithm" binding:"required"`
-	FederatedLearningID   string                 `json:"federated_learning_id" binding:"required"`
-	FederatedLearningName string                 `json:"federated_learning_name"`
-	CloudProvider         string                 `json:"cloud_provider" binding:"required"`
-	Region                string                 `json:"region" binding:"required"`
-	InstanceType          string                 `json:"instance_type" binding:"required"`
-	Participants          int                    `json:"participants"`
-	Rounds                int                    `json:"rounds"`
-	EstimatedCost         float64                `json:"estimated_cost"`
-	CPUSpecs              string                 `json:"cpu_specs"`
-	MemorySpecs           string                 `json:"memory_specs"`
-	StorageSpecs          string                 `json:"storage_specs"`
-	Configuration         map[string]interface{} `json:"configuration"`
+
+// CreateAggregator godoc
+// @Summary 새 Aggregator 생성
+// @Description 새로운 Aggregator 인스턴스를 생성하고 Terraform으로 인프라를 배포합니다.
+// @Tags aggregators
+// @Accept json
+// @Produce json
+// @Param aggregator body CreateAggregatorRequest true "Aggregator 생성 정보"
+// @Success 201 {object} CreateAggregatorResponse
+// @Failure 400 {object} map[string]string
+// @Failure 401 {object} map[string]string
+// @Failure 500 {object} map[string]string
+// @Router /api/aggregators [post]
+func (h *AggregatorHandler) CreateAggregator(c *gin.Context) {
+	userID, err := utils.GetUserIDFromContext(c)
+	if err != nil {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "인증이 필요합니다"})
+		return
+	}
+
+	var request CreateAggregatorRequest
+	if err := c.ShouldBindJSON(&request); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "잘못된 요청 형식입니다: " + err.Error()})
+		return
+	}
+
+	// Aggregator 생성
+	aggregator := &models.Aggregator{
+		ID:            uuid.New().String(),
+		UserID:       userID,
+		Name:         request.Name,
+		Status:       "creating",
+		Algorithm:    request.Algorithm,
+		CloudProvider: "openstack",
+		Region:       request.Region,
+		InstanceType: request.InstanceType,
+		StorageSpecs: request.Storage + "GB",
+	}
+
+	// DB에 저장
+	if err := h.repo.CreateAggregator(aggregator); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Aggregator 생성 실패: " + err.Error()})
+		return
+	}
+
+	// Terraform 배포 시작 (비동기)
+	go func() {
+		if err := h.deployWithTerraform(aggregator); err != nil {
+			aggregator.Status = "failed"
+			h.repo.UpdateAggregator(aggregator)
+			return
+		}
+		aggregator.Status = "running"
+		h.repo.UpdateAggregator(aggregator)
+	}()
+
+	// 응답 반환
+	response := CreateAggregatorResponse{
+		AggregatorID:    aggregator.ID,
+		Status:          "creating",
+		TerraformStatus: "deploying",
+	}
+
+	c.JSON(http.StatusCreated, gin.H{"data": response})
 }
 
+// deployWithTerraform은 Terraform을 사용하여 인프라를 배포합니다
+func (h *AggregatorHandler) deployWithTerraform(aggregator *models.Aggregator) error {
+	// Terraform 설정 생성
+	config := utils.TerraformConfig{
+		Region:       aggregator.Region,
+		InstanceType: aggregator.InstanceType,
+		ProjectName:  "fleecy-aggregator",
+		Environment:  "production",
+	}
+	
+	// Terraform 작업공간 생성
+	workspaceDir, err := utils.CreateTerraformWorkspace(aggregator.ID, config)
+	if err != nil {
+		return err
+	}
+	
+	// Terraform 배포 실행
+	result, err := utils.DeployWithTerraform(workspaceDir)
+	if err != nil {
+		return err
+	}
+	
+	// 배포 결과를 aggregator에 저장
+	aggregator.InstanceID = result.InstanceID
+	aggregator.Status = "running"
+	if aggregator.Configuration == nil {
+		aggregator.Configuration = make(map[string]interface{})
+	}
+	aggregator.Configuration["public_ip"] = result.PublicIP
+	aggregator.Configuration["private_ip"] = result.PrivateIP
+	aggregator.Configuration["workspace_dir"] = result.WorkspaceDir
+	
+	return nil
+}
+
+
+// Request/Response structures
 type UpdateStatusRequest struct {
 	Status string `json:"status" binding:"required"`
 }
@@ -364,4 +400,43 @@ type UpdateMetricsRequest struct {
 	CPUUsage     float64 `json:"cpu_usage"`
 	MemoryUsage  float64 `json:"memory_usage"`
 	NetworkUsage float64 `json:"network_usage"`
+}
+
+// Aggregator 생성 요청 구조
+type CreateAggregatorRequest struct {
+	Name         string `json:"name" binding:"required"`
+	Algorithm    string `json:"algorithm" binding:"required"`
+	Region       string `json:"region" binding:"required"`
+	Storage      string `json:"storage" binding:"required"`
+	InstanceType string `json:"instanceType" binding:"required"`
+}
+
+// Aggregator 생성 응답 구조
+type CreateAggregatorResponse struct {
+	AggregatorID    string `json:"aggregatorId"`
+	Status          string `json:"status"`
+	TerraformStatus string `json:"terraformStatus,omitempty"`
+}
+
+// 프론트엔드에서 오는 연합학습 데이터 구조 (통합 생성용)
+type FederatedLearningData struct {
+	Name         string `json:"name"`
+	Description  string `json:"description"`
+	ModelType    string `json:"modelType"`
+	Algorithm    string `json:"algorithm"`
+	Rounds       int    `json:"rounds"`
+	Participants []struct {
+		ID                string `json:"id"`
+		Name              string `json:"name"`
+		Status            string `json:"status"`
+		OpenstackEndpoint string `json:"openstack_endpoint,omitempty"`
+	} `json:"participants"`
+	ModelFileName string `json:"modelFileName,omitempty"`
+}
+
+// 프론트엔드에서 오는 집계자 설정 구조
+type AggregatorConfigData struct {
+	Region       string `json:"region"`
+	Storage      string `json:"storage"`
+	InstanceType string `json:"instanceType"`
 }

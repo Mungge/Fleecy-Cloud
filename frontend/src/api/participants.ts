@@ -1,6 +1,11 @@
 import Cookies from "js-cookie";
 import { Participant } from "@/types/participant";
-import { VMMonitoringInfo, VMHealthCheckResult } from "@/types/virtual-machine";
+import {
+	VMMonitoringInfo,
+	VMHealthCheckResult,
+	OpenStackVMInstance,
+	VirtualMachine,
+} from "@/types/virtual-machine";
 
 // 기본 API URL
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8080";
@@ -225,6 +230,114 @@ export async function assignFederatedLearningTask(
 		}
 	} catch (error) {
 		console.error("연합학습 작업 할당 실패:", error);
+		throw error;
+	}
+}
+
+// ===== VM 관련 API 함수들 =====
+
+// 참여자의 VM 목록 조회
+export async function getOpenStackVMs(
+	participantId: string
+): Promise<OpenStackVMInstance[]> {
+	try {
+		const response = await fetch(
+			`${API_BASE_URL}/api/participants/${participantId}/vms/all`,
+			{
+				method: "GET",
+				headers: getAuthHeaders(),
+				credentials: "include",
+			}
+		);
+
+		if (!response.ok) {
+			throw new Error(`HTTP error! status: ${response.status}`);
+		}
+
+		const result = await response.json();
+		return result.data || [];
+	} catch (error) {
+		console.error("OpenStack VM 목록 조회 실패:", error);
+		throw error;
+	}
+}
+
+// DB에 저장된 VM 목록 조회
+export async function getVirtualMachines(
+	participantId: string
+): Promise<VirtualMachine[]> {
+	try {
+		const response = await fetch(
+			`${API_BASE_URL}/api/participants/${participantId}/vms`,
+			{
+				method: "GET",
+				headers: getAuthHeaders(),
+				credentials: "include",
+			}
+		);
+
+		if (!response.ok) {
+			throw new Error(`HTTP error! status: ${response.status}`);
+		}
+
+		const result = await response.json();
+		return result.data || [];
+	} catch (error) {
+		console.error("VM 목록 조회 실패:", error);
+		throw error;
+	}
+}
+
+// 특정 VM 세부 정보 조회 (OpenStack에서 직접)
+export async function getOpenStackVMDetails(
+	participantId: string,
+	instanceId: string
+): Promise<OpenStackVMInstance> {
+	try {
+		const response = await fetch(
+			`${API_BASE_URL}/api/participants/${participantId}/vms/openstack/${instanceId}`,
+			{
+				method: "GET",
+				headers: getAuthHeaders(),
+				credentials: "include",
+			}
+		);
+
+		if (!response.ok) {
+			throw new Error(`HTTP error! status: ${response.status}`);
+		}
+
+		const result = await response.json();
+		return result.data;
+	} catch (error) {
+		console.error("OpenStack VM 세부 정보 조회 실패:", error);
+		throw error;
+	}
+}
+
+// 특정 VM 모니터링 (OpenStack에서 직접)
+export async function monitorOpenStackVM(
+	participantId: string,
+	instanceId: string
+): Promise<VMMonitoringInfo> {
+	try {
+		const response = await fetch(
+			`${API_BASE_URL}/api/participants/${participantId}/vms/openstack/${instanceId}/monitor`,
+			{
+				method: "GET",
+				headers: getAuthHeaders(),
+				credentials: "include",
+			}
+		);
+
+		if (!response.ok) {
+			throw new Error(`HTTP error! status: ${response.status}`);
+		}
+
+		const result = await response.json();
+		return result.data;
+	} catch (error) {
+		console.error("OpenStack VM 모니터링 실패:", error);
 		throw error;
 	}
 }

@@ -12,11 +12,11 @@ type Aggregator struct {
 	Region                 string                 `json:"region" gorm:"not null"`
 	InstanceType           string                 `json:"instance_type" gorm:"not null"`
 	ParticipantCount       int                    `json:"participant_count" gorm:"default:0"`
-	Rounds                 int                    `json:"rounds" gorm:"default:0"`
+	Rounds                 int                    `json:"rounds" gorm:"default:0"` // 삭제
 	CurrentRound           int                    `json:"current_round" gorm:"default:0"`
 	Accuracy               *float64               `json:"accuracy,omitempty"`
 	CurrentCost            float64                `json:"current_cost" gorm:"default:0"`
-	EstimatedCost          float64                `json:"estimated_cost" gorm:"default:0"`
+	EstimatedCost          float64                `json:"estimated_cost" gorm:"default:0"` // 삭제
 	CPUSpecs               string                 `json:"cpu_specs"`
 	MemorySpecs            string                 `json:"memory_specs"`
 	StorageSpecs           string                 `json:"storage_specs"`
@@ -51,14 +51,21 @@ type TrainingRound struct {
 	ID              string    `json:"id" gorm:"primaryKey"`
 	AggregatorID    string    `json:"aggregator_id" gorm:"not null;index"`
 	Round           int       `json:"round" gorm:"not null"`
-	Accuracy        float64   `json:"accuracy"`
-	Loss            float64   `json:"loss"`
+	ModelMetrics    ModelMetric `json:"model_metrics" gorm:"embedded;embeddedPrefix:model_metrics_"`
 	Duration        int       `json:"duration"` // seconds
-	ParticipantsCount int     `json:"participants_count"`
+	ParticipantsCount int     `json:"participants_count"` // 왜 있는거지?
 	StartedAt       time.Time `json:"started_at"`
 	CompletedAt     *time.Time `json:"completed_at,omitempty"`
-	CreatedAt       time.Time `json:"created_at" gorm:"autoCreateTime"`
+	CreatedAt       time.Time `json:"created_at" gorm:"autoCreateTime"` // 삭제?
 	
 	// Relationships
 	Aggregator      *Aggregator `json:"aggregator,omitempty" gorm:"foreignKey:AggregatorID"`
+}
+
+type ModelMetric struct {
+	Accuracy  *float64 `json:"accuracy,omitempty"`
+	Loss      *float64 `json:"loss,omitempty"`
+	Precision *float64 `json:"precision,omitempty"`
+	Recall    *float64 `json:"recall,omitempty"`
+	F1Score   *float64 `json:"f1_score,omitempty"`
 }

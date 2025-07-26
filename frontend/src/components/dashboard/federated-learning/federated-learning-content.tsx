@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
+import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import {
 	Card,
@@ -41,7 +42,7 @@ import {
 	AlertDialogTitle,
 	AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
-import { Plus } from "lucide-react";
+import { Plus, Check } from "lucide-react";
 import {
 	Select,
 	SelectContent,
@@ -66,7 +67,6 @@ import * as z from "zod";
 import { Slider } from "@/components/ui/slider";
 import {
 	getFederatedLearnings,
-	createFederatedLearning,
 	deleteFederatedLearning,
 } from "@/api/federatedLearning";
 import { getAvailableParticipants } from "@/api/participants";
@@ -76,7 +76,7 @@ import { toast } from "sonner";
 
 // 집계 알고리즘 목록
 const AGGREGATION_ALGORITHMS = [
-	{ id: "fedavg", name: "FedAvg (Federated Averaging)" },
+	{ id: "fedavg", name: "FedAvg" },
 	{ id: "fedprox", name: "FedProx" },
 	{ id: "scaffold", name: "SCAFFOLD" },
 	{ id: "fedopt", name: "FedOpt" },
@@ -107,6 +107,7 @@ const formSchema = z.object({
 type FormValues = z.infer<typeof formSchema>;
 
 const FederatedLearningContent = () => {
+	const router = useRouter();
 	const [federatedLearningJobs, setFederatedLearningJobs] = useState<
 		FederatedLearningJob[]
 	>([]);
@@ -183,37 +184,42 @@ const FederatedLearningContent = () => {
 	// 연합학습 생성 함수
 	const handleCreateJob = async (values: FormValues) => {
 		try {
-			// FormData 생성
-			const formData = new FormData();
-			formData.append("name", values.name);
-			if (values.description)
-				formData.append("description", values.description);
-			formData.append("modelType", values.modelType);
-			formData.append("algorithm", values.algorithm);
-			formData.append("rounds", values.rounds.toString());
-			values.participants.forEach((participant) => {
-				formData.append("participants[]", participant);
-			});
+			// 선택된 참여자 정보 가져오기
+			const selectedParticipants = participants.filter((p) =>
+				values.participants.includes(p.id)
+			);
 
+			// 연합학습 정보를 sessionStorage에 저장
+			const federatedLearningData = {
+				name: values.name,
+				description: values.description || "",
+				modelType: values.modelType,
+				algorithm: values.algorithm,
+				rounds: values.rounds,
+				participants: selectedParticipants,
+				modelFileName: modelFile?.name || null,
+			};
+
+			sessionStorage.setItem(
+				"federatedLearningData",
+				JSON.stringify(federatedLearningData)
+			);
+
+			// 모델 파일이 있는 경우 별도 저장
 			if (modelFile) {
-				formData.append("modelFile", modelFile);
+				sessionStorage.setItem("modelFileName", modelFile.name);
+				// 필요하다면 파일을 base64로 인코딩하여 저장할 수도 있음
 			}
-
-			// API 호출
-			await createFederatedLearning(formData);
-
-			// 성공 메시지 표시
-			toast.success("연합학습 작업이 생성되었습니다.");
 
 			// 폼 초기화 및 다이얼로그 닫기
 			form.reset();
 			setModelFile(null);
 			setCreateDialogOpen(false);
 
-			// 목록 새로고침
-			fetchFederatedLearningJobs();
+			// Aggregator 생성 페이지로 이동 (쿼리 파라미터 없이)
+			router.push("/dashboard/aggregator/create");
 		} catch (error) {
-			toast.error("연합학습 작업 생성에 실패했습니다: " + error);
+			toast.error("페이지 이동에 실패했습니다: " + error);
 		}
 	};
 
@@ -286,6 +292,47 @@ const FederatedLearningContent = () => {
 								새로운 연합학습 작업에 필요한 정보를 입력하세요.
 							</DialogDescription>
 						</DialogHeader>
+
+						{/* Progress Steps */}
+						<div className="w-full py-4">
+							<div className="flex items-center justify-between">
+								{/* Step 1: 정보 입력 */}
+								<div className="flex flex-col items-center">
+									<div className="flex items-center justify-center w-8 h-8 rounded-full bg-blue-500 text-white text-sm font-medium">
+										1
+									</div>
+									<span className="mt-2 text-sm font-medium text-blue-600">
+										정보 입력
+									</span>
+								</div>
+
+								{/* Connector Line */}
+								<div className="flex-1 h-0.5 bg-gray-200 mx-4"></div>
+
+								{/* Step 2: 집계자 생성 */}
+								<div className="flex flex-col items-center">
+									<div className="flex items-center justify-center w-8 h-8 rounded-full bg-gray-200 text-gray-400 text-sm font-medium">
+										2
+									</div>
+									<span className="mt-2 text-sm text-gray-400">
+										집계자 생성
+									</span>
+								</div>
+
+								{/* Connector Line */}
+								<div className="flex-1 h-0.5 bg-gray-200 mx-4"></div>
+
+								{/* Step 3: 연합학습 생성 */}
+								<div className="flex flex-col items-center">
+									<div className="flex items-center justify-center w-8 h-8 rounded-full bg-gray-200 text-gray-400 text-sm font-medium">
+										3
+									</div>
+									<span className="mt-2 text-sm text-gray-400">
+										연합학습 생성
+									</span>
+								</div>
+							</div>
+						</div>
 
 						<Form {...form}>
 							<form
@@ -539,7 +586,7 @@ const FederatedLearningContent = () => {
 								</Tabs>
 
 								<DialogFooter>
-									<Button type="submit">연합학습 생성</Button>
+									<Button type="submit">다음: 집계자 생성</Button>
 								</DialogFooter>
 							</form>
 						</Form>
@@ -715,6 +762,66 @@ const FederatedLearningContent = () => {
 					</Card>
 				</div>
 			)}
+
+			{/* Progress Steps - Bottom */}
+			<Card>
+				<CardHeader>
+					<CardTitle>연합학습 생성 단계</CardTitle>
+					<CardDescription>
+						연합학습을 생성하기 위한 단계별 진행 상황을 확인하세요.
+					</CardDescription>
+				</CardHeader>
+				<CardContent>
+					<div className="w-full py-6">
+						<div className="flex items-center justify-between max-w-2xl mx-auto">
+							{/* Step 1: 정보 입력 */}
+							<div className="flex flex-col items-center">
+								<div className="flex items-center justify-center w-12 h-12 rounded-full bg-blue-500 text-white text-lg font-medium shadow-lg">
+									<Check className="w-6 h-6" />
+								</div>
+								<span className="mt-3 text-base font-medium text-blue-600">
+									정보 입력
+								</span>
+								<span className="mt-1 text-sm text-gray-500">
+									연합학습 정보 설정
+								</span>
+							</div>
+
+							{/* Connector Line */}
+							<div className="flex-1 h-1 bg-gray-200 mx-6 rounded-full"></div>
+
+							{/* Step 2: 집계자 생성 */}
+							<div className="flex flex-col items-center">
+								<div className="flex items-center justify-center w-12 h-12 rounded-full bg-gray-200 text-gray-400 text-lg font-medium">
+									2
+								</div>
+								<span className="mt-3 text-base text-gray-400">
+									집계자 생성
+								</span>
+								<span className="mt-1 text-sm text-gray-400">
+									Aggregator 설정
+								</span>
+							</div>
+
+							{/* Connector Line */}
+							<div className="flex-1 h-1 bg-gray-200 mx-6 rounded-full"></div>
+
+							{/* Step 3: 연합학습 생성 */}
+							<div className="flex flex-col items-center">
+								<div className="flex items-center justify-center w-12 h-12 rounded-full bg-gray-200 text-gray-400 text-lg font-medium">
+									3
+								</div>
+								<span className="mt-3 text-base text-gray-400">
+									연합학습 생성
+								</span>
+								<span className="mt-1 text-sm text-gray-400">
+									최종 생성 완료
+								</span>
+							</div>
+						</div>
+					</div>
+				</CardContent>
+			</Card>
 		</div>
 	);
 };
