@@ -137,34 +137,27 @@ func getTerraformOutputs(workspaceDir string) (*TerraformResult, error) {
 		return nil, fmt.Errorf("failed to get terraform outputs: %v", err)
 	}
 	
-	// JSON 파싱하여 결과 추출 (간단한 구현)
-	outputStr := string(output)
+	// Parse JSON output from Terraform
+	var terraformOutput map[string]struct {
+		Value string `json:"value"`
+	}
+	
+	if err := json.Unmarshal(output, &terraformOutput); err != nil {
+		return nil, fmt.Errorf("failed to parse terraform output JSON: %v", err)
+	}
 	
 	result := &TerraformResult{
 		Status:       "deployed",
 		WorkspaceDir: workspaceDir,
-	}
-	
-	// 간단한 텍스트 파싱 (실제로는 JSON 파싱을 사용해야 함)
-	if strings.Contains(outputStr, "instance_id") {
-		// 실제 구현에서는 정확한 JSON 파싱을 사용
-		result.InstanceID = "i-" + generateRandomString(8)
-		result.PublicIP = "3.34.123.45" // 예시 IP
-		result.PrivateIP = "10.0.1.10"   // 예시 IP
+		InstanceID:   terraformOutput["instance_id"].Value,
+		PublicIP:     terraformOutput["public_ip"].Value,
+		PrivateIP:    terraformOutput["private_ip"].Value,
 	}
 	
 	return result, nil
 }
 
-// generateRandomString generates a random string for demonstration
-func generateRandomString(length int) string {
-	const charset = "abcdefghijklmnopqrstuvwxyz0123456789"
-	result := make([]byte, length)
-	for i := range result {
-		result[i] = charset[time.Now().UnixNano()%int64(len(charset))]
-	}
-	return string(result)
-}
+// Removed generateRandomString function as it is no longer needed.
 
 // CleanupTerraformWorkspace destroys resources and cleans up workspace
 func CleanupTerraformWorkspace(workspaceDir string) error {
