@@ -18,23 +18,24 @@ const FederatedLearningContent = () => {
 
   // 페이지 로드 시 데이터 가져오기
   useEffect(() => {
-    let mounted = true;
-
-    const loadData = async () => {
-      if (mounted) {
-        await Promise.all([
-          federatedLearning.fetchJobs(),
-          participantsHook.fetchParticipants()
-        ]);
-      }
-    };
-
-    loadData();
-
-    return () => {
-      mounted = false;
-    };
-  }, [federatedLearning.fetchJobs, participantsHook.fetchParticipants]);
+	let mounted = true;
+  
+	const loadData = async () => {
+	  if (mounted) {
+		await Promise.all([
+		  federatedLearning.fetchJobs(),
+		  participantsHook.fetchParticipants()
+		]);
+	  }
+	};
+  
+	loadData();
+  
+	return () => {
+	  mounted = false;
+	};
+	// eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []); // 컴포넌트 마운트 시에만 실행하고 싶다면
 
   return (
     <div className="space-y-6">
