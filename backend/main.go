@@ -9,6 +9,7 @@ import (
 
 	"github.com/Mungge/Fleecy-Cloud/config"
 	"github.com/Mungge/Fleecy-Cloud/handlers"
+	authHandlers "github.com/Mungge/Fleecy-Cloud/handlers/auth"
 	"github.com/Mungge/Fleecy-Cloud/middlewares"
 	"github.com/Mungge/Fleecy-Cloud/models"
 	"github.com/Mungge/Fleecy-Cloud/repository"
@@ -152,9 +153,9 @@ func main() {
 	}
 	db := config.GetDB()
 
-	// 마이그레이션 실행
 	err = db.AutoMigrate(
 		&models.User{},
+		&models.RefreshToken{},
 		&models.CloudConnection{},
 		&models.FederatedLearning{},
 		&models.Participant{},
@@ -169,6 +170,7 @@ func main() {
 
 	// 리포지토리 초기화
 	userRepo := repository.NewUserRepository(db)
+	refreshTokenRepo := repository.NewRefreshTokenRepository(db)  // 새로 추가
 	cloudRepo := repository.NewCloudRepository(db)
 	flRepo := repository.NewFederatedLearningRepository(db)
 	participantRepo := repository.NewParticipantRepository(db)
@@ -176,8 +178,9 @@ func main() {
 	vmRepo := repository.NewVirtualMachineRepository(db)
 
 	// 핸들러 초기화
-	authHandler := handlers.NewAuthHandler(
+	authHandler := authHandlers.NewAuthHandler(
 		userRepo,
+		refreshTokenRepo,  // 새로 추가
 		os.Getenv("GITHUB_CLIENT_ID"),
 		os.Getenv("GITHUB_CLIENT_SECRET"),
 	)

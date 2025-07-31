@@ -20,8 +20,8 @@ interface HeaderProps {
 const Header: React.FC<HeaderProps> = ({ isSidebarOpen }) => {
 	const { user, logout } = useAuth();
 
-	const handleLogout = () => {
-		logout();
+	const handleLogout = async () => {
+		await logout();
 	};
 
 	return (
