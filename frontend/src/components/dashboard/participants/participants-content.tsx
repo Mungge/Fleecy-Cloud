@@ -251,6 +251,9 @@ export default function ParticipantsContent() {
 					}
 				);
 			}
+
+			// 헬스체크 완료 후 참여자 목록 새로고침으로 UI 상태 동기화
+			await loadParticipants();
 		} catch (error) {
 			console.error("헬스체크 실패:", error);
 			toast.error(
@@ -263,6 +266,9 @@ export default function ParticipantsContent() {
 					</div>
 				</div>
 			);
+
+			// 오류 발생 시에도 참여자 목록 새로고침
+			await loadParticipants();
 		}
 	};
 

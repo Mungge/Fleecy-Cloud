@@ -333,8 +333,6 @@ func (h *ParticipantHandler) testOpenStackConnection(participant *models.Partici
 
 // HealthCheckParticipant는 참여자의 OpenStack 클라우드 연결 상태를 확인합니다
 func (h *ParticipantHandler) HealthCheckParticipant(c *gin.Context) {
-	userID := utils.GetUserIDFromMiddleware(c)
-
 	// 경로 매개변수에서 참여자 ID 추출
 	id := c.Param("id")
 
@@ -349,12 +347,6 @@ func (h *ParticipantHandler) HealthCheckParticipant(c *gin.Context) {
 		return
 	}
 
-	// 참여자 소유자 확인
-	if participant.UserID != userID {
-		c.JSON(http.StatusForbidden, gin.H{"error": "해당 참여자에 접근할 권한이 없습니다"})
-		return
-	}
-
 	// OpenStack 연결 테스트
 	startTime := time.Now()
 	err = h.testOpenStackConnection(participant)
@@ -364,9 +356,33 @@ func (h *ParticipantHandler) HealthCheckParticipant(c *gin.Context) {
 	status := "ACTIVE"
 	message := fmt.Sprintf("%s 클러스터가 정상적으로 연결되었습니다", participant.Name)
 	
-	if !healthy {
-		status = "ERROR"
+	// 참여자 상태 업데이트
+	var participantStatusChanged = false
+	
+	if healthy {
+		// 헬스체크 성공 시 active 상태로 변경
+		if participant.Status != "active" {
+			participant.Status = "active"
+			participantStatusChanged = true
+		}
+	} else {
+		// 헬스체크 실패 시 inactive 상태로 변경
+		status = "INACTIVE"
 		message = fmt.Sprintf("%s OpenStack 연결 실패: %v", participant.Name, err)
+		
+		if participant.Status != "inactive" {
+			participant.Status = "inactive"
+			participantStatusChanged = true
+		}
+	}
+
+	// 상태가 변경된 경우 DB 업데이트
+	if participantStatusChanged {
+		participant.UpdatedAt = time.Now()
+		if updateErr := h.repo.Update(participant); updateErr != nil {
+			fmt.Printf("참여자 상태 업데이트 오류: %v\n", updateErr)
+			// 상태 업데이트 실패는 로그만 남기고 헬스체크 결과는 반환
+		}
 	}
 
 	result := map[string]interface{}{
