@@ -21,7 +21,7 @@ export const metadata: Metadata = {
 	title: "Fleecy Cloud",
 	description: "멀티 클라우드 연합학습 플랫폼",
 	icons: {
-		icon: "/favicon.ico",
+		icon: "/fleecy.ico",
 	},
 };
 
