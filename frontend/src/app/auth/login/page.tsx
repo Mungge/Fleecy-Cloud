@@ -66,7 +66,8 @@ export default function LoginPage() {
 			if (!response.ok) {
 				throw new Error(data.error || "로그인에 실패했습니다");
 			}
-			login(data.access_token, data.user);
+			// 중복된 쿠키 설정 제거하고 login 함수만 호출
+			login(data.token, data.user);
 
 			console.log("로그인 성공, 리다이렉트 시도...");
 			router.push("/dashboard");
