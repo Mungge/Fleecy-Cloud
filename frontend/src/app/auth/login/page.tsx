@@ -83,9 +83,24 @@ export default function LoginPage() {
 	};
 
 	const handleGitHubLogin = () => {
-		const apiUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8080";
-		toast.loading("GitHub으로 로그인 중...");
-		window.location.href = `${apiUrl}/api/auth/github`;
+		try {
+			const apiUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8080";
+
+			// 환경 변수 확인
+			if (!apiUrl) {
+				toast.error("API 서버 URL이 설정되지 않았습니다");
+				return;
+			}
+
+			toast.loading("GitHub으로 로그인 중...");
+
+			// 백엔드의 GitHub OAuth 엔드포인트로 리다이렉트
+			// 백엔드에서 GitHub OAuth URL 생성 및 리다이렉트 처리
+			window.location.href = `${apiUrl}/api/auth/github`;
+		} catch (error) {
+			console.error("GitHub 로그인 오류:", error);
+			toast.error("GitHub 로그인 중 오류가 발생했습니다");
+		}
 	};
 
 	return (

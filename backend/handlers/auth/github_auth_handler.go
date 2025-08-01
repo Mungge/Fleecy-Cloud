@@ -1,12 +1,13 @@
 package handlers
 
 import (
+	"crypto/rand"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"log"
 	"net/http"
 	"os"
-	"time"
 
 	"github.com/Mungge/Fleecy-Cloud/repository"
 	"github.com/gin-gonic/gin"
@@ -51,13 +52,19 @@ type GitHubTokenResponse struct {
 
 // GitHubLoginHandler는 GitHub OAuth 인증을 시작합니다
 func (h *GitHubAuthHandler) GitHubLoginHandler(c *gin.Context) {
+	redirectAfterLogin := c.Query("redirect_url")
+	if redirectAfterLogin != "" {
+		// 리다이렉트 URL을 쿠키에 저장 (로그인 성공 후 사용)
+		c.SetCookie("login_redirect", redirectAfterLogin, 600, "/", "", isProduction(), true)
+	}
+	
 	// 상태 값 생성 (CSRF 공격 방어)
 	state := h.generateRandomState()
 	
 	// 상태 값을 임시로 쿠키에 저장
 	c.SetSameSite(http.SameSiteStrictMode)
 	c.SetCookie("oauth_state", state, 600, "/", "", isProduction(), true) // 10분 후 만료
-	
+
 	// GitHub OAuth URL로 리다이렉트
 	redirectURL := fmt.Sprintf(
 		"https://github.com/login/oauth/authorize?client_id=%s&redirect_uri=%s&scope=user:email&state=%s",
@@ -66,7 +73,6 @@ func (h *GitHubAuthHandler) GitHubLoginHandler(c *gin.Context) {
 		state,
 	)
 	
-	log.Printf("GitHub OAuth 인증 시작")
 	c.Redirect(http.StatusTemporaryRedirect, redirectURL)
 }
 
@@ -84,7 +90,7 @@ func (h *GitHubAuthHandler) GitHubCallbackHandler(c *gin.Context) {
 	// 상태 값 검증 (CSRF 공격 방어)
 	storedState, err := c.Cookie("oauth_state")
 	if err != nil || storedState != state {
-		log.Printf("GitHub OAuth CSRF 공격 시도 감지")
+		log.Printf("GitHub OAuth 상태 검증 실패: stored='%s', received='%s', error=%v", storedState, state, err)
 		c.JSON(http.StatusBadRequest, gin.H{"error": "잘못된 상태 값입니다"})
 		return
 	}
@@ -147,7 +153,26 @@ func (h *GitHubAuthHandler) GitHubCallbackHandler(c *gin.Context) {
 		log.Printf("GitHub OAuth 로그인 성공: %s", user.Email)
 	}
 	
-	c.JSON(http.StatusOK, response)
+	// 프론트엔드로 리다이렉트 (토큰은 URL 파라미터로 전달)
+	redirectURL, _ := c.Cookie("login_redirect")
+	if redirectURL == "" {
+		redirectURL = "http://localhost:3000/auth/github/callback" // 프론트엔드 콜백 페이지로 리다이렉트
+	}
+	
+	// 리다이렉트 쿠키 삭제
+	c.SetCookie("login_redirect", "", -1, "/", "", isProduction(), true)
+	
+	// 토큰을 URL 파라미터로 전달 (보안상 권장되지 않지만 개발 환경에서 임시 사용)
+	// 실제 프로덕션에서는 다른 방법을 사용해야 함
+	finalRedirectURL := fmt.Sprintf("%s?token=%s&email=%s&name=%s&id=%d", 
+		redirectURL, 
+		response.AccessToken, 
+		response.User.Email,
+		response.User.Name,
+		response.User.ID)
+	
+	log.Printf("GitHub OAuth 완료, 리다이렉트: %s", redirectURL)
+	c.Redirect(http.StatusTemporaryRedirect, finalRedirectURL)
 }
 
 // exchangeCodeForToken은 GitHub에서 인증 코드를 액세스 토큰으로 교환합니다
@@ -267,8 +292,12 @@ func (h *GitHubAuthHandler) getGitHubUserEmail(token string) (string, error) {
 
 // 헬퍼 함수들
 func (h *GitHubAuthHandler) generateRandomState() string {
-	// 간단한 상태 값 생성 (실제로는 더 강력한 랜덤 생성기 사용 권장)
-	return fmt.Sprintf("state_%d", time.Now().UnixNano())
+	randomBytes := make([]byte, 16) // 16 bytes = 128 bits
+	_, err := rand.Read(randomBytes)
+	if err != nil {
+		log.Fatalf("Failed to generate random state: %v", err)
+	}
+	return hex.EncodeToString(randomBytes)
 }
 
 func (h *GitHubAuthHandler) getCallbackURL() string {
