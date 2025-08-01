@@ -1,11 +1,11 @@
 "use client";
 
-import { useEffect, useState, useRef } from "react";
+import { useEffect, useState, useRef, Suspense } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useAuth } from "@/contexts/auth-context";
 import { toast } from "sonner";
 
-export default function GitHubCallbackPage() {
+function GitHubCallbackContent() {
 	const router = useRouter();
 	const searchParams = useSearchParams();
 	const { login } = useAuth();
@@ -169,5 +169,27 @@ export default function GitHubCallbackPage() {
 				<p className="text-gray-600 mb-4">대시보드로 이동 중...</p>
 			</div>
 		</div>
+	);
+}
+
+// 로딩 컴포넌트
+function LoadingFallback() {
+	return (
+		<div className="flex items-center justify-center min-h-screen bg-gray-50">
+			<div className="text-center">
+				<div className="animate-spin rounded-full h-16 w-16 border-b-2 border-blue-600 mx-auto"></div>
+				<p className="mt-4 text-lg text-gray-700">GitHub 로그인 초기화 중...</p>
+				<p className="mt-2 text-sm text-gray-500">잠시만 기다려주세요</p>
+			</div>
+		</div>
+	);
+}
+
+// 메인 페이지 컴포넌트 - Suspense로 감싸서 useSearchParams 사용 문제 해결
+export default function GitHubCallbackPage() {
+	return (
+		<Suspense fallback={<LoadingFallback />}>
+			<GitHubCallbackContent />
+		</Suspense>
 	);
 }
