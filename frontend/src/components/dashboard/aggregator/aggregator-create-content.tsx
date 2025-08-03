@@ -22,7 +22,7 @@ import {
 } from "@/components/ui/select";
 import { Check, ArrowLeft } from "lucide-react";
 import { toast } from "sonner";
-import { createAggregator, optimizeAggregatorPlacement, AggregatorConfig } from "@/api/aggregator";
+import { optimizeAggregatorPlacement, AggregatorConfig } from "@/api/aggregator";
 
 
 // 연합학습 데이터 타입 정의
