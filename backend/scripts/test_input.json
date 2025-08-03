@@ -1,0 +1,15 @@
+{
+    "federatedLearning": {
+      "participants": [
+        {
+          "id": "1",
+          "name": "participant1", 
+          "openstack_endpoint": "https://localhost:8080"
+        }
+      ]
+    },
+    "constraints": {
+      "maxBudget": 500000,
+      "maxLatency": 100
+    }
+  }
