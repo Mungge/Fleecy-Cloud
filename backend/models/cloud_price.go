@@ -8,7 +8,7 @@ type CloudPrice struct {
 	CloudName       string    `json:"cloud_name" gorm:"not null;index;size:20"`
 	RegionName      string    `json:"region_name" gorm:"not null;index;size:30"`
 	InstanceType    string    `json:"instance_type" gorm:"not null;index;size:30"`
-	VCPUCount       int       `json:"vcpu_count" gorm:"not null;index"`
+	VCPUCount       int       `json:"vcpu_count" gorm:"index"`
 	MemoryGB        int       `json:"memory_gb" gorm:"not null;index"`
 	OperatingSystem string    `json:"operating_system" gorm:"default:'Linux';size:50"`
 	OnDemandPrice   float64   `json:"on_demand_price" gorm:"not null;type:decimal(10,6)"`
@@ -19,7 +19,7 @@ type CloudPrice struct {
 
 // 테이블명 설정
 func (CloudPrice) TableName() string {
-	return "cloud_prices"
+	return "cloud_price"
 }
 
 func (cp *CloudPrice) String() string {

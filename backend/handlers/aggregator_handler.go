@@ -1,13 +1,16 @@
 package handlers
 
 import (
+	"fmt"
 	"net/http"
-
+	"strings"
+	
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
 
 	"github.com/Mungge/Fleecy-Cloud/models"
 	"github.com/Mungge/Fleecy-Cloud/repository"
+	"github.com/Mungge/Fleecy-Cloud/services"
 	"github.com/Mungge/Fleecy-Cloud/utils"
 )
 
@@ -15,6 +18,7 @@ import (
 type AggregatorHandler struct {
 	repo   *repository.AggregatorRepository
 	flRepo *repository.FederatedLearningRepository
+	optimizationService *services.OptimizationService
 }
 
 // NewAggregatorHandler는 새 AggregatorHandler 인스턴스를 생성합니다
@@ -22,8 +26,137 @@ func NewAggregatorHandler(repo *repository.AggregatorRepository, flRepo *reposit
 	return &AggregatorHandler{
 		repo:   repo,
 		flRepo: flRepo,
+		optimizationService: services.NewOptimizationService(),
 	}
 }
+
+// OptimizeAggregatorPlacement godoc
+// @Summary 집계자 배치 최적화
+// @Description NSGA-II 알고리즘을 사용하여 사용자 제약사항에 맞는 최적의 집계자 배치 위치를 찾습니다.
+// @Tags aggregators
+// @Accept json
+// @Produce json
+// @Param request body services.OptimizationRequest true "최적화 요청 정보"
+// @Success 200 {object} map[string]interface{} "data: services.OptimizationResponse"
+// @Failure 400 {object} map[string]string "error: 잘못된 요청"
+// @Failure 401 {object} map[string]string "error: 인증 필요"
+// @Failure 500 {object} map[string]string "error: 서버 오류"
+// @Router /api/aggregator-placement-optimization [post]
+func (h *AggregatorHandler) OptimizeAggregatorPlacement(c *gin.Context) {
+	// 1. 사용자 인증 확인 (선택적 - 필요에 따라)
+	userID, err := utils.GetUserIDFromContext(c)
+	if err != nil {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "인증이 필요합니다"})
+		return
+	}
+
+	// 2. 요청 데이터 파싱
+	var request services.OptimizationRequest
+	if err := c.ShouldBindJSON(&request); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"error": "잘못된 요청 형식입니다: " + err.Error(),
+		})
+		return
+	}
+
+	// 3. 요청 데이터 유효성 검증
+	if err := h.validateOptimizationRequest(&request); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"error": "요청 데이터 유효성 검증 실패: " + err.Error(),
+		})
+		return
+	}
+
+	// 4. Python 환경 및 스크립트 존재 여부 확인
+	if err := h.optimizationService.ValidatePythonEnvironment(); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"error": "Python 환경 오류: " + err.Error(),
+		})
+		return
+	}
+
+	if err := h.optimizationService.ValidatePythonScript(); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"error": "Python 스크립트 오류: " + err.Error(),
+		})
+		return
+	}
+
+	// 5. 최적화 실행
+	result, err := h.optimizationService.RunOptimization(request)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"error": "집계자 배치 최적화 실행 실패: " + err.Error(),
+		})
+		return
+	}
+
+	// 6. 성공 응답 반환
+	c.JSON(http.StatusOK, gin.H{
+		"message": "집계자 배치 최적화가 성공적으로 완료되었습니다",
+		"data":    result,
+		"userID":  userID, // 디버깅용 (필요에 따라 제거)
+	})
+}
+
+// validateOptimizationRequest 요청 데이터 유효성 검증
+func (h *AggregatorHandler) validateOptimizationRequest(request *services.OptimizationRequest) error {
+	// 1. 연합학습 정보 검증
+	if request.FederatedLearning.Name == "" {
+		return fmt.Errorf("연합학습 이름이 필요합니다")
+	}
+
+	if request.FederatedLearning.Algorithm == "" {
+		return fmt.Errorf("집계 알고리즘이 필요합니다")
+	}
+
+	if request.FederatedLearning.Rounds <= 0 {
+		return fmt.Errorf("라운드 수는 1 이상이어야 합니다")
+	}
+
+	// 2. 참여자 정보 검증
+	if len(request.FederatedLearning.Participants) == 0 {
+		return fmt.Errorf("최소 1명 이상의 참여자가 필요합니다")
+	}
+
+	for i, participant := range request.FederatedLearning.Participants {
+		if participant.ID == "" {
+			return fmt.Errorf("참여자 %d의 ID가 필요합니다", i+1)
+		}
+		if participant.Name == "" {
+			return fmt.Errorf("참여자 %d의 이름이 필요합니다", i+1)
+		}
+		if participant.OpenstackEndpoint == "" {
+			return fmt.Errorf("참여자 %d의 OpenStack 엔드포인트가 필요합니다", i+1)
+		}
+		// 간단한 URL 형식 검증
+		if !strings.HasPrefix(participant.OpenstackEndpoint, "http://") && 
+		   !strings.HasPrefix(participant.OpenstackEndpoint, "https://") {
+			return fmt.Errorf("참여자 %d의 OpenStack 엔드포인트가 올바른 URL 형식이 아닙니다", i+1)
+		}
+	}
+
+	// 3. 제약사항 검증
+	if request.Constraints.MaxBudget <= 0 {
+		return fmt.Errorf("최대 예산은 0보다 커야 합니다")
+	}
+
+	if request.Constraints.MaxLatency <= 0 {
+		return fmt.Errorf("최대 지연시간은 0보다 커야 합니다")
+	}
+
+	// 합리적인 범위 체크
+	if request.Constraints.MaxBudget > 10000000 { // 1천만원
+		return fmt.Errorf("최대 예산이 너무 큽니다 (최대: 10,000,000원)")
+	}
+
+	if request.Constraints.MaxLatency > 10000 { // 10초
+		return fmt.Errorf("최대 지연시간이 너무 큽니다 (최대: 10,000ms)")
+	}
+
+	return nil
+}
+
 
 // GetAggregators godoc
 // @Summary Aggregator 목록 조회
@@ -439,4 +572,24 @@ type AggregatorConfigData struct {
 	Region       string `json:"region"`
 	Storage      string `json:"storage"`
 	InstanceType string `json:"instanceType"`
+}
+
+type OptimizationRequest struct {
+    FederatedLearning struct {
+        Name         string        `json:"name"`
+        Description  string        `json:"description"`
+        Algorithm    string        `json:"algorithm"`
+        Rounds       int           `json:"rounds"`
+        Participants []Participant `json:"participants"`
+    } `json:"federatedLearning"`
+    Constraints struct {
+        MaxBudget  int `json:"maxBudget"`
+        MaxLatency int `json:"maxLatency"`
+    } `json:"constraints"`
+}
+
+type Participant struct {
+    ID               string `json:"id"`
+    Name             string `json:"name"`
+    OpenstackEndpoint string `json:"openstack_endpoint"`
 }

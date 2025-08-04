@@ -11,6 +11,7 @@ import {
 	CardTitle,
 } from "@/components/ui/card";
 import { Label } from "@/components/ui/label";
+import { Slider } from "@/components/ui/slider";
 import { Badge } from "@/components/ui/badge";
 import {
 	Select,
@@ -21,7 +22,8 @@ import {
 } from "@/components/ui/select";
 import { Check, ArrowLeft } from "lucide-react";
 import { toast } from "sonner";
-import { createAggregator, AggregatorConfig } from "@/api/aggregator";
+import { optimizeAggregatorPlacement, AggregatorConfig } from "@/api/aggregator";
+
 
 // 연합학습 데이터 타입 정의
 interface FederatedLearningData {
@@ -47,6 +49,8 @@ const AggregatorCreateContent = () => {
 		region: "ap-northeast-2",
 		storage: "20",
 		instanceType: "m1.medium",
+		maxBudget: 500000,
+		maxLatency: 100,
 	});
 	const [isLoading, setIsLoading] = useState(false);
 	const [creationStatus, setCreationStatus] = useState<{
@@ -88,69 +92,118 @@ const AggregatorCreateContent = () => {
 		setIsLoading(true);
 		setCreationStatus({
 			step: "creating",
-			message: "Aggregator 설정을 생성하고 있습니다...",
+			message: "Aggregator 배치 최적화를 시작합니다.",
+			//message: "Aggregator 설정을 생성하고 있습니다...",
 			progress: 10,
 		});
 
 		try {
-			// 1단계: Aggregator 생성 요청
-			toast.info("Aggregator 생성을 시작합니다...");
-
-			const response = await createAggregator(
+			//0단계: Aggregator 배치 최적화
+			toast.info("집계자 배치 최적화를 실행합니다...");
+			const optimizationResult = await optimizeAggregatorPlacement(
 				federatedLearningData,
-				aggregatorConfig
+				{
+					maxBudget: aggregatorConfig.maxBudget,
+					maxLatency: aggregatorConfig.maxLatency
+				}
 			);
-
 			setCreationStatus({
 				step: "deploying",
-				message: "Terraform을 이용하여 인프라를 배포하고 있습니다...",
-				progress: 50,
+				message: "최적화 완료! 최적의 집계자 배치를 찾았습니다.",
+				progress: 80,
 			});
-
-			toast.info("Terraform으로 인프라를 배포 중입니다...");
-
-			// 2단계: 배포 상태 모니터링 (실제로는 polling이나 WebSocket으로 구현)
-			// 여기서는 시뮬레이션으로 처리
-			await new Promise((resolve) => setTimeout(resolve, 3000));
-
+			toast.success(`최적화 완료! ${optimizationResult.optimizationResults.length}개의 최적해를 찾았습니다.`);
+			// 최적화 결과를 사용자에게 표시하거나 다음 단계 진행
+			// 여기서는 임시로 첫 번째 최적해 정보를 표시
+			const bestOption = optimizationResult.optimizationResults[0];
+			if (bestOption) {
+				toast.info(`추천 배치: ${bestOption.cloudProvider} ${bestOption.region} (${bestOption.instanceType}) - 비용: ${bestOption.estimatedCost.toLocaleString()}원, 지연시간: ${bestOption.estimatedLatency}ms`);
+			}
 			setCreationStatus({
 				step: "completed",
-				message: "Aggregator가 성공적으로 생성되었습니다!",
+				message: "집계자 배치 최적화가 성공적으로 완료되었습니다!",
 				progress: 100,
 			});
-
-			// 성공 메시지 표시
-			toast.success(
-				`Aggregator가 성공적으로 생성되었습니다! (ID: ${response.aggregatorId})`
-			);
-
-			// 3단계 완료 상태로 Progress bar 업데이트 후 페이지 이동
+			// 3단계 완료 상태로 업데이트 후 페이지 이동
 			setTimeout(() => {
 				// sessionStorage 정리
 				sessionStorage.removeItem("federatedLearningData");
 				sessionStorage.removeItem("modelFileName");
-
-				// 연합학습 목록 페이지로 이동
 				router.push("/dashboard/federated-learning");
-			}, 2000);
+			}, 3000); // 결과를 좀 더 오래 보여주기 위해 3초로 변경
 		} catch (error: unknown) {
-			console.error("Aggregator 생성 실패:", error);
-
+			console.error("집계자 배치 최적화 실패:", error);
 			const errorMessage =
 				error instanceof Error ? error.message : "알 수 없는 오류";
-
+			
 			setCreationStatus({
 				step: "error",
-				message: errorMessage || "Aggregator 생성에 실패했습니다.",
+				message: errorMessage || "집계자 배치 최적화에 실패했습니다.",
 				progress: 0,
-			});
+			});	
+			toast.error(`집계자 배치 최적화에 실패했습니다: ${errorMessage}`);
+			} finally {
+				setIsLoading(false);
+			}
 
-			toast.error(`Aggregator 생성에 실패했습니다: ${errorMessage}`);
-		} finally {
-			setIsLoading(false);
-		}
-	};
+			
+		// 	// 1단계: Aggregator 생성 요청
+		// 	//toast.info("Aggregator 생성을 시작합니다...");
 
+		// 	const response = await createAggregator(
+		// 		federatedLearningData,
+		// 		aggregatorConfig
+		// 	);
+
+		// 	setCreationStatus({
+		// 		step: "deploying",
+		// 		message: "Terraform을 이용하여 인프라를 배포하고 있습니다...",
+		// 		progress: 50,
+		// 	});
+
+		// 	toast.info("Terraform으로 인프라를 배포 중입니다...");
+
+		// 	// 2단계: 배포 상태 모니터링 (실제로는 polling이나 WebSocket으로 구현)
+		// 	// 여기서는 시뮬레이션으로 처리
+		// 	await new Promise((resolve) => setTimeout(resolve, 3000));
+
+		// 	setCreationStatus({
+		// 		step: "completed",
+		// 		message: "Aggregator가 성공적으로 생성되었습니다!",
+		// 		progress: 100,
+		// 	});
+
+		// 	// 성공 메시지 표시
+		// 	toast.success(
+		// 		`Aggregator가 성공적으로 생성되었습니다! (ID: ${response.aggregatorId})`
+		// 	);
+
+		// 	// 3단계 완료 상태로 Progress bar 업데이트 후 페이지 이동
+		// 	setTimeout(() => {
+		// 		// sessionStorage 정리
+		// 		sessionStorage.removeItem("federatedLearningData");
+		// 		sessionStorage.removeItem("modelFileName");
+
+		// 		// 연합학습 목록 페이지로 이동
+		// 		router.push("/dashboard/federated-learning");
+		// 	}, 2000);
+		// } catch (error: unknown) { 	 	
+		// 	console.error("Aggregator 생성 실패:", error);
+
+		// 	const errorMessage =
+		// 		error instanceof Error ? error.message : "알 수 없는 오류";
+
+		// 	setCreationStatus({
+		// 		step: "error",
+		// 		message: errorMessage || "Aggregator 생성에 실패했습니다.",
+		// 		progress: 0,
+		// 	});
+
+		// 	toast.error(`Aggregator 생성에 실패했습니다: ${errorMessage}`);
+		// } finally {
+		// 	setIsLoading(false);
+		// }
+	};	
 	if (!federatedLearningData) {
 		return (
 			<div className="flex justify-center items-center min-h-screen">
@@ -476,6 +529,63 @@ const AggregatorCreateContent = () => {
 								</SelectContent>
 							</Select>
 						</div>
+						{/* 제약조건 설정 추가 */}
+						<div className="space-y-2">
+							<div className="flex justify-between items-center">
+								<Label htmlFor="budget">최대 월 예산</Label>
+								<span className="text-sm font-medium text-green-600">
+									{aggregatorConfig.maxBudget.toLocaleString()}원
+								</span>
+							</div>
+							<Slider
+								id="budget"
+								value={[aggregatorConfig.maxBudget]}
+								onValueChange={([value]) => 
+									setAggregatorConfig(prev => ({ ...prev, maxBudget: value }))
+								}
+								max={2000000}
+								min={100000}
+								step={100000}
+								className="w-full"
+							/>
+							<div className="flex justify-between text-xs text-muted-foreground">
+								<span>10만원</span>
+								<span>200만원</span>
+							</div>
+						</div>
+
+						<div className="space-y-2">
+							<div className="flex justify-between items-center">
+								<Label htmlFor="latency">최대 허용 지연시간</Label>
+								<span className="text-sm font-medium text-blue-600">
+									{aggregatorConfig.maxLatency}ms
+								</span>
+							</div>
+							<Slider
+								id="latency"
+								value={[aggregatorConfig.maxLatency]}
+								onValueChange={([value]) => 
+									setAggregatorConfig(prev => ({ ...prev, maxLatency: value }))
+								}
+								max={500}
+								min={20}
+								step={10}
+								className="w-full"
+							/>
+							<div className="flex justify-between text-xs text-muted-foreground">
+								<span>20ms (매우 빠름)</span>
+								<span>500ms (여유)</span>
+							</div>
+						</div>
+
+						{/* 현재 설정 요약 */}
+						<div className="mt-4 p-3 bg-gray-50 rounded-md">
+							<div className="text-sm text-muted-foreground mb-1">제약조건:</div>
+							<div className="text-sm">
+								월 최대 <span className="font-medium text-green-600">{aggregatorConfig.maxBudget.toLocaleString()}원</span> 예산으로{" "}
+								<span className="font-medium text-blue-600">{aggregatorConfig.maxLatency}ms</span> 이하의 응답속도 보장
+							</div>
+						</div>
 
 						<div className="pt-4">
 							<Button
@@ -499,7 +609,7 @@ const AggregatorCreateContent = () => {
 								) : creationStatus?.step === "error" ? (
 									"다시 시도"
 								) : (
-									"Terraform으로 집계자 생성"
+									"집계자 배치 최적화 실행"
 								)}
 							</Button>
 

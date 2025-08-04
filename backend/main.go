@@ -157,6 +157,8 @@ func main() {
 		&models.User{},
 		&models.RefreshToken{},
 		&models.CloudConnection{},
+		&models.CloudPrice{},
+		&models.CloudLatency{},
 		&models.FederatedLearning{},
 		&models.Participant{},
 		&models.VirtualMachine{},
@@ -172,6 +174,8 @@ func main() {
 	userRepo := repository.NewUserRepository(db)
 	refreshTokenRepo := repository.NewRefreshTokenRepository(db)  // 새로 추가
 	cloudRepo := repository.NewCloudRepository(db)
+	// pirceRepo := repository.NewCloudPriceRepository(db)
+	// latencyRepo := repository.NewCloudLatencyRepository(db)
 	flRepo := repository.NewFederatedLearningRepository(db)
 	participantRepo := repository.NewParticipantRepository(db)
 	aggregatorRepo := repository.NewAggregatorRepository(db)
