@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
@@ -51,18 +51,18 @@ import {
 	AlertDialogTitle,
 	AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
-import { Progress } from "@/components/ui/progress";
-import { Plus, Edit, Trash2, Activity, CheckCircle } from "lucide-react";
+import { Plus, Edit, Trash2, CheckCircle, Server } from "lucide-react";
 import { toast } from "sonner";
 import {
 	createParticipant,
 	getParticipants,
 	updateParticipant,
 	deleteParticipant,
-	monitorVM,
 	healthCheckVM,
+	getOpenStackVMs,
 } from "@/api/participants";
-import type { Participant, VMMonitoringInfo } from "@/types/federatedLearning";
+import { Participant } from "@/types/participant";
+import { OpenStackVMInstance } from "@/types/virtual-machine";
 
 // 폼 스키마 정의 (YAML 파일 업로드 방식으로 변경)
 const participantSchema = z.object({
@@ -77,20 +77,14 @@ export default function ParticipantsContent() {
 	const [isLoading, setIsLoading] = useState(true);
 	const [createDialogOpen, setCreateDialogOpen] = useState(false);
 	const [editDialogOpen, setEditDialogOpen] = useState(false);
-	const [monitorDialogOpen, setMonitorDialogOpen] = useState(false);
+	const [vmListDialogOpen, setVmListDialogOpen] = useState(false);
 	const [selectedParticipant, setSelectedParticipant] =
 		useState<Participant | null>(null);
-	const [isMonitoringLoading, setIsMonitoringLoading] = useState(false);
-	const [monitoringData, setMonitoringData] = useState<VMMonitoringInfo | null>(
-		null
-	);
-	const [isRealtimeEnabled, setIsRealtimeEnabled] = useState(false);
-	const [realtimeMonitoring, setRealtimeMonitoring] = useState<
-		Map<string, VMMonitoringInfo>
-	>(new Map());
-	const [monitoringInterval, setMonitoringInterval] =
-		useState<NodeJS.Timeout | null>(null);
 	const [configFile, setConfigFile] = useState<File | null>(null);
+
+	// VM 목록 관련 상태
+	const [vmList, setVmList] = useState<OpenStackVMInstance[]>([]);
+	const [isVmListLoading, setIsVmListLoading] = useState(false);
 
 	const form = useForm<ParticipantFormData>({
 		resolver: zodResolver(participantSchema),
@@ -207,28 +201,14 @@ export default function ParticipantsContent() {
 		try {
 			await deleteParticipant(id);
 			toast.success("참여자가 성공적으로 삭제되었습니다.");
+			// 삭제된 참여자가 선택되어 있었다면 선택 해제
+			if (selectedParticipant?.id === id) {
+				setSelectedParticipant(null);
+			}
 			loadParticipants();
 		} catch (error) {
 			console.error("참여자 삭제 실패:", error);
 			toast.error("참여자 삭제에 실패했습니다.");
-		}
-	};
-
-	// VM 모니터링
-	const handleMonitorVM = async (participant: Participant) => {
-		setSelectedParticipant(participant);
-		setIsMonitoringLoading(true);
-		setMonitorDialogOpen(true);
-
-		try {
-			const monitoring = await monitorVM(participant.id);
-			setMonitoringData(monitoring);
-		} catch (error) {
-			console.error("VM 모니터링 실패:", error);
-			toast.error("VM 모니터링에 실패했습니다.");
-			setMonitoringData(null);
-		} finally {
-			setIsMonitoringLoading(false);
 		}
 	};
 
@@ -271,6 +251,9 @@ export default function ParticipantsContent() {
 					}
 				);
 			}
+
+			// 헬스체크 완료 후 참여자 목록 새로고침으로 UI 상태 동기화
+			await loadParticipants();
 		} catch (error) {
 			console.error("헬스체크 실패:", error);
 			toast.error(
@@ -283,6 +266,9 @@ export default function ParticipantsContent() {
 					</div>
 				</div>
 			);
+
+			// 오류 발생 시에도 참여자 목록 새로고침
+			await loadParticipants();
 		}
 	};
 
@@ -296,61 +282,23 @@ export default function ParticipantsContent() {
 		setEditDialogOpen(true);
 	};
 
-	// 실시간 모니터링 토글
-	const toggleRealtimeMonitoring = useCallback(async () => {
-		if (isRealtimeEnabled) {
-			// 모니터링 중지
-			if (monitoringInterval) {
-				clearInterval(monitoringInterval);
-				setMonitoringInterval(null);
-			}
-			setIsRealtimeEnabled(false);
-			setRealtimeMonitoring(new Map());
-			toast("실시간 모니터링이 중지되었습니다.");
-		} else {
-			// 모니터링 시작
-			setIsRealtimeEnabled(true);
+	// VM 목록 조회
+	const handleViewVMs = async (participant: Participant) => {
+		setSelectedParticipant(participant);
+		setIsVmListLoading(true);
+		setVmListDialogOpen(true);
 
-			const updateMonitoring = async () => {
-				const newMonitoringData = new Map<string, VMMonitoringInfo>();
-
-				await Promise.all(
-					participants.map(async (participant) => {
-						try {
-							const monitoring = await monitorVM(participant.id);
-							newMonitoringData.set(participant.id, monitoring);
-						} catch (error) {
-							toast.error(
-								`VM 모니터링 실패 (${participant.name}): ${
-									error instanceof Error ? error.message : String(error)
-								}`
-							);
-						}
-					})
-				);
-
-				setRealtimeMonitoring(newMonitoringData);
-			};
-
-			// 즉시 한 번 실행
-			await updateMonitoring();
-
-			// 30초마다 업데이트
-			const interval = setInterval(updateMonitoring, 30000);
-			setMonitoringInterval(interval);
-
-			toast("vm 실시간 모니터링이 시작되었습니다.");
+		try {
+			const vms = await getOpenStackVMs(participant.id);
+			setVmList(vms);
+		} catch (error) {
+			console.error("VM 목록 조회 실패:", error);
+			toast.error("VM 목록을 불러오는데 실패했습니다.");
+			setVmList([]);
+		} finally {
+			setIsVmListLoading(false);
 		}
-	}, [isRealtimeEnabled, monitoringInterval, participants]);
-
-	// 컴포넌트 언마운트 시 인터벌 정리
-	useEffect(() => {
-		return () => {
-			if (monitoringInterval) {
-				clearInterval(monitoringInterval);
-			}
-		};
-	}, [monitoringInterval]);
+	};
 
 	// 유틸리티 함수들
 	const getStatusBadge = (status: string) => {
@@ -375,122 +323,111 @@ export default function ParticipantsContent() {
 					</p>
 				</div>
 
-				<div className="flex items-center gap-4">
-					<Button
-						variant={isRealtimeEnabled ? "destructive" : "outline"}
-						onClick={toggleRealtimeMonitoring}
-					>
-						<Activity className="mr-2 h-4 w-4" />
-						{isRealtimeEnabled ? "모니터링 중지" : "실시간 모니터링"}
-					</Button>
+				<Dialog
+					open={createDialogOpen}
+					onOpenChange={(open) => {
+						if (open) {
+							form.reset({
+								name: "",
+								metadata: "",
+							});
+							setConfigFile(null);
+						}
+						setCreateDialogOpen(open);
+						if (!open) {
+							form.reset({
+								name: "",
+								metadata: "",
+							});
+							setConfigFile(null);
+						}
+					}}
+				>
+					<DialogTrigger asChild>
+						<Button>
+							<Plus className="mr-2 h-4 w-4" />
+							클러스터 추가
+						</Button>
+					</DialogTrigger>
+					<DialogContent className="max-w-2xl">
+						<DialogHeader>
+							<DialogTitle>클러스터 추가</DialogTitle>
+							<DialogDescription>
+								새로운 클러스터 정보를 입력하세요.
+							</DialogDescription>
+						</DialogHeader>
 
-					<Dialog
-						open={createDialogOpen}
-						onOpenChange={(open) => {
-							if (open) {
-								form.reset({
-									name: "",
-									metadata: "",
-								});
-								setConfigFile(null);
-							}
-							setCreateDialogOpen(open);
-							if (!open) {
-								form.reset({
-									name: "",
-									metadata: "",
-								});
-								setConfigFile(null);
-							}
-						}}
-					>
-						<DialogTrigger asChild>
-							<Button>
-								<Plus className="mr-2 h-4 w-4" />
-								클러스터 추가
-							</Button>
-						</DialogTrigger>
-						<DialogContent className="max-w-2xl">
-							<DialogHeader>
-								<DialogTitle>클러스터 추가</DialogTitle>
-								<DialogDescription>
-									새로운 클러스터 정보를 입력하세요.
-								</DialogDescription>
-							</DialogHeader>
+						<Form {...form}>
+							<form
+								onSubmit={form.handleSubmit(handleCreateParticipant)}
+								className="space-y-4"
+							>
+								<FormField
+									control={form.control}
+									name="name"
+									render={({ field }) => (
+										<FormItem>
+											<FormLabel>이름</FormLabel>
+											<FormControl>
+												<Input placeholder="참여자 이름" {...field} />
+											</FormControl>
+											<FormMessage />
+										</FormItem>
+									)}
+								/>
 
-							<Form {...form}>
-								<form
-									onSubmit={form.handleSubmit(handleCreateParticipant)}
-									className="space-y-4"
-								>
-									<FormField
-										control={form.control}
-										name="name"
-										render={({ field }) => (
-											<FormItem>
-												<FormLabel>이름</FormLabel>
-												<FormControl>
-													<Input placeholder="참여자 이름" {...field} />
-												</FormControl>
-												<FormMessage />
-											</FormItem>
-										)}
-									/>
+								<FormField
+									control={form.control}
+									name="metadata"
+									render={({ field }) => (
+										<FormItem>
+											<FormLabel>메타데이터</FormLabel>
+											<FormControl>
+												<Input placeholder="추가 정보" {...field} />
+											</FormControl>
+											<FormMessage />
+										</FormItem>
+									)}
+								/>
 
-									<FormField
-										control={form.control}
-										name="metadata"
-										render={({ field }) => (
-											<FormItem>
-												<FormLabel>메타데이터</FormLabel>
-												<FormControl>
-													<Input placeholder="추가 정보" {...field} />
-												</FormControl>
-												<FormMessage />
-											</FormItem>
-										)}
-									/>
-
-									{/* OpenStack 설정 YAML 파일 업로드 */}
-									<div className="space-y-4 border-t pt-4">
-										<div>
-											<Label className="text-base font-semibold">
-												OpenStack 설정
-											</Label>
-											<p className="text-sm text-muted-foreground mt-1">
-												OpenStack 클러스터 설정이 포함된 YAML 파일을
-												업로드하세요.
-											</p>
-										</div>
-
-										<div className="space-y-2">
-											<Label htmlFor="config-file">
-												설정 파일 (*.yaml, *.yml)
-											</Label>
-											<Input
-												id="config-file"
-												type="file"
-												accept=".yaml,.yml"
-												onChange={handleFileChange}
-												className="cursor-pointer"
-											/>
-											{configFile && (
-												<div className="text-sm text-green-600">
-													선택된 파일: {configFile.name} (
-													{Math.round(configFile.size / 1024)} KB)
-												</div>
-											)}
-										</div>
+								{/* OpenStack 설정 YAML 파일 업로드 */}
+								<div className="space-y-4 border-t pt-4">
+									<div>
+										<Label className="text-base font-semibold">
+											OpenStack 설정
+										</Label>
+										<p className="text-sm text-muted-foreground mt-1">
+											OpenStack 클러스터 설정이 포함된 YAML 파일을 업로드하세요.
+										</p>
 									</div>
 
-									<DialogFooter>
-										<Button type="submit">클러스터 추가</Button>
-									</DialogFooter>
-								</form>
-							</Form>
-						</DialogContent>
-					</Dialog>
-				</div>
+									<div className="space-y-2">
+										<Label htmlFor="config-file">
+											설정 파일 (*.yaml, *.yml)
+										</Label>
+										<Input
+											id="config-file"
+											type="file"
+											accept=".yaml,.yml"
+											onChange={handleFileChange}
+											className="cursor-pointer"
+										/>
+										{configFile && (
+											<div className="text-sm text-green-600">
+												선택된 파일: {configFile.name} (
+												{Math.round(configFile.size / 1024)} KB)
+											</div>
+										)}
+									</div>
+								</div>
+
+								<DialogFooter>
+									<Button type="submit">클러스터 추가</Button>
+								</DialogFooter>
+							</form>
+						</Form>
+					</DialogContent>
+				</Dialog>
 			</div>
 
 			{/* 편집 다이얼로그 */}
@@ -580,114 +517,14 @@ export default function ParticipantsContent() {
 					<div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-primary"></div>
 				</div>
 			) : (
-				<>
-					{/* 실시간 모니터링 대시보드 */}
-					{isRealtimeEnabled && realtimeMonitoring.size > 0 && (
-						<Card>
-							<CardHeader>
-								<CardTitle>실시간 VM 모니터링</CardTitle>
-								<CardDescription>
-									OpenStack 클라우드 클러스터들의 실시간 리소스 사용량
-								</CardDescription>
-							</CardHeader>
-							<CardContent>
-								<div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-									{Array.from(realtimeMonitoring.entries()).map(
-										([participantId, monitoringInfo]) => {
-											const participant = participants.find(
-												(p) => p.id === participantId
-											);
-											if (!participant) return null;
-
-											return (
-												<Card key={participantId} className="border-2">
-													<CardHeader className="pb-2">
-														<CardTitle className="text-lg">
-															{participant.name}
-														</CardTitle>
-														<div className="flex items-center gap-2">
-															<Badge
-																className={
-																	monitoringInfo.status === "ACTIVE"
-																		? "bg-green-500"
-																		: monitoringInfo.status === "SHUTOFF"
-																		? "bg-gray-500"
-																		: monitoringInfo.status === "ERROR"
-																		? "bg-red-500"
-																		: "bg-yellow-500"
-																}
-															>
-																{monitoringInfo.status}
-															</Badge>
-															<span className="text-xs text-gray-500">
-																{monitoringInfo.instance_id.substring(0, 8)}...
-															</span>
-														</div>
-													</CardHeader>
-													<CardContent className="space-y-3">
-														{/* CPU 사용률 */}
-														<div>
-															<div className="flex justify-between text-sm mb-1">
-																<span>CPU</span>
-																<span>
-																	{monitoringInfo.cpu_usage.toFixed(1)}%
-																</span>
-															</div>
-															<Progress
-																value={Math.min(monitoringInfo.cpu_usage, 100)}
-																className="h-2"
-															/>
-														</div>
-
-														{/* 메모리 사용률 */}
-														<div>
-															<div className="flex justify-between text-sm mb-1">
-																<span>메모리</span>
-																<span>
-																	{monitoringInfo.memory_usage.toFixed(1)}%
-																</span>
-															</div>
-															<Progress
-																value={Math.min(
-																	monitoringInfo.memory_usage,
-																	100
-																)}
-																className="h-2"
-															/>
-														</div>
-
-														{/* 디스크 사용률 */}
-														<div>
-															<div className="flex justify-between text-sm mb-1">
-																<span>디스크</span>
-																<span>
-																	{monitoringInfo.disk_usage.toFixed(1)}%
-																</span>
-															</div>
-															<Progress
-																value={Math.min(monitoringInfo.disk_usage, 100)}
-																className="h-2"
-															/>
-														</div>
-													</CardContent>
-												</Card>
-											);
-										}
-									)}
-								</div>
-								<div className="text-xs text-gray-500 mt-4 text-center">
-									마지막 업데이트: {new Date().toLocaleTimeString()} (30초마다
-									자동 갱신)
-								</div>
-							</CardContent>
-						</Card>
-					)}
-
-					<Card>
+				<div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+					{/* 클러스터 목록 */}
+					<Card className="md:col-span-2">
 						<CardHeader>
 							<CardTitle>클러스터 목록</CardTitle>
 							<CardDescription>
-								등록된 클러스터들을 관리하고 상태를 모니터링하세요.
+								등록된 클러스터들을 관리하고 상태를 모니터링하세요. 행을
+								클릭하면 상세 정보를 확인할 수 있습니다.
 							</CardDescription>
 						</CardHeader>
 						<CardContent>
@@ -702,7 +539,15 @@ export default function ParticipantsContent() {
 								</TableHeader>
 								<TableBody>
 									{participants.map((participant) => (
-										<TableRow key={participant.id}>
+										<TableRow
+											key={participant.id}
+											className={`cursor-pointer hover:bg-muted/50 ${
+												selectedParticipant?.id === participant.id
+													? "bg-muted"
+													: ""
+											}`}
+											onClick={() => setSelectedParticipant(participant)}
+										>
 											<TableCell className="font-medium">
 												{participant.name}
 											</TableCell>
@@ -713,8 +558,10 @@ export default function ParticipantsContent() {
 												{new Date(participant.created_at).toLocaleDateString()}
 											</TableCell>
 											<TableCell>
-												<div className="flex space-x-1">
-													{/* 기본 편집 버튼 */}
+												<div
+													className="flex space-x-1"
+													onClick={(e) => e.stopPropagation()}
+												>
 													<Button
 														variant="outline"
 														size="sm"
@@ -723,9 +570,14 @@ export default function ParticipantsContent() {
 													>
 														<Edit className="h-4 w-4" />
 													</Button>
-
-													{/* 모니터링 버튼 */}
-
+													<Button
+														variant="outline"
+														size="sm"
+														onClick={() => handleViewVMs(participant)}
+														title="VM 목록 보기"
+													>
+														<Server className="h-4 w-4" />
+													</Button>
 													<Button
 														variant="outline"
 														size="sm"
@@ -734,7 +586,6 @@ export default function ParticipantsContent() {
 													>
 														<CheckCircle className="h-4 w-4" />
 													</Button>
-													{/* 삭제 버튼 */}
 													<AlertDialog>
 														<AlertDialogTrigger asChild>
 															<Button variant="outline" size="sm" title="삭제">
@@ -778,247 +629,266 @@ export default function ParticipantsContent() {
 							</Table>
 						</CardContent>
 					</Card>
-				</>
+
+					{/* 상세 정보 카드 */}
+					<Card>
+						<CardHeader>
+							<CardTitle>클러스터 상세 정보</CardTitle>
+							<CardDescription>
+								선택한 클러스터의 상세 정보를 확인하세요.
+							</CardDescription>
+						</CardHeader>
+						<CardContent>
+							{selectedParticipant ? (
+								<div className="space-y-4">
+									<div>
+										<span className="text-sm font-medium">이름:</span>
+										<p className="text-sm">{selectedParticipant.name}</p>
+									</div>
+									<div>
+										<span className="text-sm font-medium">상태:</span>
+										<div className="mt-1">
+											{getStatusBadge(selectedParticipant.status)}
+										</div>
+									</div>
+									<div>
+										<span className="text-sm font-medium">생성일:</span>
+										<p className="text-sm">
+											{new Date(
+												selectedParticipant.created_at
+											).toLocaleString()}
+										</p>
+									</div>
+									{selectedParticipant.metadata && (
+										<div>
+											<span className="text-sm font-medium">메타데이터:</span>
+											<p className="text-sm">{selectedParticipant.metadata}</p>
+										</div>
+									)}
+									<div>
+										<span className="text-sm font-medium">
+											Cluster Endpoint:
+										</span>
+										<p className="text-sm font-mono break-all">
+											{selectedParticipant.openstack_endpoint}
+										</p>
+									</div>
+
+									{/* 액션 버튼들 */}
+									<div className="space-y-2 pt-4 border-t">
+										<h4 className="text-sm font-medium">액션</h4>
+										<div className="flex flex-col gap-2">
+											<Button
+												variant="outline"
+												size="sm"
+												onClick={() => openEditDialog(selectedParticipant)}
+												className="justify-start"
+											>
+												<Edit className="h-4 w-4 mr-2" />
+												편집
+											</Button>
+											<Button
+												variant="outline"
+												size="sm"
+												onClick={() => handleViewVMs(selectedParticipant)}
+												className="justify-start"
+											>
+												<Server className="h-4 w-4 mr-2" />
+												가상머신 목록
+											</Button>
+											<Button
+												variant="outline"
+												size="sm"
+												onClick={() => handleHealthCheck(selectedParticipant)}
+												className="justify-start"
+											>
+												<CheckCircle className="h-4 w-4 mr-2" />
+												헬스체크
+											</Button>
+										</div>
+									</div>
+								</div>
+							) : (
+								<div className="text-center py-8 text-muted-foreground">
+									<p>클러스터를 선택해주세요</p>
+									<p className="text-sm mt-2">
+										왼쪽 목록에서 클러스터를 클릭하면 상세 정보를 확인할 수
+										있습니다.
+									</p>
+								</div>
+							)}
+						</CardContent>
+					</Card>
+				</div>
 			)}
 
-			{/* VM 모니터링 다이얼로그 */}
-			<Dialog open={monitorDialogOpen} onOpenChange={setMonitorDialogOpen}>
-				<DialogContent className="max-w-4xl max-h-[80vh] overflow-y-auto">
+			{/* VM 목록 다이얼로그 */}
+			<Dialog open={vmListDialogOpen} onOpenChange={setVmListDialogOpen}>
+				<DialogContent className="max-w-[95vw] w-full max-h-[95vh] overflow-hidden flex flex-col">
 					<DialogHeader>
-						<DialogTitle>VM 모니터링 정보</DialogTitle>
+						<DialogTitle>가상머신 목록</DialogTitle>
 						<DialogDescription>
-							{selectedParticipant?.name}의 OpenStack VM 상태 및 리소스 사용량
+							{selectedParticipant?.name} 클러스터의 가상머신 목록
 						</DialogDescription>
 					</DialogHeader>
 
-					{isMonitoringLoading ? (
+					{isVmListLoading ? (
 						<div className="flex items-center justify-center py-8">
 							<div className="animate-spin rounded-full h-8 w-8 border-b-2 border-gray-900"></div>
-							<span className="ml-2">모니터링 정보를 가져오는 중...</span>
-						</div>
-					) : monitoringData ? (
-						<div className="space-y-6">
-							{/* VM 기본 정보 */}
-							<Card>
-								<CardHeader>
-									<CardTitle className="text-lg">VM 기본 정보</CardTitle>
-								</CardHeader>
-								<CardContent>
-									<div className="grid grid-cols-2 gap-4">
-										<div>
-											<label className="text-sm font-medium text-gray-500">
-												인스턴스 ID
-											</label>
-											<p className="mt-1">{monitoringData.instance_id}</p>
-										</div>
-										<div>
-											<label className="text-sm font-medium text-gray-500">
-												상태
-											</label>
-											<p className="mt-1">
-												<Badge
-													className={
-														monitoringData.status === "ACTIVE"
-															? "bg-green-500"
-															: monitoringData.status === "SHUTOFF"
-															? "bg-gray-500"
-															: monitoringData.status === "ERROR"
-															? "bg-red-500"
-															: "bg-yellow-500"
-													}
-												>
-													{monitoringData.status}
-												</Badge>
-											</p>
-										</div>
-										<div>
-											<label className="text-sm font-medium text-gray-500">
-												가용 영역
-											</label>
-											<p className="mt-1">{monitoringData.availability_zone}</p>
-										</div>
-										<div>
-											<label className="text-sm font-medium text-gray-500">
-												호스트
-											</label>
-											<p className="mt-1">{monitoringData.host}</p>
-										</div>
-										<div>
-											<label className="text-sm font-medium text-gray-500">
-												생성 시간
-											</label>
-											<p className="mt-1">
-												{new Date(monitoringData.created_at).toLocaleString()}
-											</p>
-										</div>
-										<div>
-											<label className="text-sm font-medium text-gray-500">
-												업데이트 시간
-											</label>
-											<p className="mt-1">
-												{new Date(monitoringData.updated_at).toLocaleString()}
-											</p>
-										</div>
-									</div>
-								</CardContent>
-							</Card>
-
-							{/* 리소스 사용량 */}
-							<Card>
-								<CardHeader>
-									<CardTitle className="text-lg">리소스 사용량</CardTitle>
-								</CardHeader>
-								<CardContent>
-									<div className="grid grid-cols-3 gap-4">
-										<div className="text-center">
-											<div className="text-2xl font-bold text-blue-600">
-												{monitoringData.cpu_usage.toFixed(1)}%
-											</div>
-											<div className="text-sm text-gray-500">CPU 사용률</div>
-											<Progress
-												value={monitoringData.cpu_usage}
-												className="h-2 mt-2"
-											/>
-										</div>
-										<div className="text-center">
-											<div className="text-2xl font-bold text-green-600">
-												{monitoringData.memory_usage.toFixed(1)}%
-											</div>
-											<div className="text-sm text-gray-500">메모리 사용률</div>
-											<Progress
-												value={monitoringData.memory_usage}
-												className="h-2 mt-2"
-											/>
-										</div>
-										<div className="text-center">
-											<div className="text-2xl font-bold text-purple-600">
-												{monitoringData.disk_usage.toFixed(1)}%
-											</div>
-											<div className="text-sm text-gray-500">디스크 사용률</div>
-											<Progress
-												value={monitoringData.disk_usage}
-												className="h-2 mt-2"
-											/>
-										</div>
-									</div>
-
-									<div className="grid grid-cols-2 gap-4 mt-6">
-										<div>
-											<label className="text-sm font-medium text-gray-500">
-												네트워크 입력
-											</label>
-											<p className="mt-1 text-lg font-semibold">
-												{(monitoringData.network_in / 1024 / 1024).toFixed(2)}{" "}
-												MB
-											</p>
-										</div>
-										<div>
-											<label className="text-sm font-medium text-gray-500">
-												네트워크 출력
-											</label>
-											<p className="mt-1 text-lg font-semibold">
-												{(monitoringData.network_out / 1024 / 1024).toFixed(2)}{" "}
-												MB
-											</p>
-										</div>
-									</div>
-								</CardContent>
-							</Card>
-
-							{/* 연합 학습 정보 */}
-							{monitoringData.federated_learning_status && (
-								<Card>
-									<CardHeader>
-										<CardTitle className="text-lg">연합 학습 상태</CardTitle>
-									</CardHeader>
-									<CardContent>
-										<div className="grid grid-cols-2 gap-4">
-											<div>
-												<label className="text-sm font-medium text-gray-500">
-													학습 상태
-												</label>
-												<p className="mt-1">
-													<Badge
-														className={
-															monitoringData.federated_learning_status ===
-															"training"
-																? "bg-blue-500"
-																: monitoringData.federated_learning_status ===
-																  "idle"
-																? "bg-gray-500"
-																: monitoringData.federated_learning_status ===
-																  "completed"
-																? "bg-green-500"
-																: "bg-red-500"
-														}
-													>
-														{monitoringData.federated_learning_status}
-													</Badge>
-												</p>
-											</div>
-											{monitoringData.current_task_id && (
-												<div>
-													<label className="text-sm font-medium text-gray-500">
-														현재 작업 ID
-													</label>
-													<p className="mt-1 font-mono text-sm">
-														{monitoringData.current_task_id}
-													</p>
-												</div>
-											)}
-											{monitoringData.task_progress !== undefined && (
-												<div>
-													<label className="text-sm font-medium text-gray-500">
-														작업 진행률
-													</label>
-													<p className="mt-1">
-														{monitoringData.task_progress.toFixed(1)}%
-													</p>
-													<Progress
-														value={monitoringData.task_progress}
-														className="h-2 mt-1"
-													/>
-												</div>
-											)}
-											{monitoringData.last_training_time && (
-												<div>
-													<label className="text-sm font-medium text-gray-500">
-														마지막 학습 시간
-													</label>
-													<p className="mt-1">
-														{new Date(
-															monitoringData.last_training_time
-														).toLocaleString()}
-													</p>
-												</div>
-											)}
-										</div>
-									</CardContent>
-								</Card>
-							)}
+							<span className="ml-2">VM 목록을 가져오는 중...</span>
 						</div>
 					) : (
-						<div className="text-center py-8">
-							<p className="text-gray-500">
-								모니터링 정보를 가져올 수 없습니다.
-							</p>
+						<div className="flex-1 overflow-auto space-y-4">
+							{vmList.length > 0 ? (
+								<>
+									<div className="rounded-md border">
+										<Table>
+											<TableHeader className="sticky top-0 bg-white z-10">
+												<TableRow>
+													<TableHead className="w-[200px]">이름</TableHead>
+													<TableHead className="w-[150px]">상태</TableHead>
+													<TableHead className="w-[200px]">
+														스펙 (CPU/RAM/Disk)
+													</TableHead>
+													<TableHead className="w-[250px]">IP 주소</TableHead>
+												</TableRow>
+											</TableHeader>
+											<TableBody>
+												{vmList.map((vm) => (
+													<TableRow key={vm.id} className="hover:bg-muted/50">
+														<TableCell className="align-top">
+															<div>
+																<div className="font-medium break-words">
+																	{vm.name}
+																</div>
+															</div>
+														</TableCell>
+														<TableCell className="align-top">
+															<div className="space-y-1">
+																<Badge
+																	className={
+																		vm.status === "ACTIVE"
+																			? "bg-green-500"
+																			: vm.status === "SHUTOFF"
+																			? "bg-gray-500"
+																			: vm.status === "ERROR"
+																			? "bg-red-500"
+																			: "bg-yellow-500"
+																	}
+																>
+																	{vm.status}
+																</Badge>
+																<div className="text-xs text-gray-500">
+																	{vm["OS-EXT-STS:power_state"] === 1
+																		? "Running"
+																		: "Stopped"}
+																</div>
+															</div>
+														</TableCell>
+														<TableCell className="align-top">
+															<div className="space-y-1">
+																<div className="font-medium text-sm">
+																	{vm.flavor.name || vm.flavor.id}
+																</div>
+																<div className="text-xs text-gray-600 space-y-0.5">
+																	<div className="flex items-center gap-1">
+																		<span className="font-mono">CPU:</span>
+																		<span>{vm.flavor.vcpus || 0} vCPU</span>
+																	</div>
+																	<div className="flex items-center gap-1">
+																		<span className="font-mono">RAM:</span>
+																		<span>
+																			{vm.flavor.ram
+																				? `${(vm.flavor.ram / 1024).toFixed(
+																						1
+																				  )} GB`
+																				: "0 GB"}
+																		</span>
+																	</div>
+																	<div className="flex items-center gap-1">
+																		<span className="font-mono">Disk:</span>
+																		<span>{vm.flavor.disk || 0} GB</span>
+																	</div>
+																</div>
+															</div>
+														</TableCell>
+														<TableCell className="align-top">
+															<div className="space-y-1 max-w-[250px]">
+																{Object.keys(vm.addresses || {}).length > 0 ? (
+																	Object.entries(vm.addresses).map(
+																		([networkName, addresses]) =>
+																			addresses.map((addr, index) => (
+																				<div
+																					key={`${networkName}-${index}`}
+																					className="space-y-1"
+																				>
+																					<div className="flex items-center gap-2 flex-wrap">
+																						<span className="font-mono text-sm break-all">
+																							{addr.addr}
+																						</span>
+																						<Badge
+																							variant="outline"
+																							className="text-xs flex-shrink-0"
+																						>
+																							{addr.type}
+																						</Badge>
+																					</div>
+																					<div className="text-xs text-gray-500">
+																						{networkName}
+																					</div>
+																				</div>
+																			))
+																	)
+																) : (
+																	<span className="text-sm text-gray-500">
+																		없음
+																	</span>
+																)}
+															</div>
+														</TableCell>
+													</TableRow>
+												))}
+											</TableBody>
+										</Table>
+									</div>
+
+									<div className="flex items-center justify-between text-sm text-gray-500 px-2 pb-2">
+										<span>총 {vmList.length}개의 가상머신이 있습니다.</span>
+										<span>
+											마지막 업데이트: {new Date().toLocaleTimeString()}
+										</span>
+									</div>
+								</>
+							) : (
+								<div className="text-center py-12">
+									<div className="mx-auto w-24 h-24 bg-gray-100 rounded-full flex items-center justify-center mb-4">
+										<Server className="h-12 w-12 text-gray-400" />
+									</div>
+									<h3 className="text-lg font-medium text-gray-900 mb-2">
+										가상머신이 없습니다
+									</h3>
+									<p className="text-gray-500">
+										이 클러스터에는 아직 가상머신이 없습니다.
+									</p>
+								</div>
+							)}
 						</div>
 					)}
 
 					<DialogFooter>
 						<Button
 							variant="outline"
-							onClick={() => setMonitorDialogOpen(false)}
+							onClick={() => setVmListDialogOpen(false)}
 						>
 							닫기
 						</Button>
 						<Button
 							onClick={() =>
-								selectedParticipant && handleMonitorVM(selectedParticipant)
+								selectedParticipant && handleViewVMs(selectedParticipant)
 							}
-							disabled={isMonitoringLoading}
+							disabled={isVmListLoading}
 						>
-							{isMonitoringLoading ? "새로고침 중..." : "새로고침"}
+							{isVmListLoading ? "새로고침 중..." : "새로고침"}
 						</Button>
 					</DialogFooter>
 				</DialogContent>

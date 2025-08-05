@@ -1,0 +1,30 @@
+{
+  "optimizationResults": [
+    {
+      "rank": 1,
+      "region": "asia-northeast3",
+      "instanceType": "m1.small",
+      "estimatedCost": 46800.0,
+      "estimatedLatency": 13.72,
+      "cloudProvider": "GCP"
+    },
+    {
+      "rank": 2,
+      "region": "ap-northeast-2",
+      "instanceType": "m1.small",
+      "estimatedCost": 48672.0,
+      "estimatedLatency": 13.34,
+      "cloudProvider": "AWS"
+    },
+    {
+      "rank": 3,
+      "region": "us-central1",
+      "instanceType": "m1.small",
+      "estimatedCost": 44928.0,
+      "estimatedLatency": 26.7,
+      "cloudProvider": "GCP"
+    }
+  ],
+  "executionTime": 0,
+  "status": "completed"
+}

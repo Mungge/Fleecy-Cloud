@@ -6,8 +6,11 @@ import (
 )
 
 func SetupAggregatorRoutes(authorized *gin.RouterGroup, aggregatorHandler *handlers.AggregatorHandler) {
-	aggregators := authorized.Group("api/aggregators")
+	aggregators := authorized.Group("/aggregators")
 	{
+		// Aggregator 배치 최적화
+		aggregators.POST("/optimization", aggregatorHandler.OptimizeAggregatorPlacement)
+		
 		// Aggregator 통계 조회
 		aggregators.GET("/stats", aggregatorHandler.GetAggregatorStats)
 		
