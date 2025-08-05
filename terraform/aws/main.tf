@@ -126,6 +126,18 @@ resource "aws_security_group" "main" {
     }
   }
 
+  # 모니터링 관련 보안그룹
+  dynamic "ingress" {
+    for_each = var.environment != "dev" ? [9090, 3000, 16686] : []
+    content {
+      from_port   = ingress.value
+      to_port     = ingress.value
+      protocol    = "tcp"
+      cidr_blocks = var.allowed_ips
+      description = "Monitoring port ${ingress.value}"
+    }
+  }
+
   # 모든 아웃바운드 허용
   egress {
     from_port   = 0
@@ -146,6 +158,8 @@ resource "aws_instance" "main" {
   subnet_id              = aws_subnet.public.id
   key_name               = var.key_pair_name
   vpc_security_group_ids = [aws_security_group.main.id]
+
+  user_data = file("${path.module}/../common/scripts/setup-monitoring.sh")
 
   tags = {
     Name = "${var.project_name}-server"
