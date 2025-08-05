@@ -1,11 +1,9 @@
-output "vpc_id" {
-  value = aws_vpc.main.id
-}
-
-output "instance_id" {
-  value = aws_instance.web.id
-}
-
 output "instance_public_ip" {
-  value = aws_instance.web.public_ip
+  description = "EC2 Instance Public IP"
+  value       = aws_instance.main.public_ip
+}
+
+output "ssh_command" {
+  description = "SSH Connection Command"
+  value       = "ssh -i ~/.ssh/${var.key_pair_name}.pem ubuntu@${aws_instance.main.public_ip}"
 }
