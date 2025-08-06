@@ -1,3 +1,5 @@
+import { interceptors } from "undici-types";
+
 const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8080";
 
 // Terraform 출력 타입 정의
@@ -22,13 +24,17 @@ export interface AggregatorInfo {
 	terraformOutput?: TerraformOutput;
 }
 
-// Aggregator 설정 타입 정의
-export interface AggregatorConfig {
-	region: string;
-	storage: string;
-	instanceType: string;
+// Aggregator 배치 최적화설정 타입 정의
+export interface AggregatorOptimizeConfig {
 	maxBudget: number;
 	maxLatency: number;
+}
+
+export interface AggregatorConfig {
+	cloudProvider: string;
+	region: string;
+	instanceType: string;
+	memory: number;
 }
 
 // 연합학습 데이터 타입 정의
@@ -174,18 +180,32 @@ export const deleteAggregator = async (aggregatorId: string): Promise<void> => {
 };
 
 // 집계자 배치 최적화 응답 타입
+export interface AggregatorOption {
+	rank: number;
+	region: string;
+	instanceType: string;
+	cloudProvider: string;
+	estimatedMonthlyCost: number;
+	estimatedHourlyPrice: number;
+	avgLatency: number;
+	maxLatency: number;
+	vcpu: number;
+	memory: number;
+	recommendationScore: number;
+  }
 export interface OptimizationResponse {
-	optimizationResults: Array<{
-		rank: number;
-		region: string;
-		instanceType: string;
-		estimatedCost: number;
-		estimatedLatency: number;
-		cloudProvider: string;
-	}>;
-	executionTime: number;
 	status: string;
-}
+	summary: {
+	  totalParticipants: number;
+	  participantRegions: string[];
+	  totalCandidateOptions: number;
+	  feasibleOptions: number;
+	  constraints: any;
+	  modelInfo: any;
+	};
+	optimizedOptions: AggregatorOption[];
+	message: string;
+  }
 
 // 집계자 배치 최적화 함수
 export const optimizeAggregatorPlacement = async (
@@ -197,15 +217,8 @@ export const optimizeAggregatorPlacement = async (
 ): Promise<OptimizationResponse> => {
 	try {
 		const requestBody = {
-			federatedLearning: {
-				name: federatedLearningData.name,
-				description: federatedLearningData.description,
-				modelType: federatedLearningData.modelType,
-				algorithm: federatedLearningData.algorithm,
-				rounds: federatedLearningData.rounds,
-				participants: federatedLearningData.participants
-			},
-			constraints: constraints
+			federatedLearning: federatedLearningData,
+			aggregatorConfig: constraints
 		};
 
 		const response = await fetch(`${API_URL}/api/aggregators/optimization`, {
