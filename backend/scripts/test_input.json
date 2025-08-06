@@ -1,15 +1,22 @@
 {
-    "federatedLearning": {
-      "participants": [
-        {
-          "id": "1",
-          "name": "participant1", 
-          "openstack_endpoint": "https://localhost:8080"
-        }
-      ]
-    },
-    "constraints": {
-      "maxBudget": 500000,
-      "maxLatency": 100
-    }
+  "federatedLearning": {
+    "name": "테스트",
+    "description": "테스트 설명",
+    "modelType": "CNN",
+    "algorithm": "FedAvg",
+    "rounds": 10,
+    "participants": [
+      {
+        "id": "test1",
+        "name": "테스트 참여자",
+        "status": "active",
+        "openstack_region": "ap-northeast-2",
+        "openstack_endpoint": "http://test"
+      }
+    ]
+  },
+  "aggregatorConfig": {
+    "maxBudget": 1000000,
+    "maxLatency": 300
   }
+}

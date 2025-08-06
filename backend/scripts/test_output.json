@@ -1,30 +1,49 @@
 {
-  "optimizationResults": [
+  "status": "success",
+  "summary": {
+    "totalParticipants": 1,
+    "participantRegions": [
+      "unknown"
+    ],
+    "totalCandidateOptions": 12166,
+    "feasibleOptions": 2039,
+    "constraints": {
+      "maxBudget": 1000000,
+      "maxLatency": 300
+    },
+    "modelInfo": {
+      "name": "테스트",
+      "modelType": "CNN",
+      "rounds": 10
+    }
+  },
+  "optimizedOptions": [
     {
       "rank": 1,
-      "region": "asia-northeast3",
-      "instanceType": "m1.small",
-      "estimatedCost": 46800.0,
-      "estimatedLatency": 13.72,
-      "cloudProvider": "GCP"
+      "region": "ap-south-1",
+      "instanceType": "t3a.nano",
+      "cloudProvider": "AWS",
+      "estimatedMonthlyCost": 2902.0,
+      "estimatedHourlyPrice": 0.0031,
+      "avgLatency": 149.3,
+      "maxLatency": 149.3,
+      "vcpu": 2,
+      "memory": 0,
+      "recommendationScore": 29.5
     },
     {
       "rank": 2,
-      "region": "ap-northeast-2",
-      "instanceType": "m1.small",
-      "estimatedCost": 48672.0,
-      "estimatedLatency": 13.34,
-      "cloudProvider": "AWS"
-    },
-    {
-      "rank": 3,
-      "region": "us-central1",
-      "instanceType": "m1.small",
-      "estimatedCost": 44928.0,
-      "estimatedLatency": 26.7,
-      "cloudProvider": "GCP"
+      "region": "ap-southeast-1",
+      "instanceType": "t3a.micro",
+      "cloudProvider": "AWS",
+      "estimatedMonthlyCost": 11045.0,
+      "estimatedHourlyPrice": 0.0118,
+      "avgLatency": 81.0,
+      "maxLatency": 81.0,
+      "vcpu": 2,
+      "memory": 1,
+      "recommendationScore": 27.4
     }
   ],
-  "executionTime": 0,
-  "status": "completed"
+  "message": "2개의 최적화된 집계자 옵션을 찾았습니다."
 }
