@@ -18,6 +18,7 @@ type Participant struct {
 	Name      string    `json:"name" gorm:"not null;type:varchar(255)"`
 	Status    string    `json:"status" gorm:"type:varchar(50);default:'inactive';check:status IN ('active','inactive')"`
 	Metadata  string    `json:"metadata,omitempty" gorm:"type:text"`
+	Region    string    `json:"region,omitempty" gorm:"not null;type:varchar(100);default:Unknown"`
 
 	// OpenStack 클라우드 관련 필드
 	OpenStackEndpoint    string `json:"openstack_endpoint,omitempty" gorm:"type:varchar(500)"`     // OpenStack 인증 엔드포인트
@@ -190,6 +191,10 @@ func decrypt(ciphertext string, key []byte) (string, error) {
 func (p *Participant) Validate() error {
 	if p.Name == "" {
 		return fmt.Errorf("참여자 이름은 필수입니다")
+	}
+
+	if p.Region == "" {
+		return fmt.Errorf("리전은 필수입니다")
 	}
 
 	if p.OpenStackEndpoint == "" {

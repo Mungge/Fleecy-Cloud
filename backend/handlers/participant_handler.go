@@ -74,6 +74,11 @@ func (h *ParticipantHandler) CreateParticipant(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "참여자 이름은 필수입니다"})
 		return
 	}
+	region := c.PostForm("region")
+	if region == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "리전은 필수입니다"})
+		return
+	}
 	metadata := c.PostForm("metadata")
 
 	// 업로드된 파일 처리
@@ -115,6 +120,7 @@ func (h *ParticipantHandler) CreateParticipant(c *gin.Context) {
 		Name:     name,
 		Status:   "inactive", // 기본적으로 비활성 상태로 생성
 		Metadata: metadata,
+		Region:   region,
 		
 		// OpenStack 관련 필드
 		OpenStackEndpoint:    authURL,
@@ -223,9 +229,12 @@ func (h *ParticipantHandler) UpdateParticipant(c *gin.Context) {
 		return
 	}
 
-	// 폼 데이터에서 name과 metadata 추출
+	// 폼 데이터에서 name, region, metadata 추출
 	if name := c.PostForm("name"); name != "" {
 		participant.Name = name
+	}
+	if region := c.PostForm("region"); region != "" {
+		participant.Region = region
 	}
 	if metadata := c.PostForm("metadata"); metadata != "" {
 		participant.Metadata = metadata
