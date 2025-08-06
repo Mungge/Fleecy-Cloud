@@ -15,14 +15,16 @@ type OptimizationRequest struct {
 	FederatedLearning struct {
 		Name         string        `json:"name"`
 		Description  string        `json:"description"`
+		ModelType    string        `json:"modelType"`
 		Algorithm    string        `json:"algorithm"`
 		Rounds       int           `json:"rounds"`
 		Participants []Participant `json:"participants"`
+		ModelFileName *string      `json:"modelFileName,omitempty"`
 	} `json:"federatedLearning"`
-	Constraints struct {
+	AggregatorConfig struct {
 		MaxBudget  int `json:"maxBudget"`
 		MaxLatency int `json:"maxLatency"`
-	} `json:"constraints"`
+	} `json:"aggregatorConfig"`
 }
 
 // 참여자 구조체
@@ -30,14 +32,42 @@ type Participant struct {
 	ID                string `json:"id"`
 	Name              string `json:"name"`
 	Status            string `json:"status"`
+	Region            string `json:"openstack_region"`
 	OpenstackEndpoint string `json:"openstack_endpoint"`
 }
 
 // 최적화 응답 구조체
 type OptimizationResponse struct {
-	OptimizationResults []OptimizationResult `json:"optimizationResults"`
-	ExecutionTime       float64              `json:"executionTime"`
-	Status              string               `json:"status"`
+	Status           string            `json:"status"`
+	Summary          OptimizationSummary `json:"summary"`
+	OptimizedOptions []AggregatorOption `json:"optimizedOptions"`
+	Message          string            `json:"message"`
+	ExecutionTime    float64           `json:"executionTime,omitempty"` // Go에서 추가
+}
+
+// 최적화 요약 정보
+type OptimizationSummary struct {
+	TotalParticipants      int      `json:"totalParticipants"`
+	ParticipantRegions     []string `json:"participantRegions"`
+	TotalCandidateOptions  int      `json:"totalCandidateOptions"`
+	FeasibleOptions        int      `json:"feasibleOptions"`
+	Constraints            interface{} `json:"constraints"`
+	ModelInfo              interface{} `json:"modelInfo"`
+}
+
+// 집계자 옵션 (새로운 구조)
+type AggregatorOption struct {
+	Rank                   int     `json:"rank"`
+	Region                 string  `json:"region"`
+	InstanceType           string  `json:"instanceType"`
+	CloudProvider          string  `json:"cloudProvider"`
+	EstimatedMonthlyCost   float64 `json:"estimatedMonthlyCost"`
+	EstimatedHourlyPrice   float64 `json:"estimatedHourlyPrice"`
+	AvgLatency             float64 `json:"avgLatency"`
+	MaxLatency             float64 `json:"maxLatency"`
+	VCPU                   int     `json:"vcpu"`
+	Memory                 int     `json:"memory"`
+	RecommendationScore    float64 `json:"recommendationScore"`
 }
 
 // 최적화 결과 구조체
@@ -98,11 +128,50 @@ func (s *OptimizationService) RunOptimization(request OptimizationRequest) (*Opt
 	result.ExecutionTime = executionTime
 	result.Status = "completed"
 
+	// Python에서 에러가 발생한 경우 처리
+	if result.Status == "error" {
+		return nil, fmt.Errorf("Python 최적화 에러: %s", result.Message)
+	}
+
 	// 6. 임시 파일 정리
 	s.cleanupTempFiles(inputFilePath, outputFilePath)
 
 	return result, nil
 }
+
+// 하위 호환성을 위한 변환 함수
+func (s *OptimizationService) RunOptimizationLegacy(request OptimizationRequest) (*OptimizationResponse, error) {
+	// 새로운 형식으로 최적화 실행
+	newResult, err := s.RunOptimization(request)
+	if err != nil {
+		return nil, err
+	}
+
+	// 기존 형식으로 변환 (필요한 경우)
+	legacyResults := make([]OptimizationResult, len(newResult.OptimizedOptions))
+	for i, option := range newResult.OptimizedOptions {
+		legacyResults[i] = OptimizationResult{
+			Rank:             option.Rank,
+			Region:           option.Region,
+			InstanceType:     option.InstanceType,
+			EstimatedCost:    option.EstimatedMonthlyCost,
+			EstimatedLatency: option.AvgLatency,
+			CloudProvider:    option.CloudProvider,
+		}
+	}
+
+	// 기존 구조체 형식으로 반환
+	legacyResponse := &OptimizationResponse{
+		Status:           newResult.Status,
+		Summary:          newResult.Summary,
+		OptimizedOptions: newResult.OptimizedOptions,
+		Message:          newResult.Message,
+		ExecutionTime:    newResult.ExecutionTime,
+	}
+
+	return legacyResponse, nil
+}
+
 
 // 임시 디렉토리 생성
 func (s *OptimizationService) createTempDirectories() error {
@@ -199,5 +268,19 @@ func (s *OptimizationService) ValidatePythonEnvironment() error {
 	if err := cmd.Run(); err != nil {
 		return fmt.Errorf("Python3이 설치되어 있지 않거나 PATH에 없습니다: %v", err)
 	}
+	return nil
+}
+
+// 의존성 패키지 확인
+func (s *OptimizationService) ValidatePythonDependencies() error {
+	requiredPackages := []string{"psycopg2", "deap", "numpy", "python-dotenv"}
+	
+	for _, pkg := range requiredPackages {
+		cmd := exec.Command("python3", "-c", fmt.Sprintf("import %s", pkg))
+		if err := cmd.Run(); err != nil {
+			return fmt.Errorf("필수 Python 패키지가 설치되지 않았습니다: %s", pkg)
+		}
+	}
+	
 	return nil
 }
