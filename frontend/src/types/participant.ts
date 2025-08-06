@@ -7,6 +7,7 @@ export interface Participant {
 	name: string;
 	status: "active" | "inactive" | "busy" | "error" | "pending";
 	metadata?: string;
+	region?: string;
 
 	// OpenStack 클라우드 관련 필드
 	openstack_endpoint?: string;
@@ -36,6 +37,7 @@ export interface Participant {
 // 참여자 생성 요청 인터페이스
 export interface CreateParticipantRequest {
 	name: string;
+	region?: string;
 	metadata?: string;
 
 	// OpenStack 클라우드 관련 필드
