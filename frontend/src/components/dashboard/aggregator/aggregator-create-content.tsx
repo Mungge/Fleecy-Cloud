@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { ArrowLeft } from "lucide-react";
 import { toast } from "sonner";
-import { FederatedLearningData, AggregatorOptimizeConfig, CreationStatus } from "./aggregator.types";
+import { FederatedLearningData, AggregatorOptimizeConfig, CreationStatus, AggregatorOption } from "./aggregator.types";
 import { useAggregatorOptimization } from "./hooks/useAggregatorOptimization";
 import { useAggregatorCreation } from "./hooks/useAggregatorCreation";
 import { AggregatorSelectionModal } from "./components/AggregatorSelectionModal";
@@ -31,14 +31,14 @@ const AggregatorCreateContent = () => {
 		showAggregatorSelection,
 		setShowAggregatorSelection,
 		handleAggregatorOptimization,
-		resetOptimization
+		//resetOptimization
 	} = useAggregatorOptimization();
 
 	// 생성 훅
 	const {
 		isCreating,
 		creationStatus: actualCreationStatus,
-		setCreationStatus: setActualCreationStatus,
+		//setCreationStatus: setActualCreationStatus,
 		handleCreateAggregator,
 		resetCreation
 	} = useAggregatorCreation();
@@ -80,7 +80,7 @@ const AggregatorCreateContent = () => {
 	};
 
 	// 집계자 선택 후 생성
-	const onSelectAggregator = (option: any) => {
+	const onSelectAggregator = (option: AggregatorOption) => {
 		if (federatedLearningData) {
 			// 최적화 상태를 생성 상태로 전환
 			setShowAggregatorSelection(false);
