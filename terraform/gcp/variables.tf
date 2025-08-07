@@ -45,14 +45,19 @@ variable "custom_ports" {
   default     = [8080, 9000]
 }
 
-variable "ssh_public_key_path" {
-  description = "SSH 공개키 파일 경로"
+variable "ssh_public_key_content" {
+  description = "SSH 공개키 내용 (파일 경로가 아닌 실제 키 내용)"
   type        = string
-  default     = "~/.ssh/id_rsa.pub"
 }
 
 variable "ssh_username" {
   description = "SSH 사용자명"
   type        = string
   default     = "ubuntu"
+}
+
+variable "gcp_credentials_json" {
+  description = "GCP 서비스 계정 키 JSON 내용"
+  type        = string
+  sensitive   = true
 }
