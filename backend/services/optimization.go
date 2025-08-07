@@ -32,7 +32,7 @@ type Participant struct {
 	ID                string `json:"id"`
 	Name              string `json:"name"`
 	Status            string `json:"status"`
-	Region            string `json:"openstack_region"`
+	Region            string `json:"region"`
 	OpenstackEndpoint string `json:"openstack_endpoint"`
 }
 
