@@ -12,13 +12,13 @@ variable "project_name" {
 variable "region" {
   description = "GCP 리전"
   type        = string
-  default     = "asia-northeast3"  # 서울 리전
+  default     = "us-central1"  # 개발용: 무료 리전
 }
 
 variable "zone" {
   description = "GCP 존"
   type        = string
-  default     = "asia-northeast3-a"  # 서울 존
+  default     = "us-central1-a"  # 개발용: 무료 리전
 }
 
 variable "environment" {
@@ -30,7 +30,7 @@ variable "environment" {
 variable "instance_type" {
   description = "VM 인스턴스 타입"
   type        = string
-  default     = "f1-micro"  # AWS t2.micro과 유사
+  default     = "f1-micro"  # 개발용: AWS t2.micro과 유사한 무료 티어
 }
 
 variable "allowed_ips" {
