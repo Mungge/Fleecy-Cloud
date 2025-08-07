@@ -21,11 +21,6 @@ resource "google_compute_subnetwork" "public" {
   network       = google_compute_network.main.id
 }
 
-# SSH 키 메타데이터 준비
-locals {
-  ssh_keys = "${var.ssh_username}:${var.ssh_public_key_content}"  # 파일이 아닌 내용 직접 사용
-}
-
 # 방화벽 규칙 - SSH (항상 필요)
 resource "google_compute_firewall" "ssh" {
   name    = "${var.project_name}-allow-ssh"
@@ -142,7 +137,6 @@ resource "google_compute_instance" "main" {
 
   # 메타데이터 (SSH 키 포함)
   metadata = {
-    ssh-keys = local.ssh_keys
     startup-script = file("${path.module}/../common/scripts/setup-monitoring.sh")
   }
 

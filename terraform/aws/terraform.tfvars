@@ -1,6 +1,5 @@
 project_name   = "fleecy-cloud"
 instance_type  = "t2.micro"
-key_pair_name  = "fleecy-cloud-keypair"  # AWS 콘솔에서 미리 생성한 키페어 이름
 
 # 보안 설정
 environment    = "dev"                  # dev, staging, prod

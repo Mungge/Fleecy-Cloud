@@ -8,7 +8,7 @@ terraform {
 }
 
 provider "google" {
-  credentials = local.gcp_credentials  # JSON 내용 직접 사용
+  credentials = local.gcp_credentials  # 프로덕션: 변수값, 개발: 파일
   project     = var.project_id
   region      = var.region
 }

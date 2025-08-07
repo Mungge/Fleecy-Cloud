@@ -59,6 +59,7 @@ variable "ssh_username" {
 variable "gcp_credentials_json" {
   description = "GCP 서비스 계정 키 JSON 내용 (프로덕션용, DB에서 전달)"
   type        = string
+  default     = ""
   sensitive   = true
 }
 

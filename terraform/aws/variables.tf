@@ -22,17 +22,6 @@ variable "instance_type" {
   default     = "t2.micro"
 }
 
-variable "ssh_public_key_content" {
-  description = "SSH 공개키 내용 (파일 경로가 아닌 실제 키 내용)"
-  type        = string
-}
-
-variable "ssh_username" {
-  description = "SSH 사용자명"
-  type        = string
-  default     = "ubuntu"
-}
-
 variable "environment" {
   description = "환경 (dev, staging, prod)"
   type        = string
@@ -54,12 +43,14 @@ variable "custom_ports" {
 variable "aws_access_key" {
   description = "AWS Access Key ID (프로덕션용, DB에서 전달)"
   type        = string
+  default     = ""
   sensitive   = true
 }
 
 variable "aws_secret_key" {
   description = "AWS Secret Access Key (프로덕션용, DB에서 전달)"
   type        = string
+  default     = ""
   sensitive   = true
 }
 

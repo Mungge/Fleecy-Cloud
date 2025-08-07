@@ -14,16 +14,6 @@ data "aws_ami" "ubuntu" {
   }
 }
 
-# SSH 키페어를 동적으로 받은 공개키로부터 생성
-resource "aws_key_pair" "main" {
-  key_name   = "${var.project_name}-keypair"
-  public_key = var.ssh_public_key_content  # 파일이 아닌 내용 직접 사용
-
-  tags = {
-    Name = "${var.project_name}-keypair"
-  }
-}
-
 # VPC 생성
 resource "aws_vpc" "main" {
   cidr_block = "10.0.0.0/16"
@@ -166,7 +156,6 @@ resource "aws_instance" "main" {
   ami                    = data.aws_ami.ubuntu.id
   instance_type          = var.instance_type
   subnet_id              = aws_subnet.public.id
-  key_name               = var.key_pair_name
   vpc_security_group_ids = [aws_security_group.main.id]
 
   user_data = file("${path.module}/../common/scripts/setup-monitoring.sh")
