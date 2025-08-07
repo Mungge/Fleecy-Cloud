@@ -85,25 +85,23 @@ EOF
 # 9. Grafana sample dashboard (JSON)
 cat <<'EOF' > /opt/monitoring/grafana/provisioning/dashboards/sample-dashboard.json
 {
-  "dashboard": {
-    "id": null,
-    "title": "Sample Monitoring Dashboard",
-    "panels": [
-      {
-        "type": "graph",
-        "title": "Node Exporter CPU Usage",
-        "targets": [
-          {
-            "expr": "rate(node_cpu_seconds_total[1m])",
-            "legendFormat": "{{cpu}}"
-          }
-        ],
-        "datasource": "Prometheus"
-      }
-    ],
-    "schemaVersion": 16,
-    "version": 0
-  }
+  "id": null,
+  "title": "Sample Monitoring Dashboard",
+  "panels": [
+    {
+      "type": "graph",
+      "title": "Node Exporter CPU Usage",
+      "targets": [
+        {
+          "expr": "rate(node_cpu_seconds_total[1m])",
+          "legendFormat": "{{cpu}}"
+        }
+      ],
+      "datasource": "Prometheus"
+    }
+  ],
+  "schemaVersion": 16,
+  "version": 0
 }
 EOF
 
