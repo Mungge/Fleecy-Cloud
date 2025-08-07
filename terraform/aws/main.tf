@@ -14,6 +14,16 @@ data "aws_ami" "ubuntu" {
   }
 }
 
+# SSH 키페어를 동적으로 받은 공개키로부터 생성
+resource "aws_key_pair" "main" {
+  key_name   = "${var.project_name}-keypair"
+  public_key = var.ssh_public_key_content  # 파일이 아닌 내용 직접 사용
+
+  tags = {
+    Name = "${var.project_name}-keypair"
+  }
+}
+
 # VPC 생성
 resource "aws_vpc" "main" {
   cidr_block = "10.0.0.0/16"
