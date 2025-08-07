@@ -13,51 +13,43 @@ import {
 import { Label } from "@/components/ui/label";
 import { Slider } from "@/components/ui/slider";
 import { Badge } from "@/components/ui/badge";
-import {
-	Select,
-	SelectContent,
-	SelectItem,
-	SelectTrigger,
-	SelectValue,
-} from "@/components/ui/select";
+// import {
+// 	Select,
+// 	SelectContent,
+// 	SelectItem,
+// 	SelectTrigger,
+// 	SelectValue,
+// } from "@/components/ui/select";
 import { Check, ArrowLeft } from "lucide-react";
 import { toast } from "sonner";
-import { optimizeAggregatorPlacement, AggregatorConfig } from "@/api/aggregator";
-
-
-// 연합학습 데이터 타입 정의
-interface FederatedLearningData {
-	name: string;
-	description: string;
-	modelType: string;
-	algorithm: string;
-	rounds: number;
-	participants: Array<{
-		id: string;
-		name: string;
-		status: string;
-		openstack_endpoint?: string;
-	}>;
-	modelFileName?: string | null;
-}
+import { OptimizationResponse, AggregatorOption } from "@/api/aggregator";
+import { optimizeAggregatorPlacement, AggregatorOptimizeConfig, AggregatorConfig } from "@/api/aggregator";
+import {FederatedLearningData } from "@/api/aggregator";
+import { createAggregator } from "@/api/aggregator";
 
 const AggregatorCreateContent = () => {
 	const router = useRouter();
 	const [federatedLearningData, setFederatedLearningData] =
 		useState<FederatedLearningData | null>(null);
-	const [aggregatorConfig, setAggregatorConfig] = useState<AggregatorConfig>({
-		region: "ap-northeast-2",
-		storage: "20",
-		instanceType: "m1.medium",
+	const [aggregatorOptimizeConfig, setAggregatorOptimizeConfig] = useState<AggregatorOptimizeConfig>({
 		maxBudget: 500000,
-		maxLatency: 100,
+		maxLatency: 150,
 	});
+	// const [aggregatorConfig, setAggregatorConfig] = useState<AggregatorConfig>({
+	// 	cloudProvider: "aws",
+	// 	region: "ap-northeast-2",
+	// 	instanceType: "t3.medium",
+	// 	memory: 4,
+	// });
 	const [isLoading, setIsLoading] = useState(false);
 	const [creationStatus, setCreationStatus] = useState<{
-		step: "creating" | "deploying" | "completed" | "error";
+		step: "creating" | "selecting" | "deploying" | "completed" | "error";
 		message: string;
 		progress?: number;
 	} | null>(null);
+
+	const [optimizationResults, setOptimizationResults] = useState<OptimizationResponse | null>(null);
+	const [showAggregatorSelection, setShowAggregatorSelection] = useState(false);
 
 	// 페이지 로드 시 sessionStorage에서 데이터 가져오기
 	useEffect(() => {
@@ -82,127 +74,224 @@ const AggregatorCreateContent = () => {
 		router.push("/dashboard/federated-learning");
 	};
 
-	// Aggregator 생성 및 연합학습 생성
-	const handleCreateAggregator = async () => {
+	const handleAggregatorOptimization = async () => {
 		if (!federatedLearningData) {
 			toast.error("연합학습 정보가 없습니다.");
 			return;
 		}
-
 		setIsLoading(true);
 		setCreationStatus({
 			step: "creating",
 			message: "Aggregator 배치 최적화를 시작합니다.",
-			//message: "Aggregator 설정을 생성하고 있습니다...",
-			progress: 10,
+			progress: 5,
 		});
 
 		try {
-			//0단계: Aggregator 배치 최적화
+			// 0단계: Aggregator 배치 최적화
 			toast.info("집계자 배치 최적화를 실행합니다...");
-			const optimizationResult = await optimizeAggregatorPlacement(
-				federatedLearningData,
-				{
-					maxBudget: aggregatorConfig.maxBudget,
-					maxLatency: aggregatorConfig.maxLatency
-				}
+			const optimizationResult: OptimizationResponse = await optimizeAggregatorPlacement(
+			  federatedLearningData,
+			  {
+				maxBudget: aggregatorOptimizeConfig.maxBudget,
+				maxLatency: aggregatorOptimizeConfig.maxLatency
+			  }
 			);
-			setCreationStatus({
-				step: "deploying",
-				message: "최적화 완료! 최적의 집계자 배치를 찾았습니다.",
-				progress: 80,
-			});
-			toast.success(`최적화 완료! ${optimizationResult.optimizationResults.length}개의 최적해를 찾았습니다.`);
-			// 최적화 결과를 사용자에게 표시하거나 다음 단계 진행
-			// 여기서는 임시로 첫 번째 최적해 정보를 표시
-			const bestOption = optimizationResult.optimizationResults[0];
-			if (bestOption) {
-				toast.info(`추천 배치: ${bestOption.cloudProvider} ${bestOption.region} (${bestOption.instanceType}) - 비용: ${bestOption.estimatedCost.toLocaleString()}원, 지연시간: ${bestOption.estimatedLatency}ms`);
+			
+			if (optimizationResult.status === 'error') {
+				throw new Error(optimizationResult.message);
 			}
+
 			setCreationStatus({
-				step: "completed",
-				message: "집계자 배치 최적화가 성공적으로 완료되었습니다!",
-				progress: 100,
-			});
-			// 3단계 완료 상태로 업데이트 후 페이지 이동
-			setTimeout(() => {
-				// sessionStorage 정리
-				sessionStorage.removeItem("federatedLearningData");
-				sessionStorage.removeItem("modelFileName");
-				router.push("/dashboard/federated-learning");
-			}, 3000); // 결과를 좀 더 오래 보여주기 위해 3초로 변경
+				step: "selecting",
+				message: "최적화 완료! 집계자를 선택해주세요.",
+				progress: 15,
+			  });
+
+			toast.success(optimizationResult.message);
+
+			// 최적화 결과가 있는 경우 선택 단계로 이동
+			if (optimizationResult.optimizedOptions.length > 0) {
+				setOptimizationResults(optimizationResult);
+				setShowAggregatorSelection(true);
+			  } else {
+				throw new Error("사용 가능한 집계자 옵션이 없습니다.");
+			  }
 		} catch (error: unknown) {
 			console.error("집계자 배치 최적화 실패:", error);
-			const errorMessage =
-				error instanceof Error ? error.message : "알 수 없는 오류";
+			const errorMessage = error instanceof Error ? error.message : "알 수 없는 오류";
 			
 			setCreationStatus({
-				step: "error",
-				message: errorMessage || "집계자 배치 최적화에 실패했습니다.",
-				progress: 0,
-			});	
+			step: "error",
+			message: errorMessage || "집계자 배치 최적화에 실패했습니다.",
+			progress: 0,
+			});
 			toast.error(`집계자 배치 최적화에 실패했습니다: ${errorMessage}`);
-			} finally {
-				setIsLoading(false);
-			}
-
+		} finally {
+			setIsLoading(false);
+		}
+  	};
+	
+	// 집계자 선택 컴포넌트
+	const AggregatorSelectionModal = ({ 
+		results, 
+		onSelect, 
+		onCancel 
+	}: {
+		results: OptimizationResponse;
+		onSelect: (option: AggregatorOption) => void;
+		onCancel: () => void;
+	}) => {
+		const [selectedOption, setSelectedOption] = useState<AggregatorOption | null>(null);
+	
+		return (
+		<div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+			<div className="bg-white rounded-lg p-6 max-w-6xl max-h-[80vh] overflow-y-auto">
+			<h2 className="text-2xl font-bold mb-4">집계자 선택</h2>
 			
-		// 	// 1단계: Aggregator 생성 요청
-		// 	//toast.info("Aggregator 생성을 시작합니다...");
+			{/* 요약 정보 */}
+			<div className="mb-6 p-4 bg-gray-100 rounded-lg">
+				<h3 className="font-semibold mb-2">최적화 요약</h3>
+				<div className="grid grid-cols-2 gap-4 text-sm">
+				<div>참여자 수: {results.summary.totalParticipants}명</div>
+				<div>참여자 지역: {results.summary.participantRegions.join(', ')}</div>
+				<div>후보 옵션: {results.summary.totalCandidateOptions}개</div>
+				<div>조건 만족 옵션: {results.summary.feasibleOptions}개</div>
+				</div>
+			</div>
+	
+			{/* 옵션 리스트 */}
+			<div className="space-y-3 mb-6">
+				{results.optimizedOptions.map((option) => (
+				<div
+					key={`${option.region}-${option.instanceType}`}
+					className={`p-4 border rounded-lg cursor-pointer transition-colors ${
+					selectedOption?.rank === option.rank
+						? 'border-blue-500 bg-blue-50'
+						: 'border-gray-200 hover:border-gray-300 hover:bg-gray-50'
+					}`}
+					onClick={() => setSelectedOption(option)}
+				>
+					<div className="flex justify-between items-start mb-2">
+					<div className="flex items-center space-x-2">
+						<span className="bg-blue-100 text-blue-800 px-2 py-1 rounded text-sm font-medium">
+						#{option.rank}
+						</span>
+						<span className="font-semibold text-lg">
+						{option.cloudProvider} {option.region}
+						</span>
+						<span className="bg-green-100 text-green-800 px-2 py-1 rounded text-sm">
+						추천도: {option.recommendationScore}%
+						</span>
+					</div>
+					<div className="text-right">
+						<div className="text-2xl font-bold text-blue-600">
+						₩{option.estimatedMonthlyCost.toLocaleString()}
+						</div>
+						<div className="text-sm text-gray-500">월 예상 비용</div>
+					</div>
+					</div>
+	
+					<div className="grid grid-cols-4 gap-4 mt-3">
+					<div>
+						<div className="text-sm text-gray-600">인스턴스</div>
+						<div className="font-medium">{option.instanceType}</div>
+						<div className="text-xs text-gray-500">
+						{option.vcpu}vCPU, {option.memory}GB
+						</div>
+					</div>
+					<div>
+						<div className="text-sm text-gray-600">평균 지연시간</div>
+						<div className="font-medium text-orange-600">{option.avgLatency}ms</div>
+					</div>
+					<div>
+						<div className="text-sm text-gray-600">최대 지연시간</div>
+						<div className="font-medium text-red-600">{option.maxLatency}ms</div>
+					</div>
+					<div>
+						<div className="text-sm text-gray-600">시간당 비용</div>
+						<div className="font-medium">${option.estimatedHourlyPrice}</div>
+					</div>
+					</div>
+				</div>
+				))}
+			</div>
+	
+			{/* 버튼 */}
+			<div className="flex justify-end space-x-3">
+				<button
+				onClick={onCancel}
+				className="px-4 py-2 text-gray-600 hover:text-gray-800 transition-colors"
+				>
+				취소
+				</button>
+				<button
+				onClick={() => selectedOption && onSelect(selectedOption)}
+				disabled={!selectedOption}
+				className="px-6 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 disabled:bg-gray-300 disabled:cursor-not-allowed transition-colors"
+				>
+				선택한 집계자로 생성
+				</button>
+			</div>
+			</div>
+		</div>
+		);
+	};
+  
 
-		// 	const response = await createAggregator(
-		// 		federatedLearningData,
-		// 		aggregatorConfig
-		// 	);
-
-		// 	setCreationStatus({
-		// 		step: "deploying",
-		// 		message: "Terraform을 이용하여 인프라를 배포하고 있습니다...",
-		// 		progress: 50,
-		// 	});
-
-		// 	toast.info("Terraform으로 인프라를 배포 중입니다...");
-
-		// 	// 2단계: 배포 상태 모니터링 (실제로는 polling이나 WebSocket으로 구현)
-		// 	// 여기서는 시뮬레이션으로 처리
-		// 	await new Promise((resolve) => setTimeout(resolve, 3000));
-
-		// 	setCreationStatus({
-		// 		step: "completed",
-		// 		message: "Aggregator가 성공적으로 생성되었습니다!",
-		// 		progress: 100,
-		// 	});
-
-		// 	// 성공 메시지 표시
-		// 	toast.success(
-		// 		`Aggregator가 성공적으로 생성되었습니다! (ID: ${response.aggregatorId})`
-		// 	);
-
-		// 	// 3단계 완료 상태로 Progress bar 업데이트 후 페이지 이동
-		// 	setTimeout(() => {
-		// 		// sessionStorage 정리
-		// 		sessionStorage.removeItem("federatedLearningData");
-		// 		sessionStorage.removeItem("modelFileName");
-
-		// 		// 연합학습 목록 페이지로 이동
-		// 		router.push("/dashboard/federated-learning");
-		// 	}, 2000);
-		// } catch (error: unknown) { 	 	
-		// 	console.error("Aggregator 생성 실패:", error);
-
-		// 	const errorMessage =
-		// 		error instanceof Error ? error.message : "알 수 없는 오류";
-
-		// 	setCreationStatus({
-		// 		step: "error",
-		// 		message: errorMessage || "Aggregator 생성에 실패했습니다.",
-		// 		progress: 0,
-		// 	});
-
-		// 	toast.error(`Aggregator 생성에 실패했습니다: ${errorMessage}`);
-		// } finally {
-		// 	setIsLoading(false);
-		// }
+	// Aggregator 생성 및 연합학습 생성
+	const handleCreateAggregator = async (selectedOption: AggregatorOption) => {
+		setShowAggregatorSelection(false);
+		setIsLoading(true);
+		
+		setCreationStatus({
+		  step: "deploying",
+		  message: `선택된 집계자를 배포하는 중... (${selectedOption.cloudProvider} ${selectedOption.region})`,
+		  progress: 50,
+		});
+	  
+		try {
+		  // 🔥 기존 API 구조에 맞게 수정
+		  const aggregatorConfig: AggregatorConfig = {
+			cloudProvider: selectedOption.cloudProvider,
+			region: selectedOption.region,
+			instanceType: selectedOption.instanceType,
+			memory: selectedOption.memory
+		  };
+	  
+		  // 기존 createAggregator API 사용
+		  const result = await createAggregator(
+			federatedLearningData!,
+			aggregatorConfig
+		  );
+		  
+		  setCreationStatus({
+			step: "completed",
+			message: "집계자가 성공적으로 생성되었습니다!",
+			progress: 100,
+		  });
+	  
+		  toast.success(`집계자 생성이 완료되었습니다! (ID: ${result.aggregatorId})`);
+	  
+		  // 결과 표시 후 페이지 이동
+		  setTimeout(() => {
+			sessionStorage.removeItem("federatedLearningData");
+			sessionStorage.removeItem("modelFileName");
+			router.push("/dashboard/federated-learning");
+		  }, 2000);
+	  
+		} catch (error: unknown) {
+		  console.error("집계자 생성 실패:", error);
+		  const errorMessage = error instanceof Error ? error.message : "알 수 없는 오류";
+		  
+		  setCreationStatus({
+			step: "error",
+			message: errorMessage || "집계자 생성에 실패했습니다.",
+			progress: 0,
+		  });
+		  toast.error(`집계자 생성에 실패했습니다: ${errorMessage}`);
+		} finally {
+		  setIsLoading(false);
+		}
 	};	
 	if (!federatedLearningData) {
 		return (
@@ -452,100 +541,23 @@ const AggregatorCreateContent = () => {
 						</CardDescription>
 					</CardHeader>
 					<CardContent className="space-y-4">
-						<div className="space-y-2">
-							<Label htmlFor="region">리전</Label>
-							<Select
-								value={aggregatorConfig.region}
-								onValueChange={(value) =>
-									setAggregatorConfig((prev) => ({ ...prev, region: value }))
-								}
-							>
-								<SelectTrigger>
-									<SelectValue />
-								</SelectTrigger>
-								<SelectContent>
-									<SelectItem value="ap-northeast-2">
-										아시아 태평양 (서울)
-									</SelectItem>
-									<SelectItem value="ap-northeast-1">
-										아시아 태평양 (도쿄)
-									</SelectItem>
-									<SelectItem value="us-east-1">
-										미국 동부 (버지니아 북부)
-									</SelectItem>
-									<SelectItem value="us-west-2">미국 서부 (오레곤)</SelectItem>
-									<SelectItem value="eu-west-1">유럽 (아일랜드)</SelectItem>
-								</SelectContent>
-							</Select>
-						</div>
-
-						<div className="space-y-2">
-							<Label htmlFor="instanceType">인스턴스 타입</Label>
-							<Select
-								value={aggregatorConfig.instanceType}
-								onValueChange={(value) =>
-									setAggregatorConfig((prev) => ({
-										...prev,
-										instanceType: value,
-									}))
-								}
-							>
-								<SelectTrigger>
-									<SelectValue />
-								</SelectTrigger>
-								<SelectContent>
-									<SelectItem value="m1.small">
-										m1.small (1 vCPU, 2GB RAM)
-									</SelectItem>
-									<SelectItem value="m1.medium">
-										m1.medium (2 vCPU, 4GB RAM)
-									</SelectItem>
-									<SelectItem value="m1.large">
-										m1.large (4 vCPU, 8GB RAM)
-									</SelectItem>
-									<SelectItem value="m1.xlarge">
-										m1.xlarge (8 vCPU, 16GB RAM)
-									</SelectItem>
-								</SelectContent>
-							</Select>
-						</div>
-
-						<div className="space-y-2">
-							<Label htmlFor="storage">스토리지 (GB)</Label>
-							<Select
-								value={aggregatorConfig.storage}
-								onValueChange={(value) =>
-									setAggregatorConfig((prev) => ({ ...prev, storage: value }))
-								}
-							>
-								<SelectTrigger>
-									<SelectValue />
-								</SelectTrigger>
-								<SelectContent>
-									<SelectItem value="10">10 GB</SelectItem>
-									<SelectItem value="20">20 GB</SelectItem>
-									<SelectItem value="50">50 GB</SelectItem>
-									<SelectItem value="100">100 GB</SelectItem>
-								</SelectContent>
-							</Select>
-						</div>
-						{/* 제약조건 설정 추가 */}
+						{/* 제약조건 설정 */}
 						<div className="space-y-2">
 							<div className="flex justify-between items-center">
-								<Label htmlFor="budget">최대 월 예산</Label>
+								<Label htmlFor="budget">최대 월 예산 제약조건</Label>
 								<span className="text-sm font-medium text-green-600">
-									{aggregatorConfig.maxBudget.toLocaleString()}원
+									{aggregatorOptimizeConfig.maxBudget.toLocaleString()}원
 								</span>
 							</div>
 							<Slider
 								id="budget"
-								value={[aggregatorConfig.maxBudget]}
+								value={[aggregatorOptimizeConfig.maxBudget]}
 								onValueChange={([value]) => 
-									setAggregatorConfig(prev => ({ ...prev, maxBudget: value }))
+									setAggregatorOptimizeConfig(prev => ({ ...prev, maxBudget: value }))
 								}
-								max={2000000}
-								min={100000}
-								step={100000}
+								max={1000000}
+								min={50000}
+								step={10000}
 								className="w-full"
 							/>
 							<div className="flex justify-between text-xs text-muted-foreground">
@@ -556,20 +568,20 @@ const AggregatorCreateContent = () => {
 
 						<div className="space-y-2">
 							<div className="flex justify-between items-center">
-								<Label htmlFor="latency">최대 허용 지연시간</Label>
+								<Label htmlFor="latency">최대 허용 지연시간 제약조건</Label>
 								<span className="text-sm font-medium text-blue-600">
-									{aggregatorConfig.maxLatency}ms
+									{aggregatorOptimizeConfig.maxLatency}ms
 								</span>
 							</div>
 							<Slider
 								id="latency"
-								value={[aggregatorConfig.maxLatency]}
+								value={[aggregatorOptimizeConfig.maxLatency]}
 								onValueChange={([value]) => 
-									setAggregatorConfig(prev => ({ ...prev, maxLatency: value }))
+									setAggregatorOptimizeConfig(prev => ({ ...prev, maxLatency: value }))
 								}
 								max={500}
 								min={20}
-								step={10}
+								step={5}
 								className="w-full"
 							/>
 							<div className="flex justify-between text-xs text-muted-foreground">
@@ -582,14 +594,14 @@ const AggregatorCreateContent = () => {
 						<div className="mt-4 p-3 bg-gray-50 rounded-md">
 							<div className="text-sm text-muted-foreground mb-1">제약조건:</div>
 							<div className="text-sm">
-								월 최대 <span className="font-medium text-green-600">{aggregatorConfig.maxBudget.toLocaleString()}원</span> 예산으로{" "}
-								<span className="font-medium text-blue-600">{aggregatorConfig.maxLatency}ms</span> 이하의 응답속도 보장
+								월 최대 <span className="font-medium text-green-600">{aggregatorOptimizeConfig.maxBudget.toLocaleString()}원</span> 예산으로{" "}
+								<span className="font-medium text-blue-600">{aggregatorOptimizeConfig.maxLatency}ms</span> 이하의 응답속도 보장
 							</div>
 						</div>
 
 						<div className="pt-4">
 							<Button
-								onClick={handleCreateAggregator}
+								onClick={handleAggregatorOptimization}
 								disabled={isLoading || creationStatus?.step === "completed"}
 								className="w-full"
 								variant={
@@ -622,6 +634,16 @@ const AggregatorCreateContent = () => {
 					</CardContent>
 				</Card>
 			</div>
+			{showAggregatorSelection && optimizationResults && (
+			<AggregatorSelectionModal
+				results={optimizationResults}
+				onSelect={handleCreateAggregator}
+				onCancel={() => {
+				setShowAggregatorSelection(false);
+				setCreationStatus(null);
+				}}
+			/>
+			)}
 		</div>
 	);
 };

@@ -67,6 +67,7 @@ import { OpenStackVMInstance } from "@/types/virtual-machine";
 // 폼 스키마 정의 (YAML 파일 업로드 방식으로 변경)
 const participantSchema = z.object({
 	name: z.string().min(1, "이름은 필수입니다"),
+	region: z.string().min(1, "리전은 필수입니다"),
 	metadata: z.string().optional(),
 });
 
@@ -90,6 +91,7 @@ export default function ParticipantsContent() {
 		resolver: zodResolver(participantSchema),
 		defaultValues: {
 			name: "",
+			region: "",
 			metadata: "",
 		},
 	});
@@ -136,6 +138,7 @@ export default function ParticipantsContent() {
 			// FormData 생성
 			const formData = new FormData();
 			formData.append("name", data.name);
+			formData.append("region", data.region);
 			if (data.metadata) {
 				formData.append("metadata", data.metadata);
 			}
@@ -150,6 +153,7 @@ export default function ParticipantsContent() {
 
 			form.reset({
 				name: "",
+				region: "",
 				metadata: "",
 			});
 			setConfigFile(null);
@@ -169,6 +173,7 @@ export default function ParticipantsContent() {
 			if (configFile) {
 				const formData = new FormData();
 				formData.append("name", data.name);
+				formData.append("region", data.region);
 				if (data.metadata) {
 					formData.append("metadata", data.metadata);
 				}
@@ -176,9 +181,10 @@ export default function ParticipantsContent() {
 
 				await updateParticipant(selectedParticipant.id, formData);
 			} else {
-				// 파일이 없는 경우 FormData만 사용 (name, metadata만)
+				// 파일이 없는 경우 FormData만 사용 (name, region, metadata만)
 				const formData = new FormData();
 				formData.append("name", data.name);
+				formData.append("region", data.region);
 				if (data.metadata) {
 					formData.append("metadata", data.metadata);
 				}
@@ -277,6 +283,7 @@ export default function ParticipantsContent() {
 		setSelectedParticipant(participant);
 		form.reset({
 			name: participant.name,
+			region: participant.region || "",
 			metadata: participant.metadata || "",
 		});
 		setEditDialogOpen(true);
@@ -329,6 +336,7 @@ export default function ParticipantsContent() {
 						if (open) {
 							form.reset({
 								name: "",
+								region: "",
 								metadata: "",
 							});
 							setConfigFile(null);
@@ -337,6 +345,7 @@ export default function ParticipantsContent() {
 						if (!open) {
 							form.reset({
 								name: "",
+								region: "",
 								metadata: "",
 							});
 							setConfigFile(null);
@@ -370,6 +379,23 @@ export default function ParticipantsContent() {
 											<FormLabel>이름</FormLabel>
 											<FormControl>
 												<Input placeholder="참여자 이름" {...field} />
+											</FormControl>
+											<FormMessage />
+										</FormItem>
+									)}
+								/>
+
+								<FormField
+									control={form.control}
+									name="region"
+									render={({ field }) => (
+										<FormItem>
+											<FormLabel>리전</FormLabel>
+											<FormControl>
+												<Input
+													placeholder="리전 (예: us-east-1, ap-northeast-2)"
+													{...field}
+												/>
 											</FormControl>
 											<FormMessage />
 										</FormItem>
@@ -459,6 +485,23 @@ export default function ParticipantsContent() {
 
 							<FormField
 								control={form.control}
+								name="region"
+								render={({ field }) => (
+									<FormItem>
+										<FormLabel>리전</FormLabel>
+										<FormControl>
+											<Input
+												placeholder="리전 (예: us-east-1, ap-northeast-2)"
+												{...field}
+											/>
+										</FormControl>
+										<FormMessage />
+									</FormItem>
+								)}
+							/>
+
+							<FormField
+								control={form.control}
 								name="metadata"
 								render={({ field }) => (
 									<FormItem>
@@ -532,6 +575,7 @@ export default function ParticipantsContent() {
 								<TableHeader>
 									<TableRow>
 										<TableHead>이름</TableHead>
+										<TableHead>리전</TableHead>
 										<TableHead>상태</TableHead>
 										<TableHead>생성일</TableHead>
 										<TableHead>액션</TableHead>
@@ -551,6 +595,7 @@ export default function ParticipantsContent() {
 											<TableCell className="font-medium">
 												{participant.name}
 											</TableCell>
+											<TableCell>{participant.region || "-"}</TableCell>
 											<TableCell>
 												{getStatusBadge(participant.status)}
 											</TableCell>
@@ -651,6 +696,12 @@ export default function ParticipantsContent() {
 											{getStatusBadge(selectedParticipant.status)}
 										</div>
 									</div>
+									{selectedParticipant.region && (
+										<div>
+											<span className="text-sm font-medium">리전:</span>
+											<p className="text-sm">{selectedParticipant.region}</p>
+										</div>
+									)}
 									<div>
 										<span className="text-sm font-medium">생성일:</span>
 										<p className="text-sm">
