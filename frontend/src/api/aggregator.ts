@@ -1,4 +1,4 @@
-import { interceptors } from "undici-types";
+//import { interceptors } from "undici-types";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8080";
 
@@ -200,8 +200,15 @@ export interface OptimizationResponse {
 	  participantRegions: string[];
 	  totalCandidateOptions: number;
 	  feasibleOptions: number;
-	  constraints: any;
-	  modelInfo: any;
+	  constraints: {
+		maxBudget: number;
+		maxLatency: number;
+	  };
+	  modelInfo: {
+		modelType: string;
+		algorithm: string;
+		rounds: number;
+	  };
 	};
 	optimizedOptions: AggregatorOption[];
 	message: string;
