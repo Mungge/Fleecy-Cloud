@@ -137,20 +137,20 @@ func (h *AggregatorHandler) validateOptimizationRequest(request *services.Optimi
 	}
 
 	// 3. 제약사항 검증
-	if request.Constraints.MaxBudget <= 0 {
+	if request.AggregatorConfig.MaxBudget <= 0 {
 		return fmt.Errorf("최대 예산은 0보다 커야 합니다")
 	}
 
-	if request.Constraints.MaxLatency <= 0 {
+	if request.AggregatorConfig.MaxLatency <= 0 {
 		return fmt.Errorf("최대 지연시간은 0보다 커야 합니다")
 	}
 
 	// 합리적인 범위 체크
-	if request.Constraints.MaxBudget > 10000000 { // 1천만원
+	if request.AggregatorConfig.MaxBudget > 10000000 { // 1천만원
 		return fmt.Errorf("최대 예산이 너무 큽니다 (최대: 10,000,000원)")
 	}
 
-	if request.Constraints.MaxLatency > 10000 { // 10초
+	if request.AggregatorConfig.MaxLatency > 10000 { // 10초
 		return fmt.Errorf("최대 지연시간이 너무 큽니다 (최대: 10,000ms)")
 	}
 
