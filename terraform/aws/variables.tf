@@ -52,13 +52,33 @@ variable "custom_ports" {
 }
 
 variable "aws_access_key" {
-  description = "AWS Access Key ID"
+  description = "AWS Access Key ID (프로덕션용, DB에서 전달)"
   type        = string
   sensitive   = true
 }
 
 variable "aws_secret_key" {
-  description = "AWS Secret Access Key"
+  description = "AWS Secret Access Key (프로덕션용, DB에서 전달)"
   type        = string
   sensitive   = true
+}
+
+# CSV 파일에서 AWS 키 읽기 (개발용)
+locals {
+  # 프로덕션에서는 변수값 사용, 개발에서는 CSV 파일 사용
+  use_csv_file = var.aws_access_key == "" || var.aws_secret_key == ""
+  
+  # CSV 파일 읽고 파싱 (파일이 있을 때만)
+  csv_file_exists = fileexists("${path.module}/../credentials/keys.csv")
+  csv_content     = local.csv_file_exists ? file("${path.module}/../credentials/keys.csv") : ""
+  csv_lines       = local.csv_content != "" ? split("\n", local.csv_content) : []
+  credential_data = length(local.csv_lines) > 1 ? split(",", local.csv_lines[1]) : ["", ""]
+  
+  # 최종 키 값 결정 (변수 우선, 없으면 CSV에서 읽기)
+  aws_access_key = var.aws_access_key != "" ? var.aws_access_key : (
+    length(local.credential_data) > 0 ? trimspace(local.credential_data[0]) : ""
+  )
+  aws_secret_key = var.aws_secret_key != "" ? var.aws_secret_key : (
+    length(local.credential_data) > 1 ? trimspace(local.credential_data[1]) : ""
+  )
 }

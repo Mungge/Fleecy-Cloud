@@ -57,7 +57,17 @@ variable "ssh_username" {
 }
 
 variable "gcp_credentials_json" {
-  description = "GCP 서비스 계정 키 JSON 내용"
+  description = "GCP 서비스 계정 키 JSON 내용 (프로덕션용, DB에서 전달)"
   type        = string
   sensitive   = true
+}
+
+locals {
+  # GCP 인증 방식 결정
+  gcp_file_exists = fileexists("${path.module}/../credentials/service-account.json")
+  
+  # 프로덕션: 변수값 사용, 개발: 파일 사용
+  gcp_credentials = var.gcp_credentials_json != "" ? var.gcp_credentials_json : (
+    local.gcp_file_exists ? file("${path.module}/../credentials/service-account.json") : ""
+  )
 }
