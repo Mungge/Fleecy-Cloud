@@ -32,7 +32,7 @@ output "subnet_name" {
 
 output "ssh_connection" {
   description = "SSH 연결 명령어"
-  value       = "ssh ${var.ssh_username}@${google_compute_instance.main.network_interface[0].access_config[0].nat_ip}"
+  value       = "gcloud compute ssh ${google_compute_instance.main.name}"
 }
 
 output "zone" {

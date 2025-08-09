@@ -48,6 +48,7 @@ variable "custom_ports" {
 variable "ssh_public_key_content" {
   description = "SSH 공개키 내용 (파일 경로가 아닌 실제 키 내용)"
   type        = string
+  default= ""
 }
 
 variable "ssh_username" {
