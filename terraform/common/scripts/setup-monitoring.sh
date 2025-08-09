@@ -28,7 +28,6 @@ systemctl start docker
 mkdir -p /opt/monitoring/prometheus
 mkdir -p /opt/monitoring/grafana/provisioning/datasources
 mkdir -p /opt/monitoring/grafana/provisioning/dashboards
-mkdir -p /opt/monitoring/grafana/provisioning/dashboards
 mkdir -p /opt/monitoring/data/prometheus
 mkdir -p /opt/monitoring/data/grafana
 
@@ -46,11 +45,12 @@ scrape_configs:
   - job_name: 'node-exporter'
     static_configs:
       - targets: ['node-exporter:9100']
-
-  - job_name: 'jaeger'
-    metrics_path: /metrics
+      
+  # 연합학습 집계자 애플리케이션 메트릭스 (필요시 추가)
+  - job_name: 'federated-aggregator'
     static_configs:
-      - targets: ['jaeger:14269']
+      - targets: ['host.docker.internal:8080']  # 애플리케이션 메트릭스 엔드포인트
+    scrape_interval: 10s
 EOF
 
 # 7. Grafana provisioning - datasources.yaml
@@ -68,13 +68,13 @@ datasources:
 EOF
 
 # 8. Grafana provisioning - dashboards.yaml
-cat <<'EOF' > /opt/monitoring/grafana/provisioning/dashboards.yaml
+cat <<'EOF' > /opt/monitoring/grafana/provisioning/dashboards/dashboards.yaml
 apiVersion: 1
 
 providers:
-  - name: 'default'
+  - name: 'federated-learning'
     orgId: 1
-    folder: ''
+    folder: 'Federated Learning'
     type: file
     disableDeletion: false
     updateIntervalSeconds: 10
@@ -82,26 +82,135 @@ providers:
       path: /etc/grafana/provisioning/dashboards
 EOF
 
-# 9. Grafana sample dashboard (JSON)
-cat <<'EOF' > /opt/monitoring/grafana/provisioning/dashboards/sample-dashboard.json
+# 9. 연합학습 집계자용 대시보드 생성
+cat <<'EOF' > /opt/monitoring/grafana/provisioning/dashboards/federated-aggregator-dashboard.json
 {
   "id": null,
-  "title": "Sample Monitoring Dashboard",
+  "title": "연합학습 집계자 모니터링",
+  "tags": ["federated-learning", "aggregator"],
+  "time": {
+    "from": "now-1h",
+    "to": "now"
+  },
+  "refresh": "30s",
   "panels": [
     {
-      "type": "graph",
-      "title": "Node Exporter CPU Usage",
+      "id": 1,
+      "title": "CPU 사용률",
+      "type": "stat",
+      "gridPos": {"h": 8, "w": 12, "x": 0, "y": 0},
       "targets": [
         {
-          "expr": "rate(node_cpu_seconds_total[1m])",
-          "legendFormat": "{{cpu}}"
+          "expr": "100 - (avg(irate(node_cpu_seconds_total{mode=\"idle\"}[1m])) * 100)",
+          "legendFormat": "CPU Usage %"
         }
       ],
-      "datasource": "Prometheus"
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percent",
+          "thresholds": {
+            "steps": [
+              {"color": "green", "value": null},
+              {"color": "yellow", "value": 60},
+              {"color": "red", "value": 80}
+            ]
+          }
+        }
+      }
+    },
+    {
+      "id": 2,
+      "title": "메모리 사용률",
+      "type": "stat",
+      "gridPos": {"h": 8, "w": 12, "x": 12, "y": 0},
+      "targets": [
+        {
+          "expr": "((node_memory_MemTotal_bytes - node_memory_MemFree_bytes - node_memory_Buffers_bytes - node_memory_Cached_bytes) / node_memory_MemTotal_bytes) * 100",
+          "legendFormat": "Memory Usage %"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percent",
+          "thresholds": {
+            "steps": [
+              {"color": "green", "value": null},
+              {"color": "yellow", "value": 70},
+              {"color": "red", "value": 85}
+            ]
+          }
+        }
+      }
+    },
+    {
+      "id": 3,
+      "title": "디스크 사용률",
+      "type": "gauge",
+      "gridPos": {"h": 8, "w": 8, "x": 0, "y": 8},
+      "targets": [
+        {
+          "expr": "100 - ((node_filesystem_avail_bytes{mountpoint=\"/\"} * 100) / node_filesystem_size_bytes{mountpoint=\"/\"})",
+          "legendFormat": "Root Disk Usage %"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percent",
+          "max": 100,
+          "thresholds": {
+            "steps": [
+              {"color": "green", "value": null},
+              {"color": "yellow", "value": 70},
+              {"color": "red", "value": 85}
+            ]
+          }
+        }
+      }
+    },
+    {
+      "id": 4,
+      "title": "네트워크 I/O",
+      "type": "timeseries",
+      "gridPos": {"h": 8, "w": 8, "x": 8, "y": 8},
+      "targets": [
+        {
+          "expr": "rate(node_network_receive_bytes_total[1m])",
+          "legendFormat": "Receive {{device}}"
+        },
+        {
+          "expr": "rate(node_network_transmit_bytes_total[1m])",
+          "legendFormat": "Transmit {{device}}"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "binBps"
+        }
+      }
+    },
+    {
+      "id": 5,
+      "title": "시스템 로드",
+      "type": "timeseries",
+      "gridPos": {"h": 8, "w": 8, "x": 16, "y": 8},
+      "targets": [
+        {
+          "expr": "node_load1",
+          "legendFormat": "1m load avg"
+        },
+        {
+          "expr": "node_load5",
+          "legendFormat": "5m load avg"
+        },
+        {
+          "expr": "node_load15",
+          "legendFormat": "15m load avg"
+        }
+      ]
     }
   ],
-  "schemaVersion": 16,
-  "version": 0
+  "schemaVersion": 30,
+  "version": 1
 }
 EOF
 
@@ -128,31 +237,19 @@ services:
     networks:
       - monitoring
 
-  jaeger:
-    image: jaegertracing/all-in-one:latest
-    ports:
-      - "16686:16686"
-      - "4318:4318"
-    environment:
-      - COLLECTOR_OTLP_ENABLED=true
-      - COLLECTOR_OTLP_HTTP_PORT=4318
-    networks:
-      - monitoring
-    restart: always
-    healthcheck:
-      test: ["CMD", "wget", "--spider", "-q", "http://localhost:16686"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
-
   prometheus:
     image: prom/prometheus:latest
+    container_name: prometheus
     volumes:
       - ./prometheus/prometheus.yml:/etc/prometheus/prometheus.yml
       - prometheus_data:/prometheus
     command:
       - "--config.file=/etc/prometheus/prometheus.yml"
       - "--storage.tsdb.path=/prometheus"
+      - "--web.console.libraries=/etc/prometheus/console_libraries"
+      - "--web.console.templates=/etc/prometheus/consoles"
+      - "--storage.tsdb.retention.time=200h"
+      - "--web.enable-lifecycle"
     ports:
       - "9090:9090"
     networks:
@@ -166,13 +263,21 @@ services:
 
   grafana:
     image: grafana/grafana:latest
+    container_name: grafana
     volumes:
       - grafana_data:/var/lib/grafana
       - ./grafana/provisioning:/etc/grafana/provisioning
     environment:
       - GF_SECURITY_ADMIN_USER=admin
-      - GF_SECURITY_ADMIN_PASSWORD=admin
+      - GF_SECURITY_ADMIN_PASSWORD=admin123
       - GF_USERS_ALLOW_SIGN_UP=false
+      - GF_INSTALL_PLUGINS=grafana-piechart-panel
+      # 임베드 및 API 접근 허용
+      - GF_SECURITY_ALLOW_EMBEDDING=true
+      - GF_AUTH_ANONYMOUS_ENABLED=true
+      - GF_AUTH_ANONYMOUS_ORG_ROLE=Viewer
+      - GF_SECURITY_COOKIE_SAMESITE=none
+      - GF_PANELS_DISABLE_SANITIZE_HTML=true
     ports:
       - "3000:3000"
     networks:
@@ -194,3 +299,11 @@ EOF
 # 11. 모니터링 경로 이동 및 실행
 cd /opt/monitoring
 docker-compose up -d
+
+echo "========================================="
+echo "연합학습 집계자 모니터링 시스템 설치 완료!"
+echo "========================================="
+echo "Grafana: http://localhost:3000 (admin/admin123)"
+echo "Prometheus: http://localhost:9090"
+echo "Node Exporter: http://localhost:9101"
+echo "========================================="

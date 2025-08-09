@@ -14,6 +14,58 @@ data "aws_ami" "ubuntu" {
   }
 }
 
+# 키 페어 이름 설정
+locals {
+  key_name = "${var.project_name}-keypair-${var.environment}"
+}
+
+# 1. 개발 환경용: Terraform에서 키 페어 생성
+resource "tls_private_key" "dev" {
+  count = var.environment == "dev" ? 1 : 0
+  
+  algorithm = "RSA"
+  rsa_bits  = 4096
+}
+
+# 2. 개발 환경용: 개인키를 로컬에 저장
+resource "local_file" "private_key_dev" {
+  count = var.environment == "dev" ? 1 : 0
+  
+  content         = tls_private_key.dev[0].private_key_pem
+  filename        = pathexpand("~/.ssh/${local.key_name}.pem")
+  file_permission = "0600"
+}
+
+# 3. 개발 환경용 키 페어 (공개키 소스 변경)
+resource "aws_key_pair" "dev" {
+  count = var.environment == "dev" ? 1 : 0
+  
+  key_name   = local.key_name
+  public_key = tls_private_key.dev[0].public_key_openssh
+}
+
+# 배포 환경용 키 페어 (키 변경 무시)
+resource "aws_key_pair" "prod" {
+  count = var.environment != "dev" ? 1 : 0
+  
+  key_name   = local.key_name
+  public_key = local.ssh_public_key_content
+
+  tags = {
+    Name = local.key_name
+    Environment = var.environment
+  }
+  
+  lifecycle {
+    ignore_changes = [public_key]
+  }
+}
+
+# 환경에 따라 사용할 키 페어 결정
+locals {
+  key_pair_name = var.environment == "dev" ? aws_key_pair.dev[0].key_name : aws_key_pair.prod[0].key_name
+}
+
 # VPC 생성
 resource "aws_vpc" "main" {
   cidr_block = "10.0.0.0/16"
@@ -156,7 +208,7 @@ resource "aws_instance" "main" {
   ami                    = data.aws_ami.ubuntu.id
   instance_type          = var.instance_type
   subnet_id              = aws_subnet.public.id
-  key_name               = var.key_pair_name
+  key_name               = local.key_name
   vpc_security_group_ids = [aws_security_group.main.id]
 
   user_data = file("${path.module}/../common/scripts/setup-monitoring.sh")

@@ -60,4 +60,4 @@ terraform/gcp/.terraform/
 terraform.tfstate
 terraform.tfstate.*
 
-terraform/aws/keys/fleecy-cloud-keypair
+credentials/

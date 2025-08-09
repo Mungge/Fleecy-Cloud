@@ -6,25 +6,19 @@ data "google_compute_image" "ubuntu" {
   project = "ubuntu-os-cloud"
 }
 
-# VPC 네트워크 생성 (AWS VPC와 동일)
+# VPC 네트워크 생성
 resource "google_compute_network" "main" {
   name                    = "${var.project_name}-vpc"
   auto_create_subnetworks = false  # 수동으로 서브넷 생성
   mtu                     = 1460
 }
 
-# 서브넷 생성 (AWS 퍼블릭 서브넷과 동일)
+# 서브넷 생성
 resource "google_compute_subnetwork" "public" {
   name          = "${var.project_name}-public-subnet"
   ip_cidr_range = "10.0.1.0/24"
   region        = var.region
   network       = google_compute_network.main.id
-}
-
-# SSH 키 메타데이터 준비
-locals {
-  ssh_public_key = file(var.ssh_public_key_path)
-  ssh_keys = "${var.ssh_username}:${local.ssh_public_key}"
 }
 
 # 방화벽 규칙 - SSH (항상 필요)
@@ -141,7 +135,7 @@ resource "google_compute_instance" "main" {
     }
   }
 
-  # 메타데이터 (SSH 키 포함)
+  # 메타데이터
   metadata = {
     ssh-keys = local.ssh_keys
     startup-script = file("${path.module}/../common/scripts/setup-monitoring.sh")
