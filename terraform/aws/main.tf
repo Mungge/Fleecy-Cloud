@@ -41,7 +41,7 @@ resource "aws_key_pair" "dev" {
   count = var.environment == "dev" ? 1 : 0
   
   key_name   = local.key_name
-  public_key = tls_private_key.dev[0].public_key_openssh  # ← 변경됨
+  public_key = tls_private_key.dev[0].public_key_openssh
 }
 
 # 배포 환경용 키 페어 (키 변경 무시)
