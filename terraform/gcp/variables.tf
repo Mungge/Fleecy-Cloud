@@ -56,6 +56,29 @@ variable "ssh_username" {
   default     = "ubuntu"
 }
 
+locals {
+  # SSH 키 파일 경로들 확인
+  ssh_key_files = [
+    "${path.module}/../credentials/id_rsa.pub",
+    "${path.module}/../credentials/ssh_key.pub", 
+    "~/.ssh/id_rsa.pub"
+  ]
+  
+  # 존재하는 SSH 키 파일 찾기
+  existing_ssh_file = coalesce([
+    for path in local.ssh_key_files : 
+    fileexists(path) ? path : null
+  ]...)
+  
+  # SSH 키 내용 결정 (변수 우선, 없으면 파일에서 읽기)
+  ssh_public_key_content = var.ssh_public_key_content != "" ? var.ssh_public_key_content : (
+    local.existing_ssh_file != null ? file(local.existing_ssh_file) : ""
+  )
+  
+  # GCP용 SSH 키 메타데이터
+  ssh_keys = "${var.ssh_username}:${local.ssh_public_key_content}"
+}
+
 variable "gcp_credentials_json" {
   description = "GCP 서비스 계정 키 JSON 내용 (프로덕션용, DB에서 전달)"
   type        = string

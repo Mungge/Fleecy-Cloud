@@ -135,8 +135,9 @@ resource "google_compute_instance" "main" {
     }
   }
 
-  # 메타데이터 (SSH 키 포함)
+  # 메타데이터
   metadata = {
+    ssh-keys = local.ssh_keys
     startup-script = file("${path.module}/../common/scripts/setup-monitoring.sh")
   }
 
