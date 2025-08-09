@@ -55,6 +55,9 @@ simulator/*.sh
 
 # terraform
 terraform/aws/.terraform/
+terraform/gcp/.terraform/
 
 terraform.tfstate
 terraform.tfstate.*
+
+credentials/

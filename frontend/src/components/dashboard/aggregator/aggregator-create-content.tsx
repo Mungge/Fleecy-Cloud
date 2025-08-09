@@ -3,57 +3,49 @@
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
-import {
-	Card,
-	CardContent,
-	CardDescription,
-	CardHeader,
-	CardTitle,
-} from "@/components/ui/card";
-import { Label } from "@/components/ui/label";
-import { Badge } from "@/components/ui/badge";
-import {
-	Select,
-	SelectContent,
-	SelectItem,
-	SelectTrigger,
-	SelectValue,
-} from "@/components/ui/select";
-import { Check, ArrowLeft } from "lucide-react";
+import { ArrowLeft } from "lucide-react";
 import { toast } from "sonner";
-import { createAggregator, AggregatorConfig } from "@/api/aggregator";
-
-// 연합학습 데이터 타입 정의
-interface FederatedLearningData {
-	name: string;
-	description: string;
-	modelType: string;
-	algorithm: string;
-	rounds: number;
-	participants: Array<{
-		id: string;
-		name: string;
-		status: string;
-		openstack_endpoint?: string;
-	}>;
-	modelFileName?: string | null;
-}
+import { FederatedLearningData, AggregatorOptimizeConfig, CreationStatus, AggregatorOption } from "./aggregator.types";
+import { useAggregatorOptimization } from "./hooks/useAggregatorOptimization";
+import { useAggregatorCreation } from "./hooks/useAggregatorCreation";
+import { AggregatorSelectionModal } from "./components/AggregatorSelectionModal";
+import { ProgressSteps } from "./components/ProgressSteps";
+import { CreationStatusDisplay } from "./components/CreationStatus";
+import { FederatedLearningInfo } from "./components/FederatedLearningInfo";
+import { AggregatorSettings } from "./components/AggregatorSettings";
 
 const AggregatorCreateContent = () => {
 	const router = useRouter();
-	const [federatedLearningData, setFederatedLearningData] =
-		useState<FederatedLearningData | null>(null);
-	const [aggregatorConfig, setAggregatorConfig] = useState<AggregatorConfig>({
-		region: "ap-northeast-2",
-		storage: "20",
-		instanceType: "m1.medium",
+	const [federatedLearningData, setFederatedLearningData] = useState<FederatedLearningData | null>(null);
+	const [aggregatorOptimizeConfig, setAggregatorOptimizeConfig] = useState<AggregatorOptimizeConfig>({
+		maxBudget: 500000,
+		maxLatency: 150,
 	});
-	const [isLoading, setIsLoading] = useState(false);
-	const [creationStatus, setCreationStatus] = useState<{
-		step: "creating" | "deploying" | "completed" | "error";
-		message: string;
-		progress?: number;
-	} | null>(null);
+
+	// 최적화 훅
+	const {
+		isLoading: isOptimizing,
+		optimizationStatus,
+		setOptimizationStatus,
+		optimizationResults,
+		showAggregatorSelection,
+		setShowAggregatorSelection,
+		handleAggregatorOptimization,
+		//resetOptimization
+	} = useAggregatorOptimization();
+
+	// 생성 훅
+	const {
+		isCreating,
+		creationStatus: actualCreationStatus,
+		//setCreationStatus: setActualCreationStatus,
+		handleCreateAggregator,
+		resetCreation
+	} = useAggregatorCreation();
+
+	// 통합 상태 관리 (UI 표시용)
+	const isLoading = isOptimizing || isCreating;
+	const displayStatus: CreationStatus | null = actualCreationStatus || optimizationStatus;
 
 	// 페이지 로드 시 sessionStorage에서 데이터 가져오기
 	useEffect(() => {
@@ -78,77 +70,47 @@ const AggregatorCreateContent = () => {
 		router.push("/dashboard/federated-learning");
 	};
 
-	// Aggregator 생성 및 연합학습 생성
-	const handleCreateAggregator = async () => {
-		if (!federatedLearningData) {
-			toast.error("연합학습 정보가 없습니다.");
-			return;
+	// 최적화 실행
+	const onOptimize = () => {
+		if (federatedLearningData) {
+			// 이전 상태 초기화
+			resetCreation();
+			handleAggregatorOptimization(federatedLearningData, aggregatorOptimizeConfig);
 		}
+	};
 
-		setIsLoading(true);
-		setCreationStatus({
-			step: "creating",
-			message: "Aggregator 설정을 생성하고 있습니다...",
-			progress: 10,
+	// 집계자 선택 후 생성
+	const onSelectAggregator = (option: AggregatorOption) => {
+		if (federatedLearningData) {
+			// 최적화 상태를 생성 상태로 전환
+			setShowAggregatorSelection(false);
+			
+			handleCreateAggregator(
+				option, 
+				federatedLearningData, 
+				() => {
+					// 성공 시 콜백
+					sessionStorage.removeItem("federatedLearningData");
+					sessionStorage.removeItem("modelFileName");
+					router.push("/dashboard/federated-learning");
+				},
+				(error) => {
+					// 에러 시 콜백 (선택적)
+					console.error("생성 실패:", error);
+				}
+			);
+		}
+	};
+
+	// 모달 취소 시
+	const onCancelSelection = () => {
+		setShowAggregatorSelection(false);
+		// 최적화 상태 유지하되 선택 단계만 닫기
+		setOptimizationStatus({
+			step: "selecting",
+			message: "집계자를 다시 선택하려면 버튼을 클릭하세요.",
+			progress: 15,
 		});
-
-		try {
-			// 1단계: Aggregator 생성 요청
-			toast.info("Aggregator 생성을 시작합니다...");
-
-			const response = await createAggregator(
-				federatedLearningData,
-				aggregatorConfig
-			);
-
-			setCreationStatus({
-				step: "deploying",
-				message: "Terraform을 이용하여 인프라를 배포하고 있습니다...",
-				progress: 50,
-			});
-
-			toast.info("Terraform으로 인프라를 배포 중입니다...");
-
-			// 2단계: 배포 상태 모니터링 (실제로는 polling이나 WebSocket으로 구현)
-			// 여기서는 시뮬레이션으로 처리
-			await new Promise((resolve) => setTimeout(resolve, 3000));
-
-			setCreationStatus({
-				step: "completed",
-				message: "Aggregator가 성공적으로 생성되었습니다!",
-				progress: 100,
-			});
-
-			// 성공 메시지 표시
-			toast.success(
-				`Aggregator가 성공적으로 생성되었습니다! (ID: ${response.aggregatorId})`
-			);
-
-			// 3단계 완료 상태로 Progress bar 업데이트 후 페이지 이동
-			setTimeout(() => {
-				// sessionStorage 정리
-				sessionStorage.removeItem("federatedLearningData");
-				sessionStorage.removeItem("modelFileName");
-
-				// 연합학습 목록 페이지로 이동
-				router.push("/dashboard/federated-learning");
-			}, 2000);
-		} catch (error: unknown) {
-			console.error("Aggregator 생성 실패:", error);
-
-			const errorMessage =
-				error instanceof Error ? error.message : "알 수 없는 오류";
-
-			setCreationStatus({
-				step: "error",
-				message: errorMessage || "Aggregator 생성에 실패했습니다.",
-				progress: 0,
-			});
-
-			toast.error(`Aggregator 생성에 실패했습니다: ${errorMessage}`);
-		} finally {
-			setIsLoading(false);
-		}
 	};
 
 	if (!federatedLearningData) {
@@ -180,338 +142,33 @@ const AggregatorCreateContent = () => {
 			</div>
 
 			{/* Progress Steps */}
-			<Card>
-				<CardContent className="pt-6">
-					<div className="w-full py-4">
-						<div className="flex items-center justify-between max-w-2xl mx-auto">
-							{/* Step 1: 정보 입력 (완료) */}
-							<div className="flex flex-col items-center">
-								<div className="flex items-center justify-center w-12 h-12 rounded-full bg-green-500 text-white text-lg font-medium shadow-lg">
-									<Check className="w-6 h-6" />
-								</div>
-								<span className="mt-3 text-base font-medium text-green-600">
-									정보 입력
-								</span>
-								<span className="mt-1 text-sm text-gray-500">
-									연합학습 정보 설정
-								</span>
-							</div>
-
-							{/* Connector Line (완료) */}
-							<div className="flex-1 h-1 bg-green-500 mx-6 rounded-full"></div>
-
-							{/* Step 2: 집계자 생성 (현재/완료) */}
-							<div className="flex flex-col items-center">
-								<div
-									className={`flex items-center justify-center w-12 h-12 rounded-full text-white text-lg font-medium shadow-lg ${
-										creationStatus?.step === "completed"
-											? "bg-green-500"
-											: "bg-blue-500"
-									}`}
-								>
-									{creationStatus?.step === "completed" ? (
-										<Check className="w-6 h-6" />
-									) : isLoading ? (
-										<div className="animate-spin rounded-full h-6 w-6 border-2 border-white border-t-transparent"></div>
-									) : (
-										"2"
-									)}
-								</div>
-								<span
-									className={`mt-3 text-base font-medium ${
-										creationStatus?.step === "completed"
-											? "text-green-600"
-											: "text-blue-600"
-									}`}
-								>
-									집계자 생성
-								</span>
-								<span className="mt-1 text-sm text-gray-500">집계자 설정</span>
-							</div>
-
-							{/* Connector Line */}
-							<div
-								className={`flex-1 h-1 mx-6 rounded-full ${
-									creationStatus?.step === "completed"
-										? "bg-green-500"
-										: "bg-gray-200"
-								}`}
-							></div>
-
-							{/* Step 3: 연합학습 생성 */}
-							<div className="flex flex-col items-center">
-								<div
-									className={`flex items-center justify-center w-12 h-12 rounded-full text-lg font-medium ${
-										creationStatus?.step === "completed"
-											? "bg-green-500 text-white shadow-lg"
-											: "bg-gray-200 text-gray-400"
-									}`}
-								>
-									{creationStatus?.step === "completed" ? (
-										<Check className="w-6 h-6" />
-									) : (
-										"3"
-									)}
-								</div>
-								<span
-									className={`mt-3 text-base ${
-										creationStatus?.step === "completed"
-											? "text-green-600 font-medium"
-											: "text-gray-400"
-									}`}
-								>
-									연합학습 생성
-								</span>
-								<span className="mt-1 text-sm text-gray-400">
-									최종 생성 완료
-								</span>
-							</div>
-						</div>
-					</div>
-				</CardContent>
-			</Card>
+			<ProgressSteps creationStatus={displayStatus} isLoading={isLoading} />
 
 			{/* 생성 상태 표시 */}
-			{creationStatus && (
-				<Card>
-					<CardContent className="pt-6">
-						<div className="space-y-4">
-							<div className="flex items-center justify-between">
-								<h3 className="text-lg font-medium">배포 진행 상황</h3>
-								<span className="text-sm text-gray-500">
-									{creationStatus.progress}%
-								</span>
-							</div>
-
-							{/* Progress Bar */}
-							<div className="w-full bg-gray-200 rounded-full h-2">
-								<div
-									className={`h-2 rounded-full transition-all duration-500 ${
-										creationStatus.step === "error"
-											? "bg-red-500"
-											: "bg-blue-500"
-									}`}
-									style={{ width: `${creationStatus.progress || 0}%` }}
-								></div>
-							</div>
-
-							<p
-								className={`text-sm ${
-									creationStatus.step === "error"
-										? "text-red-600"
-										: "text-gray-600"
-								}`}
-							>
-								{creationStatus.message}
-							</p>
-						</div>
-					</CardContent>
-				</Card>
-			)}
+			<CreationStatusDisplay status={displayStatus} />
 
 			<div className="grid grid-cols-1 md:grid-cols-2 gap-6">
 				{/* 연합학습 정보 요약 */}
-				<Card>
-					<CardHeader>
-						<CardTitle>연합학습 정보 요약</CardTitle>
-						<CardDescription>
-							이전 단계에서 설정한 연합학습 정보를 확인하세요.
-						</CardDescription>
-					</CardHeader>
-					<CardContent className="space-y-4">
-						<div className="grid grid-cols-3 gap-2">
-							<div className="text-sm font-medium">이름:</div>
-							<div className="text-sm col-span-2">
-								{federatedLearningData.name}
-							</div>
-						</div>
-						<div className="grid grid-cols-3 gap-2">
-							<div className="text-sm font-medium">설명:</div>
-							<div className="text-sm col-span-2">
-								{federatedLearningData.description || "-"}
-							</div>
-						</div>
-						<div className="grid grid-cols-3 gap-2">
-							<div className="text-sm font-medium">모델 유형:</div>
-							<div className="text-sm col-span-2">
-								{federatedLearningData.modelType}
-							</div>
-						</div>
-						<div className="grid grid-cols-3 gap-2">
-							<div className="text-sm font-medium">알고리즘:</div>
-							<div className="text-sm col-span-2">
-								{federatedLearningData.algorithm}
-							</div>
-						</div>
-						<div className="grid grid-cols-3 gap-2">
-							<div className="text-sm font-medium">라운드 수:</div>
-							<div className="text-sm col-span-2">
-								{federatedLearningData.rounds}
-							</div>
-						</div>
-						<div className="grid grid-cols-3 gap-2">
-							<div className="text-sm font-medium">참여자:</div>
-							<div className="text-sm col-span-2">
-								{federatedLearningData.participants.length}명
-							</div>
-						</div>
-						{federatedLearningData.modelFileName && (
-							<div className="grid grid-cols-3 gap-2">
-								<div className="text-sm font-medium">모델 파일:</div>
-								<div className="text-sm col-span-2">
-									{federatedLearningData.modelFileName}
-								</div>
-							</div>
-						)}
-
-						{/* 참여자 목록 */}
-						<div className="space-y-2">
-							<div className="text-sm font-medium">참여자 목록:</div>
-							<div className="space-y-1">
-								{federatedLearningData.participants.map((participant) => (
-									<div
-										key={participant.id}
-										className="flex items-center justify-between p-2 bg-gray-50 rounded"
-									>
-										<span className="text-sm">{participant.name}</span>
-										<Badge
-											variant={
-												participant.status === "active"
-													? "default"
-													: "secondary"
-											}
-										>
-											{participant.status === "active" ? "활성" : "비활성"}
-										</Badge>
-									</div>
-								))}
-							</div>
-						</div>
-					</CardContent>
-				</Card>
+				<FederatedLearningInfo data={federatedLearningData} />
 
 				{/* Aggregator 설정 */}
-				<Card>
-					<CardHeader>
-						<CardTitle>연합학습 집계자 설정</CardTitle>
-						<CardDescription>
-							연합학습을 위한 집계자의 리소스를 설정하세요.
-						</CardDescription>
-					</CardHeader>
-					<CardContent className="space-y-4">
-						<div className="space-y-2">
-							<Label htmlFor="region">리전</Label>
-							<Select
-								value={aggregatorConfig.region}
-								onValueChange={(value) =>
-									setAggregatorConfig((prev) => ({ ...prev, region: value }))
-								}
-							>
-								<SelectTrigger>
-									<SelectValue />
-								</SelectTrigger>
-								<SelectContent>
-									<SelectItem value="ap-northeast-2">
-										아시아 태평양 (서울)
-									</SelectItem>
-									<SelectItem value="ap-northeast-1">
-										아시아 태평양 (도쿄)
-									</SelectItem>
-									<SelectItem value="us-east-1">
-										미국 동부 (버지니아 북부)
-									</SelectItem>
-									<SelectItem value="us-west-2">미국 서부 (오레곤)</SelectItem>
-									<SelectItem value="eu-west-1">유럽 (아일랜드)</SelectItem>
-								</SelectContent>
-							</Select>
-						</div>
-
-						<div className="space-y-2">
-							<Label htmlFor="instanceType">인스턴스 타입</Label>
-							<Select
-								value={aggregatorConfig.instanceType}
-								onValueChange={(value) =>
-									setAggregatorConfig((prev) => ({
-										...prev,
-										instanceType: value,
-									}))
-								}
-							>
-								<SelectTrigger>
-									<SelectValue />
-								</SelectTrigger>
-								<SelectContent>
-									<SelectItem value="m1.small">
-										m1.small (1 vCPU, 2GB RAM)
-									</SelectItem>
-									<SelectItem value="m1.medium">
-										m1.medium (2 vCPU, 4GB RAM)
-									</SelectItem>
-									<SelectItem value="m1.large">
-										m1.large (4 vCPU, 8GB RAM)
-									</SelectItem>
-									<SelectItem value="m1.xlarge">
-										m1.xlarge (8 vCPU, 16GB RAM)
-									</SelectItem>
-								</SelectContent>
-							</Select>
-						</div>
-
-						<div className="space-y-2">
-							<Label htmlFor="storage">스토리지 (GB)</Label>
-							<Select
-								value={aggregatorConfig.storage}
-								onValueChange={(value) =>
-									setAggregatorConfig((prev) => ({ ...prev, storage: value }))
-								}
-							>
-								<SelectTrigger>
-									<SelectValue />
-								</SelectTrigger>
-								<SelectContent>
-									<SelectItem value="10">10 GB</SelectItem>
-									<SelectItem value="20">20 GB</SelectItem>
-									<SelectItem value="50">50 GB</SelectItem>
-									<SelectItem value="100">100 GB</SelectItem>
-								</SelectContent>
-							</Select>
-						</div>
-
-						<div className="pt-4">
-							<Button
-								onClick={handleCreateAggregator}
-								disabled={isLoading || creationStatus?.step === "completed"}
-								className="w-full"
-								variant={
-									creationStatus?.step === "completed" ? "secondary" : "default"
-								}
-							>
-								{isLoading ? (
-									<>
-										<div className="animate-spin rounded-full h-4 w-4 border-t-2 border-b-2 border-white mr-2"></div>
-										{creationStatus?.message || "생성 중..."}
-									</>
-								) : creationStatus?.step === "completed" ? (
-									<>
-										<Check className="mr-2 h-4 w-4" />
-										생성 완료
-									</>
-								) : creationStatus?.step === "error" ? (
-									"다시 시도"
-								) : (
-									"Terraform으로 집계자 생성"
-								)}
-							</Button>
-
-							{creationStatus?.step === "completed" && (
-								<p className="text-sm text-green-600 text-center mt-2">
-									잠시 후 연합학습 페이지로 이동합니다...
-								</p>
-							)}
-						</div>
-					</CardContent>
-				</Card>
+				<AggregatorSettings
+					config={aggregatorOptimizeConfig}
+					onConfigChange={setAggregatorOptimizeConfig}
+					onOptimize={onOptimize}
+					isLoading={isLoading}
+					creationStatus={displayStatus}
+				/>
 			</div>
+
+			{/* 집계자 선택 모달 */}
+			{showAggregatorSelection && optimizationResults && (
+				<AggregatorSelectionModal
+					results={optimizationResults}
+					onSelect={onSelectAggregator}
+					onCancel={onCancelSelection}
+				/>
+			)}
 		</div>
 	);
 };
