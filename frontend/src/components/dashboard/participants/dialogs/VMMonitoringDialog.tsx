@@ -32,7 +32,7 @@ export function VMMonitoringDialog({
 
 	return (
 		<Dialog open={open} onOpenChange={onOpenChange}>
-			<DialogContent className="max-w-[90vw] w-[90vw] min-h-[600px] max-h-[90vh] overflow-auto">
+			<DialogContent className="!max-w-[70vw] w-[90vw] min-h-[600px] max-h-[90vh] overflow-auto">
 				<DialogHeader>
 					<DialogTitle>VM 모니터링 정보</DialogTitle>
 					<DialogDescription>

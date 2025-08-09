@@ -42,7 +42,7 @@ export function VMListDialog({
 }: VMListDialogProps) {
 	return (
 		<Dialog open={open} onOpenChange={onOpenChange}>
-			<DialogContent className="max-w-[200vw] w-[150vw] min-h-[700px] max-h-[95vh] overflow-auto flex flex-col">
+			<DialogContent className="!max-w-[70vw] w-full min-h-[700px] max-h-[95vh] overflow-auto flex flex-col">
 				<DialogHeader>
 					<DialogTitle>가상머신 목록</DialogTitle>
 					<DialogDescription>
