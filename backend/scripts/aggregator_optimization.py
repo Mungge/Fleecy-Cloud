@@ -92,7 +92,8 @@ class AggregatorOptimizer:
         return {
             # 제약사항을 매우 관대하게 설정하여 더 많은 옵션 포함
             'maxBudget': config.get('maxBudget', 100000000),  # 1억원으로 기본값 설정
-            'maxLatency': config.get('maxLatency', 1000.0),   # 1초로 기본값 설정
+            'maxLatency': config.get('maxLatency', 1000.0),   # 1000ms로 기본값 설정
+            'minMemoryRequirement': config.get('minMemoryRequirement', 4),  # 4GB로 기본값 설정
         }
     
     def _generate_options(self) -> List[Dict]:
@@ -125,7 +126,8 @@ class AggregatorOptimizer:
             
             # 제약사항 확인 (매우 관대함)
             if (monthly_cost <= self.constraints['maxBudget'] and 
-                avg_latency <= self.constraints['maxLatency']):
+                avg_latency <= self.constraints['maxLatency'] and
+                price['memory_gb'] >= self.constraints['minMemoryRequirement']):
                 
                 options.append({
                     'region': region,
