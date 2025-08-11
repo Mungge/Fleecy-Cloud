@@ -24,6 +24,13 @@ const Header: React.FC<HeaderProps> = ({ isSidebarOpen }) => {
 		await logout();
 	};
 
+	const getDate = () => {
+		return new Date().toLocaleDateString("ko-KR", {
+			year: "numeric",
+			month: "long",
+			day: "numeric",
+		});
+	};
 	return (
 		<header className="h-16 border-b bg-card">
 			<div className="px-6 h-full flex justify-between items-center">
@@ -37,7 +44,7 @@ const Header: React.FC<HeaderProps> = ({ isSidebarOpen }) => {
 				<div className="flex items-center gap-4">
 					<Button variant="outline" size="sm" className="hidden md:flex gap-2">
 						<Calendar className="h-4 w-4" />
-						<span>2025년 3월</span>
+						<span>{getDate()}</span>
 					</Button>
 					<DropdownMenu>
 						<DropdownMenuTrigger asChild>
