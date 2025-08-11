@@ -14,56 +14,82 @@ data "aws_ami" "ubuntu" {
   }
 }
 
-# 키 페어 이름 설정
-locals {
-  key_name = "${var.project_name}-keypair-${var.environment}"
-}
-
-# 1. 개발 환경용: Terraform에서 키 페어 생성
+# 개발환경: 새 키 생성 (기존 키가 없을 때만)
 resource "tls_private_key" "dev" {
-  count = var.environment == "dev" ? 1 : 0
+  count = var.environment == "dev" && !local.dev_key_exists ? 1 : 0
   
   algorithm = "RSA"
   rsa_bits  = 4096
 }
 
-# 2. 개발 환경용: 개인키를 로컬에 저장
+# 개발환경: 생성된 개인키를 로컬에 저장
 resource "local_file" "private_key_dev" {
-  count = var.environment == "dev" ? 1 : 0
+  count = var.environment == "dev" && !local.dev_key_exists ? 1 : 0
   
   content         = tls_private_key.dev[0].private_key_pem
-  filename        = pathexpand("~/.ssh/${local.key_name}.pem")
+  filename        = local.dev_private_key_path
   file_permission = "0600"
 }
 
-# 3. 개발 환경용 키 페어 (공개키 소스 변경)
-resource "aws_key_pair" "dev" {
-  count = var.environment == "dev" ? 1 : 0
+# 배포환경: DB에 키가 없으면 새로 생성
+resource "tls_private_key" "prod" {
+  count = var.environment != "dev" && !local.db_keypair_exists ? 1 : 0
   
-  key_name   = local.key_name
-  public_key = tls_private_key.dev[0].public_key_openssh
+  algorithm = "RSA"
+  rsa_bits  = 4096
 }
 
-# 배포 환경용 키 페어 (키 변경 무시)
-resource "aws_key_pair" "prod" {
-  count = var.environment != "dev" ? 1 : 0
+# 배포환경: 새로 생성한 키를 DB에 저장
+resource "null_resource" "save_keypair_to_db" {
+  count = var.environment != "dev" && !local.db_keypair_exists ? 1 : 0
   
-  key_name   = local.key_name
-  public_key = local.ssh_public_key_content
+  triggers = {
+    public_key = tls_private_key.prod[0].public_key_openssh
+    private_key = tls_private_key.prod[0].private_key_pem
+  }
+  
+  provisioner "local-exec" {
+    command = <<-EOT
+      curl -X POST "${var.api_endpoint}/keypairs/${var.project_name}/${var.environment}" \
+        -H "Content-Type: application/json" \
+        -H "Authorization: Bearer ${var.api_token}" \
+        -d '{
+          "public_key": "${replace(tls_private_key.prod[0].public_key_openssh, "\n", "")}",
+          "private_key": "${replace(tls_private_key.prod[0].private_key_pem, "\n", "\\n")}"
+        }'
+    EOT
+  }
+}
+
+# AWS Key Pair 등록
+resource "aws_key_pair" "main" {
+  key_name = local.key_name
+  
+  public_key = (
+    # 개발환경: tls_private_key.dev가 존재할 때만 접근
+    var.environment == "dev" && length(tls_private_key.dev) > 0 ? 
+      tls_private_key.dev[0].public_key_openssh :
+    # 배포환경: tls_private_key.prod가 존재할 때 체크
+    var.environment != "dev" && local.db_keypair_exists ? 
+      local.db_public_key :
+    var.environment != "dev" && length(tls_private_key.prod) > 0 ?
+      tls_private_key.prod[0].public_key_openssh :
+    # 기본값 (이 경우는 발생하지 않아야 함)
+    ""
+  )
 
   tags = {
-    Name = local.key_name
+    Name        = local.key_name
     Environment = var.environment
+    Project     = var.project_name
   }
   
-  lifecycle {
-    ignore_changes = [public_key]
-  }
+  depends_on = [null_resource.save_keypair_to_db]
 }
 
-# 환경에 따라 사용할 키 페어 결정
+# 환경에 따라 사용할 키 페어 이름
 locals {
-  key_pair_name = var.environment == "dev" ? aws_key_pair.dev[0].key_name : aws_key_pair.prod[0].key_name
+  key_pair_name = aws_key_pair.main.key_name
 }
 
 # VPC 생성
@@ -211,7 +237,7 @@ resource "aws_instance" "main" {
   key_name               = local.key_name
   vpc_security_group_ids = [aws_security_group.main.id]
 
-  user_data = file("${path.module}/../common/scripts/setup-monitoring.sh")
+  # user_data = file("${path.module}/../common/scripts/setup-monitoring.sh")
 
   tags = {
     Name = "${var.project_name}-server"
