@@ -213,7 +213,7 @@ func initializeCloudLatencies(db *gorm.DB) error {
 
 	cloudLatencies = append(cloudLatencies, cloudLatency)
 	processedIdx[pairKey] = len(cloudLatencies) - 1
-	}
+}
 
 	// 배치로 데이터 삽입
 	if len(cloudLatencies) > 0 {
