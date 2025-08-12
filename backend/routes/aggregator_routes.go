@@ -1,11 +1,11 @@
 package routes
 
 import (
-	"github.com/Mungge/Fleecy-Cloud/handlers"
+	"github.com/Mungge/Fleecy-Cloud/handlers/aggregator"
 	"github.com/gin-gonic/gin"
 )
 
-func SetupAggregatorRoutes(authorized *gin.RouterGroup, aggregatorHandler *handlers.AggregatorHandler) {
+func SetupAggregatorRoutes(authorized *gin.RouterGroup, aggregatorHandler *aggregator.AggregatorHandler) {
 	aggregators := authorized.Group("/aggregators")
 	{
 		// Aggregator 배치 최적화
