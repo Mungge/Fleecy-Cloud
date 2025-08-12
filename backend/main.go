@@ -23,6 +23,9 @@ func main() {
 	// 리포지토리 초기화
 	repos := initialization.InitializeRepositories()
 
+	// Aggregator 의존성 초기화
+	aggregatorDeps := initialization.NewDependencies()
+
 	// 핸들러 초기화
 	authHandler := authHandlers.NewAuthHandler(
 		repos.UserRepo,
@@ -33,7 +36,7 @@ func main() {
 	cloudHandler := handlers.NewCloudHandler(repos.CloudRepo)
 	flHandler := handlers.NewFederatedLearningHandler(repos.FLRepo)
 	participantHandler := handlers.NewParticipantHandler(repos.ParticipantRepo)
-	aggregatorHandler := handlers.NewAggregatorHandler(repos.AggregatorRepo, repos.FLRepo)
+	aggregatorHandler := aggregatorDeps.AggregatorHandler
 
 	// Gin 라우터 설정
 	r := gin.Default()

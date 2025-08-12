@@ -6,9 +6,11 @@ import (
 	"os"
 
 	"github.com/Mungge/Fleecy-Cloud/config"
+	aggregatorhandler "github.com/Mungge/Fleecy-Cloud/handlers/aggregator"
 	"github.com/Mungge/Fleecy-Cloud/models"
 	"github.com/Mungge/Fleecy-Cloud/repository"
 	"github.com/Mungge/Fleecy-Cloud/services"
+	aggregatorservice "github.com/Mungge/Fleecy-Cloud/services/aggregator"
 	"github.com/joho/godotenv"
 	sdktrace "go.opentelemetry.io/otel/sdk/trace"
 )
@@ -22,6 +24,21 @@ type Repositories struct {
 	ParticipantRepo  *repository.ParticipantRepository
 	AggregatorRepo   *repository.AggregatorRepository
 	VMRepo           *repository.VirtualMachineRepository
+}
+
+// Dependencies는 애플리케이션의 모든 의존성을 관리합니다
+type Dependencies struct {
+	// Repositories
+	Repositories *Repositories
+	
+	// Aggregator Services
+	AggregatorService   *aggregatorservice.AggregatorService
+	MetricsService      *aggregatorservice.AggregatorMetricsService
+	TrainingService     *aggregatorservice.AggregatorTrainingService
+	OptimizationService aggregatorservice.OptimizationService 
+	
+	// Aggregator Handler
+	AggregatorHandler *aggregatorhandler.AggregatorHandler
 }
 
 // InitializeApplication은 애플리케이션의 모든 초기화 작업을 수행합니다
@@ -127,6 +144,42 @@ func InitializeRepositories() *Repositories {
 	
 	log.Println("리포지토리 초기화 완료")
 	return repos
+}
+
+// NewDependencies는 모든 의존성을 초기화하고 주입합니다 
+func NewDependencies() *Dependencies {
+	log.Println("Aggregator 의존성 초기화 시작...")
+	
+	// Repository 초기화
+	repos := InitializeRepositories()
+	
+	// Aggregator Service 초기화 (새로운 구조)
+	aggregatorService := aggregatorservice.NewAggregatorService(repos.AggregatorRepo, repos.FLRepo)
+	metricsService := aggregatorservice.NewAggregatorMetricsService(repos.AggregatorRepo)
+	trainingService := aggregatorservice.NewAggregatorTrainingService(repos.AggregatorRepo)
+	
+	// OptimizationService 어댑터 사용
+	originalOptimizationService := services.NewOptimizationService()
+	optimizationService := aggregatorservice.NewOptimizationServiceAdapter(originalOptimizationService)
+	
+	// Aggregator Handler 초기화 (새로운 구조)
+	aggregatorHandler := aggregatorhandler.NewAggregatorHandler(
+		aggregatorService,
+		metricsService,
+		trainingService,
+		optimizationService,
+	)
+	
+	log.Println("Aggregator 의존성 초기화 완료")
+	
+	return &Dependencies{
+		Repositories:        repos,
+		AggregatorService:   aggregatorService,
+		MetricsService:      metricsService,
+		TrainingService:     trainingService,
+		OptimizationService: optimizationService,
+		AggregatorHandler:   aggregatorHandler,
+	}
 }
 
 // ShutdownTracer는 트레이서를 안전하게 종료합니다
