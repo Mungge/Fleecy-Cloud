@@ -1,0 +1,4 @@
+numpy==1.26.4
+deap==1.4.1
+psycopg2-binary==2.9.9
+python-dotenv==1.0.1

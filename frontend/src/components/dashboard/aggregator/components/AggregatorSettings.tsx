@@ -5,6 +5,7 @@ import { Label } from "@/components/ui/label";
 import { Slider } from "@/components/ui/slider";
 import { Check } from "lucide-react";
 import { AggregatorOptimizeConfig, CreationStatus } from "../aggregator.types";
+import { MemoryRequirementInfo } from "../components/MemoryRequirementInfo";
 
 interface AggregatorSettingsProps {
   config: AggregatorOptimizeConfig;
@@ -12,6 +13,8 @@ interface AggregatorSettingsProps {
   onOptimize: () => void;
   isLoading: boolean;
   creationStatus: CreationStatus | null;
+  modelFileSize?: number; // 추가
+  participantCount?: number; // 추가
 }
 
 export const AggregatorSettings = ({
@@ -19,7 +22,9 @@ export const AggregatorSettings = ({
   onConfigChange,
   onOptimize,
   isLoading,
-  creationStatus
+  creationStatus,
+  modelFileSize,
+  participantCount
 }: AggregatorSettingsProps) => {
   return (
     <Card>
@@ -30,6 +35,15 @@ export const AggregatorSettings = ({
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-4">
+        {/* 메모리 요구사항 정보 표시 */}
+        {modelFileSize && participantCount && (
+          <MemoryRequirementInfo 
+            modelFileSize={modelFileSize}
+            participantCount={participantCount}
+            safetyFactor={1.5}
+          />
+        )}
+
         {/* 제약조건 설정 */}
         <div className="space-y-2">
           <div className="flex justify-between items-center">

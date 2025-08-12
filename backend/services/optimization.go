@@ -207,24 +207,16 @@ func (s *OptimizationService) saveInputData(request OptimizationRequest) (string
 
 // Python 스크립트 실행
 func (s *OptimizationService) executePythonScript(inputPath, outputPath string) error {
-	// Python 스크립트 실행 명령어 구성
-	cmd := exec.Command("python3", s.pythonScriptPath, inputPath, outputPath)
-	
-	// 환경변수 설정 (필요한 경우)
-	cmd.Env = os.Environ()
-	
-	// 스크립트 실행
-	output, err := cmd.CombinedOutput()
-	if err != nil {
-		return fmt.Errorf("Python 스크립트 실행 오류: %v, 출력: %s", err, string(output))
-	}
-
-	// 출력 파일이 생성되었는지 확인
-	if _, err := os.Stat(outputPath); os.IsNotExist(err) {
-		return fmt.Errorf("Python 스크립트가 결과 파일을 생성하지 못했습니다: %s", outputPath)
-	}
-
-	return nil
+    cmd := exec.Command("bash", "./scripts/run_optimizer.sh", inputPath, outputPath)
+    cmd.Env = os.Environ() // .env는 파이썬 쪽에서 python-dotenv가 읽습니다.
+    out, err := cmd.CombinedOutput()
+    if err != nil {
+        return fmt.Errorf("쉘 스크립트 실행 오류: %v, 출력: %s", err, string(out))
+    }
+    if _, err := os.Stat(outputPath); os.IsNotExist(err) {
+        return fmt.Errorf("결과 파일이 생성되지 않았습니다: %s", outputPath)
+    }
+    return nil
 }
 
 // 최적화 결과 파일 읽기

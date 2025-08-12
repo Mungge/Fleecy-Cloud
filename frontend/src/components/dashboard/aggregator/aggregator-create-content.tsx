@@ -17,6 +17,7 @@ import { AggregatorSettings } from "./components/AggregatorSettings";
 const AggregatorCreateContent = () => {
 	const router = useRouter();
 	const [federatedLearningData, setFederatedLearningData] = useState<FederatedLearningData | null>(null);
+	const [modelFileSize, setModelFileSize] = useState<number>(0);
 	const [aggregatorOptimizeConfig, setAggregatorOptimizeConfig] = useState<AggregatorOptimizeConfig>({
 		maxBudget: 500000,
 		maxLatency: 150,
@@ -50,10 +51,16 @@ const AggregatorCreateContent = () => {
 	// 페이지 로드 시 sessionStorage에서 데이터 가져오기
 	useEffect(() => {
 		const savedData = sessionStorage.getItem("federatedLearningData");
+		const savedFileSize = sessionStorage.getItem("modelFileSize");
 		if (savedData) {
 			try {
 				const parsedData = JSON.parse(savedData);
 				setFederatedLearningData(parsedData);
+				if (savedFileSize) {
+					const fileSizeInBytes = parseInt(savedFileSize, 10);
+					setModelFileSize(fileSizeInBytes);
+					console.log("모델 파일 크기 (MB):", (fileSizeInBytes / (1024 * 1024)).toFixed(2), "MB");
+				}
 			} catch (error) {
 				console.error("데이터 파싱 실패:", error);
 				toast.error("저장된 연합학습 정보를 불러올 수 없습니다.");
@@ -75,7 +82,10 @@ const AggregatorCreateContent = () => {
 		if (federatedLearningData) {
 			// 이전 상태 초기화
 			resetCreation();
-			handleAggregatorOptimization(federatedLearningData, aggregatorOptimizeConfig);
+			handleAggregatorOptimization(
+				federatedLearningData, 
+				aggregatorOptimizeConfig,
+				modelFileSize > 0 ? modelFileSize : 500);
 		}
 	};
 
@@ -92,6 +102,7 @@ const AggregatorCreateContent = () => {
 					// 성공 시 콜백
 					sessionStorage.removeItem("federatedLearningData");
 					sessionStorage.removeItem("modelFileName");
+					sessionStorage.removeItem("modelFileSize");
 					router.push("/dashboard/federated-learning");
 				},
 				(error) => {
@@ -109,7 +120,7 @@ const AggregatorCreateContent = () => {
 		setOptimizationStatus({
 			step: "selecting",
 			message: "집계자를 다시 선택하려면 버튼을 클릭하세요.",
-			progress: 15,
+			progress: 10,
 		});
 	};
 
@@ -158,6 +169,8 @@ const AggregatorCreateContent = () => {
 					onOptimize={onOptimize}
 					isLoading={isLoading}
 					creationStatus={displayStatus}
+					modelFileSize={modelFileSize}
+					participantCount={federatedLearningData.participants.length}
 				/>
 			</div>
 
