@@ -100,9 +100,6 @@ class AggregatorOptimizer:
         """집계자 배치 옵션 생성 - 더 많은 옵션 포함"""
         options = []
         
-        print(f"디버그: 가격 데이터 수: {len(self.price_data)}")
-        print(f"디버그: 참가자 수: {len(self.participants)}")
-        
         for price in self.price_data:
             region = price['region_name']
             

@@ -1,6 +1,16 @@
 import { OptimizationResponse, AggregatorOption } from "@/api/aggregator";
 import { AggregatorOptimizeConfig, AggregatorConfig } from "@/api/aggregator";
 import {FederatedLearningData } from "@/api/aggregator";
+
+export interface ModelFileInfo {
+  fileName: string;
+  fileSize: number; // bytes
+  fileSizeInMB: number; // MB
+}
+
+export interface ExtendedAggregatorOptimizeConfig extends AggregatorOptimizeConfig {
+  minMemoryRequirement?: number; // GB 단위
+}
 export interface CreationStatus {
   step: "creating" | "selecting" | "deploying" | "completed" | "error";
   message: string;
