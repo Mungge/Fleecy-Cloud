@@ -25,7 +25,7 @@ type Repositories struct {
 }
 
 // InitializeApplication은 애플리케이션의 모든 초기화 작업을 수행합니다
-func InitializeApplication() (error) {
+func InitializeApplication() error {
 	log.Println("애플리케이션 초기화 시작...")
 
 	// 0. 환경 변수 로드(.env)
