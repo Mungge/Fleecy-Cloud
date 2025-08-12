@@ -36,7 +36,7 @@ class DatabaseManager:
         """클라우드 가격 정보 조회"""
         with self.conn.cursor() as cursor:
             cursor.execute("""
-                SELECT cloud_name, region_name, instance_type, vcpu_count, 
+                SELECT cloud_name, region_name, instance_type, v_cpu_count, 
                        memory_gb, on_demand_price
                 FROM cloud_price
                 ORDER BY cloud_name, region_name, on_demand_price
@@ -46,7 +46,7 @@ class DatabaseManager:
                     'cloud_name': row[0],
                     'region_name': row[1], 
                     'instance_type': row[2],
-                    'vcpu_count': row[3],
+                    'v_cpu_count': row[3],
                     'memory_gb': row[4],
                     'hourly_price': float(row[5])
                 }
@@ -133,7 +133,7 @@ class AggregatorOptimizer:
                     'cost': monthly_cost,
                     'avgLatency': avg_latency,
                     'maxLatency': max_latency,
-                    'vcpu': price['vcpu_count'],
+                    'vcpu': price['v_cpu_count'],
                     'memory': price['memory_gb'],
                     'hourlyPrice': price['hourly_price']
                 })
