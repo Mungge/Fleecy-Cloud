@@ -211,8 +211,8 @@ func initializeCloudLatencies(db *gorm.DB) error {
 			AvgLatency:     avgLatency,
 		}
 
-	cloudLatencies = append(cloudLatencies, cloudLatency)
-	processedIdx[pairKey] = len(cloudLatencies) - 1
+		cloudLatencies = append(cloudLatencies, cloudLatency)
+		processedIdx[pairKey] = len(cloudLatencies) - 1
 }
 
 	// 배치로 데이터 삽입
