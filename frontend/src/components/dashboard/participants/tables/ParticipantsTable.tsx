@@ -46,6 +46,7 @@ export function ParticipantsTable({
 			<TableHeader>
 				<TableRow>
 					<TableHead>이름</TableHead>
+					<TableHead>리전</TableHead>
 					<TableHead>상태</TableHead>
 					<TableHead>생성일</TableHead>
 					<TableHead>액션</TableHead>
@@ -61,6 +62,15 @@ export function ParticipantsTable({
 						onClick={() => onSelectParticipant(participant)}
 					>
 						<TableCell className="font-medium">{participant.name}</TableCell>
+						<TableCell>
+							{participant.region ? (
+								<span className="text-sm bg-muted px-2 py-1 rounded">
+									{participant.region}
+								</span>
+							) : (
+								<span className="text-muted-foreground text-sm">-</span>
+							)}
+						</TableCell>
 						<TableCell>{getStatusBadge(participant.status)}</TableCell>
 						<TableCell>
 							{new Date(participant.created_at).toLocaleDateString()}
@@ -124,7 +134,7 @@ export function ParticipantsTable({
 				))}
 				{participants.length === 0 && (
 					<TableRow>
-						<TableCell colSpan={4} className="text-center py-8">
+						<TableCell colSpan={5} className="text-center py-8">
 							클러스터가 없습니다. 새 클러스터를 추가해보세요.
 						</TableCell>
 					</TableRow>

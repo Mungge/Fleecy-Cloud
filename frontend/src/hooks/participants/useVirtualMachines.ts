@@ -38,7 +38,6 @@ export function useVirtualMachines() {
 
 	const closeVMListDialog = () => {
 		setVmListDialogOpen(false);
-		setVmList([]);
 	};
 
 	const closeMonitoringDialog = () => {
