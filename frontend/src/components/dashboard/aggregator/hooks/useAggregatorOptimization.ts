@@ -1,13 +1,14 @@
 // hooks/useAggregatorOptimization.ts
 import { useState } from "react";
 import { toast } from "sonner";
-import { optimizeAggregatorPlacement } from "@/api/aggregator";
+import { optimizeAggregatorPlacement, AggregatorOptimizeConfig } from "@/api/aggregator";
 import { 
   CreationStatus, 
   OptimizationResponse, 
   FederatedLearningData, 
-  AggregatorOptimizeConfig 
+  ExtendedAggregatorOptimizeConfig 
 } from "../aggregator.types";
+import { calculateMinimumMemoryRequirement } from "../utils/modelMemoryCalculator";
 
 export const useAggregatorOptimization = () => {
   const [isLoading, setIsLoading] = useState(false);
@@ -17,7 +18,8 @@ export const useAggregatorOptimization = () => {
 
   const handleAggregatorOptimization = async (
     federatedLearningData: FederatedLearningData,
-    aggregatorOptimizeConfig: AggregatorOptimizeConfig
+    aggregatorOptimizeConfig: AggregatorOptimizeConfig,
+    modelFileSize?: number
   ) => {
     if (!federatedLearningData) {
       toast.error("연합학습 정보가 없습니다.");
@@ -32,18 +34,51 @@ export const useAggregatorOptimization = () => {
     });
 
     try {
+      // 모델 파일 크기 기반 최소 메모리 요구사항 계산
+      let extendedConfig: ExtendedAggregatorOptimizeConfig = {
+        ...aggregatorOptimizeConfig
+      };
+
+      if (modelFileSize) {
+        const minMemoryRequired = calculateMinimumMemoryRequirement(
+          modelFileSize,
+          federatedLearningData.participants.length,
+          1.5 // 안전 계수
+        );
+
+        extendedConfig.minMemoryRequirement = minMemoryRequired;
+        toast.info(
+          `최소 메모리 요구사항: ${minMemoryRequired}GB (모델 크기 × 참여자 ${federatedLearningData.participants.length}명 × 1.5)`,
+          { duration: 5000 }
+        );
+      }
+
       // Aggregator 배치 최적화 실행
       toast.info("집계자 배치 최적화를 실행합니다...");
       const optimizationResult: OptimizationResponse = await optimizeAggregatorPlacement(
         federatedLearningData,
-        {
-          maxBudget: aggregatorOptimizeConfig.maxBudget,
-          maxLatency: aggregatorOptimizeConfig.maxLatency
-        }
+        extendedConfig
       );
       
       if (optimizationResult.status === 'error') {
         throw new Error(optimizationResult.message);
+      }
+
+      // 메모리 요구사항을 충족하지 못하는 옵션 필터링 (클라이언트 사이드 검증)
+      if (extendedConfig.minMemoryRequirement) {
+        const filteredOptions = optimizationResult.optimizedOptions.filter(
+          option => option.memory >= extendedConfig.minMemoryRequirement!
+        );
+
+        if (filteredOptions.length === 0) {
+          throw new Error(
+            `최소 메모리 요구사항(${extendedConfig.minMemoryRequirement}GB)을 충족하는 인스턴스가 없습니다.`
+          );
+        }
+
+        // 필터링된 결과로 업데이트
+        optimizationResult.optimizedOptions = filteredOptions;
+        optimizationResult.summary.feasibleOptions = filteredOptions.length;
       }
 
       setOptimizationStatus({

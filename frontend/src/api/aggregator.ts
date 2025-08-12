@@ -51,6 +51,7 @@ export interface FederatedLearningData {
 		openstack_endpoint?: string;
 	}>;
 	modelFileName?: string | null;
+	modelFileSize?: number; // 모델 파일 크기 (바이트 단위)
 }
 
 // Aggregator 생성 요청 타입
@@ -220,6 +221,7 @@ export const optimizeAggregatorPlacement = async (
 	constraints: {
 		maxBudget: number;
 		maxLatency: number;
+		minMemoryRequirement?: number;
 	}
 ): Promise<OptimizationResponse> => {
 	try {
