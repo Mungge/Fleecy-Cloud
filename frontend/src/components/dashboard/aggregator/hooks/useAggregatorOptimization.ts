@@ -35,7 +35,7 @@ export const useAggregatorOptimization = () => {
 
     try {
       // 모델 파일 크기 기반 최소 메모리 요구사항 계산
-      let extendedConfig: ExtendedAggregatorOptimizeConfig = {
+      const extendedConfig: ExtendedAggregatorOptimizeConfig = {
         ...aggregatorOptimizeConfig
       };
 
