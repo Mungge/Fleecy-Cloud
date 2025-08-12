@@ -8,6 +8,7 @@ import { Participant } from "@/types/participant";
 // 폼 스키마 정의
 const participantSchema = z.object({
 	name: z.string().min(1, "이름은 필수입니다"),
+	region: z.string().min(1, "리전은 필수입니다"),
 	metadata: z.string().optional(),
 });
 
@@ -22,6 +23,7 @@ export function useParticipantForm() {
 		resolver: zodResolver(participantSchema),
 		defaultValues: {
 			name: "",
+			region: "",
 			metadata: "",
 		},
 	});
@@ -58,6 +60,7 @@ export function useParticipantForm() {
 	const openEditDialog = (participant: Participant) => {
 		form.reset({
 			name: participant.name,
+			region: participant.region || "",
 			metadata: participant.metadata || "",
 		});
 		setConfigFile(null);
@@ -69,6 +72,7 @@ export function useParticipantForm() {
 		setCreateDialogOpen(false);
 		form.reset({
 			name: "",
+			region: "",
 			metadata: "",
 		});
 		setConfigFile(null);
@@ -84,6 +88,7 @@ export function useParticipantForm() {
 	const createFormData = (data: ParticipantFormData) => {
 		const formData = new FormData();
 		formData.append("name", data.name);
+		formData.append("region", data.region);
 		if (data.metadata) {
 			formData.append("metadata", data.metadata);
 		}

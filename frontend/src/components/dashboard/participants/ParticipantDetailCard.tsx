@@ -44,6 +44,12 @@ export function ParticipantDetailCard({
 								{getStatusBadge(selectedParticipant.status)}
 							</div>
 						</div>
+						{selectedParticipant.region && (
+							<div>
+								<span className="text-sm font-medium">리전:</span>
+								<p className="text-sm">{selectedParticipant.region}</p>
+							</div>
+						)}
 						<div>
 							<span className="text-sm font-medium">생성일:</span>
 							<p className="text-sm">

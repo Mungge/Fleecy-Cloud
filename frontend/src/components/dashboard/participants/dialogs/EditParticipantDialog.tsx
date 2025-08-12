@@ -63,6 +63,20 @@ export function EditParticipantDialog({
 
 						<FormField
 							control={form.control}
+							name="region"
+							render={({ field }) => (
+								<FormItem>
+									<FormLabel>리전</FormLabel>
+									<FormControl>
+										<Input placeholder="리전 (예: us-east-1, ap-northeast-2)" {...field} />
+									</FormControl>
+									<FormMessage />
+								</FormItem>
+							)}
+						/>
+
+						<FormField
+							control={form.control}
 							name="metadata"
 							render={({ field }) => (
 								<FormItem>
