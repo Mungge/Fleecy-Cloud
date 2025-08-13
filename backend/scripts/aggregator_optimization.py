@@ -313,7 +313,7 @@ class AggregatorOptimizer:
             # 오류 발생 시 상위 20개 옵션이라도 반환
             if self.options:
                 print("오류 발생 - 기본 옵션으로 대체")
-                sorted_options = sorted(self.options, key=lambda x: (x['cost'] * 0.4 + x['avgLatency'] * 0.6))
+                sorted_options = sorted(self.options, key=lambda x: (x['cost'] * 0.5 + x['avgLatency'] * 0.5))
                 # 오류 발생 시 반환 개수를 20개로 수정합니다.
                 return self._format_results(sorted_options[:25])
             return []
