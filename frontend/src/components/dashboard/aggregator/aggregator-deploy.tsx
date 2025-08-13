@@ -18,14 +18,13 @@ import {
   CheckCircle,
   XCircle,
   Loader2,
-  Cloud,
   Server,
   HardDrive,
   Zap,
 } from "lucide-react";
 
 export default function AggregatorDeploy() {
-  const { isCreating, creationStatus, handleCreateAggregator, resetCreation } =
+  const { creationStatus, handleCreateAggregator, resetCreation } =
     useAggregatorCreation();
 
   // 팝업에서 선택된 옵션 (실제로는 props로 받아올 것)
@@ -87,7 +86,7 @@ export default function AggregatorDeploy() {
     }, 1000); // 1초 후 자동 시작
 
     return () => clearTimeout(timer);
-  }, []);
+  }, [handleCreateAggregator, selectedOption, federatedLearningData]); // 의존성 배열 추가
 
   const getStatusIcon = () => {
     if (!creationStatus)
