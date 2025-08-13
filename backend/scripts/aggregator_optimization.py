@@ -36,10 +36,12 @@ class DatabaseManager:
         """클라우드 가격 정보 조회"""
         with self.conn.cursor() as cursor:
             cursor.execute("""
-                SELECT cloud_name, region_name, instance_type, v_cpu_count, 
-                       memory_gb, on_demand_price
-                FROM cloud_price
-                ORDER BY cloud_name, region_name, on_demand_price
+                SELECT p.name as cloud_name, r.name as region_name, cp.instance_type, cp.v_cpu_count, 
+                       cp.memory_gb, cp.on_demand_price
+                FROM cloud_price cp
+                JOIN providers p ON cp.provider_id = p.id
+                JOIN regions r ON cp.region_id = r.id
+                ORDER BY p.name, r.name, cp.on_demand_price
             """)
             return [
                 {
@@ -57,8 +59,10 @@ class DatabaseManager:
         """지연시간 매트릭스 조회"""
         with self.conn.cursor() as cursor:
             cursor.execute("""
-                SELECT source_region, target_region, avg_latency
-                FROM cloud_latency
+                SELECT sr.name as source_region, tr.name as target_region, cl.avg_latency
+                FROM cloud_latency cl
+                JOIN regions sr ON cl.source_region_id = sr.id
+                JOIN regions tr ON cl.target_region_id = tr.id
             """)
             
             matrix = {}
