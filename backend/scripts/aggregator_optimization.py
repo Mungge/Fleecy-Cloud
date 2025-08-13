@@ -117,7 +117,7 @@ class AggregatorOptimizer:
                     latencies.append(self.latency_matrix[participant_region][region])
             
             if not latencies:
-                avg_latency = 5  # 기본값 1초
+                avg_latency = 3  # 기본값 1초
                 max_latency = 5
             else:    
                 avg_latency = sum(latencies) / len(latencies)
@@ -142,7 +142,6 @@ class AggregatorOptimizer:
                     'hourlyPrice': price['hourly_price']
                 })
         
-        print(f"디버그: 생성된 총 옵션 수: {len(options)}")
         return options
     
     def filter_options(self, options_list: List[Dict], constraints: Dict) -> List[Dict]:
@@ -150,11 +149,10 @@ class AggregatorOptimizer:
         return [
             option for option in options_list
             if option['cost'] <= constraints['maxBudget'] and
-               option['avgLatency'] <= constraints['maxLatency']
+               option['avgLatency'] <= constraints['maxLatency'] and
+               option['memory'] >= constraints['minMemoryRequirement']
         ]
 
-    
-    # AggregatorOptimizer 클래스 내부에 아래 함수를 붙여넣거나 교체하세요.
 
     def nsga2_optimize(self) -> Tuple[List, List[Dict]]:
         """NSGA-II 최적화 실행 """
@@ -162,13 +160,10 @@ class AggregatorOptimizer:
             raise ValueError("사용자 조건에 맞는 집계자 옵션이 없습니다.")
         
         filtered_options = self.options
-        print(f"디버그: NSGA-II에 사용할 옵션 수: {len(filtered_options)}")
         
         # 옵션들의 분포 확인
         costs = [opt['cost'] for opt in filtered_options]
         latencies = [opt['avgLatency'] for opt in filtered_options]
-        print(f"디버그: Cost 범위: {min(costs):.2f} ~ {max(costs):.2f}")
-        print(f"디버그: Latency 범위: {min(latencies):.2f} ~ {max(latencies):.2f}")
 
         # DEAP 설정
         if hasattr(creator, "FitnessMulti"):
@@ -214,7 +209,7 @@ class AggregatorOptimizer:
             ind.fitness.values = fit
         
         # 진화 실행
-        ngen = 200  # 300은 너무 많을 수 있음
+        ngen = 300  
         cxpb, mutpb = 0.7, 0.3
         
         for gen in range(ngen):
@@ -243,18 +238,15 @@ class AggregatorOptimizer:
             
             if gen % 20 == 0:
                 fronts = tools.sortNondominated(population, len(population), first_front_only=True)
-                print(f"디버그: Generation {gen}, First front size: {len(fronts[0])}")
         
         # 모든 Pareto Front 추출
         all_fronts = tools.sortNondominated(population, len(population), first_front_only=False)
-        print(f"디버그: 총 front 수: {len(all_fronts)}")
         
         # 상위 3개 front에서 해 수집
         desired_solutions = 25  # 중복 제거 전에 더 많이 수집
         collected_individuals = []
         
         for i, front in enumerate(all_fronts[:3]):  # 상위 3개 front만
-            print(f"디버그: Front {i} 크기: {len(front)}")
             collected_individuals.extend(front)
             if len(collected_individuals) >= desired_solutions:
                 break
@@ -277,12 +269,9 @@ class AggregatorOptimizer:
                 if len(final_indices) >= 20:  # 최종 목표 개수
                     break
         
-        print(f"디버그: 수집된 개체 수: {len(collected_individuals)}")
-        print(f"디버그: 중복 제거 후 최종 개수: {len(final_indices)}")
         
         # 만약 결과가 너무 적으면 다양성을 위해 추가
         if len(final_indices) < 20:
-            print("디버그: 결과가 너무 적어 다양성 추가")
             # Cost 기준 상위 몇 개
             sorted_by_cost = sorted(range(len(filtered_options)), 
                                 key=lambda i: filtered_options[i]['cost'])[:5]
@@ -309,14 +298,12 @@ class AggregatorOptimizer:
             # Pareto front의 모든 해를 결과로 변환
             pareto_solutions = []
             
-            # 💥 더 명확하고 간결해진 로직
             # optimal_indices 리스트에서 인덱스를 하나씩 가져옵니다.
             for index in optimal_indices:
                 # 해당 인덱스를 사용하여 바로 옵션 정보를 찾습니다.
                 option = filtered_options[index]
                 pareto_solutions.append(option)
             
-            print(f"디버그: 최종 솔루션 수: {len(pareto_solutions)}")
             
             # 결과 포맷팅
             return self._format_results(pareto_solutions)
@@ -326,7 +313,7 @@ class AggregatorOptimizer:
             # 오류 발생 시 상위 20개 옵션이라도 반환
             if self.options:
                 print("오류 발생 - 기본 옵션으로 대체")
-                sorted_options = sorted(self.options, key=lambda x: (x['cost'] * 0.4 + x['avgLatency'] * 0.6))
+                sorted_options = sorted(self.options, key=lambda x: (x['cost'] * 0.5 + x['avgLatency'] * 0.5))
                 # 오류 발생 시 반환 개수를 20개로 수정합니다.
                 return self._format_results(sorted_options[:25])
             return []
