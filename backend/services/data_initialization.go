@@ -247,6 +247,8 @@ func processCloudPriceCSV(db *gorm.DB, filename string) error {
 			return fmt.Errorf("failed to insert cloud prices from %s: %w", filename, err)
 		}
 		log.Printf("Successfully inserted %d cloud price records from %s", len(cloudPrices), filename)
+	} else {
+		log.Printf("Processed %s, but no valid cloud price records were found to insert", filename)
 	}
 
 	return nil
