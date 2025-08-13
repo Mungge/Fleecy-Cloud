@@ -11,11 +11,21 @@ import (
 )
 
 type TerraformConfig struct {
-	WorkingDir   string
-	Region       string
-	InstanceType string
-	ProjectName  string
-	Environment  string
+	WorkingDir    string
+	CloudProvider string  // aws, gcp
+	ProjectName   string
+	Region        string
+	Zone          string
+	InstanceType  string
+	Environment   string
+	
+	// GCP 전용 (nullable)
+	ProjectID     *string
+	
+	// 추가 공통 설정
+	StorageSpecs  string
+	AggregatorID  string
+	Algorithm     string
 }
 
 type TerraformResult struct {
