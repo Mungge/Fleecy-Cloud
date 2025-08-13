@@ -118,7 +118,7 @@ func initializeProvidersAndRegions(db *gorm.DB) error {
 	return nil
 }
 
-// initializeCloudPrices는 cloud_price_AWS.csv 파일로부터 가격 데이터를 초기화합니다
+// initializeCloudPrices는 cloud_price_AWS.csv와 cloud_price_GCP.csv 파일로부터 가격 데이터를 초기화합니다
 func initializeCloudPrices(db *gorm.DB) error {
 	// 이미 데이터가 있는지 확인
 	var count int64
@@ -133,21 +133,40 @@ func initializeCloudPrices(db *gorm.DB) error {
 
 	log.Println("Initializing cloud price data...")
 
+	// AWS와 GCP CSV 파일들 처리
+	csvFiles := []string{"cloud_price_AWS.csv", "cloud_price_GCP.csv"}
+	
+	for _, csvFile := range csvFiles {
+		if err := processCloudPriceCSV(db, csvFile); err != nil {
+			log.Printf("Warning: Failed to process %s: %v", csvFile, err)
+			// 한 파일이 실패해도 다른 파일은 계속 처리
+			continue
+		}
+	}
+
+	log.Println("Cloud price data initialization completed")
+	return nil
+}
+
+// processCloudPriceCSV는 개별 CSV 파일을 처리합니다
+func processCloudPriceCSV(db *gorm.DB, filename string) error {
+	log.Printf("Processing %s...", filename)
+	
 	providerRepo := repository.NewProviderRepository(db)
 	regionRepo := repository.NewRegionRepository(db)
 
 	// CSV 파일 읽기
-	cloudPriceFile := findAssetPath("cloud_price_AWS.csv")
+	cloudPriceFile := findAssetPath(filename)
 	file, err := os.Open(cloudPriceFile)
 	if err != nil {
-		return fmt.Errorf("failed to open cloud_price_AWS.csv at %s: %w", cloudPriceFile, err)
+		return fmt.Errorf("failed to open %s at %s: %w", filename, cloudPriceFile, err)
 	}
 	defer file.Close()
 
 	reader := csv.NewReader(file)
 	records, err := reader.ReadAll()
 	if err != nil {
-		return fmt.Errorf("failed to read CSV file: %w", err)
+		return fmt.Errorf("failed to read CSV file %s: %w", filename, err)
 	}
 
 	// 헤더 제거
@@ -158,25 +177,25 @@ func initializeCloudPrices(db *gorm.DB) error {
 	var cloudPrices []models.CloudPrice
 	for i, record := range records {
 		if len(record) < 6 {
-			log.Printf("Skipping invalid record at line %d: insufficient columns", i+2)
+			log.Printf("Skipping invalid record at line %d in %s: insufficient columns", i+2, filename)
 			continue
 		}
 
 		vcpuCount, err := strconv.Atoi(record[3])
 		if err != nil {
-			log.Printf("Skipping record at line %d: invalid v_cpu_count %s", i+2, record[3])
+			log.Printf("Skipping record at line %d in %s: invalid v_cpu_count %s", i+2, filename, record[3])
 			continue
 		}
 
 		memoryGB, err := strconv.Atoi(record[4])
 		if err != nil {
-			log.Printf("Skipping record at line %d: invalid memory_gb %s", i+2, record[4])
+			log.Printf("Skipping record at line %d in %s: invalid memory_gb %s", i+2, filename, record[4])
 			continue
 		}
 
 		onDemandPrice, err := strconv.ParseFloat(record[5], 64)
 		if err != nil {
-			log.Printf("Skipping record at line %d: invalid on_demand_price %s", i+2, record[5])
+			log.Printf("Skipping record at line %d in %s: invalid on_demand_price %s", i+2, filename, record[5])
 			continue
 		}
 
@@ -194,7 +213,7 @@ func initializeCloudPrices(db *gorm.DB) error {
 		
 		provider, err := providerRepo.GetProviderByName(providerName)
 		if err != nil {
-			log.Printf("Skipping record at line %d: provider %s not found: %v", i+2, providerName, err)
+			log.Printf("Skipping record at line %d in %s: provider %s not found: %v", i+2, filename, providerName, err)
 			continue
 		}
 
@@ -202,7 +221,7 @@ func initializeCloudPrices(db *gorm.DB) error {
 		regionName := strings.TrimSpace(record[1])
 		region, err := regionRepo.GetRegionByName(regionName)
 		if err != nil {
-			log.Printf("Skipping record at line %d: region %s not found: %v", i+2, regionName, err)
+			log.Printf("Skipping record at line %d in %s: region %s not found: %v", i+2, filename, regionName, err)
 			continue
 		}
 
@@ -225,9 +244,9 @@ func initializeCloudPrices(db *gorm.DB) error {
 			Columns:   []clause.Column{{Name: "provider_id"}, {Name: "region_id"}, {Name: "instance_type"}},
 			DoNothing: true,
 		}).CreateInBatches(cloudPrices, 1000).Error; err != nil {
-			return fmt.Errorf("failed to insert cloud prices: %w", err)
+			return fmt.Errorf("failed to insert cloud prices from %s: %w", filename, err)
 		}
-		log.Printf("Successfully inserted %d cloud price records", len(cloudPrices))
+		log.Printf("Successfully inserted %d cloud price records from %s", len(cloudPrices), filename)
 	}
 
 	return nil
