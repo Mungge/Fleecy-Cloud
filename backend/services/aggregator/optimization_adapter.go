@@ -61,7 +61,7 @@ func (a *OptimizationServiceAdapter) RunOptimization(request OptimizationRequest
 			ID:                p.ID,
 			Name:              p.Name,
 			Status:            "active", // 기본값 설정
-			Region:            "default", // 기본값 설정 (필요시 요청에서 추가)
+			Region:            p.Region, // 실제 Region 값 사용
 			OpenstackEndpoint: p.OpenstackEndpoint,
 		}
 		serviceRequest.FederatedLearning.Participants = append(

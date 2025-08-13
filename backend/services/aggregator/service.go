@@ -58,6 +58,7 @@ type OptimizationRequest struct {
 type Participant struct {
 	ID                string `json:"id"`
 	Name              string `json:"name"`
+	Region            string `json:"region,omitempty"`
 	OpenstackEndpoint string `json:"openstack_endpoint"`
 }
 
