@@ -15,13 +15,17 @@ import (
 
 // Repositories는 애플리케이션에서 사용되는 모든 리포지토리를 포함합니다
 type Repositories struct {
-	UserRepo         *repository.UserRepository
-	RefreshTokenRepo *repository.RefreshTokenRepository
-	CloudRepo        *repository.CloudRepository
-	FLRepo           *repository.FederatedLearningRepository
-	ParticipantRepo  *repository.ParticipantRepository
-	AggregatorRepo   *repository.AggregatorRepository
-	VMRepo           *repository.VirtualMachineRepository
+	UserRepo           *repository.UserRepository
+	RefreshTokenRepo   *repository.RefreshTokenRepository
+	CloudRepo          *repository.CloudRepository
+	FLRepo             *repository.FederatedLearningRepository
+	ParticipantRepo    *repository.ParticipantRepository
+	AggregatorRepo     *repository.AggregatorRepository
+	VMRepo             *repository.VirtualMachineRepository
+	ProviderRepo       *repository.ProviderRepository
+	RegionRepo         *repository.RegionRepository
+	CloudPriceRepo     *repository.CloudPriceRepository
+	CloudLatencyRepo   *repository.CloudLatencyRepository
 }
 
 // InitializeApplication은 애플리케이션의 모든 초기화 작업을 수행합니다
@@ -56,6 +60,8 @@ func RunDatabaseMigration() error {
 	
 	db := config.GetDB()
 	err := db.AutoMigrate(
+		&models.Provider{},
+		&models.Region{},
 		&models.User{},
 		&models.RefreshToken{},
 		&models.CloudConnection{},
