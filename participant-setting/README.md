@@ -71,7 +71,7 @@ OpenStack을 설치한 VM에서 아래 스크립트를 실행하면 Prometheus �
 웹 임베딩 허용을 위해 `grafana.ini` 파일을 수정합니다.
 
 ```bash
-vim ~/etc/grafana/grafana.ini
+vim /etc/grafana/grafana.ini
 ```
 
 다음 설정을 파일에 추가하거나 수정하세요:
@@ -87,6 +87,12 @@ org_role = Viewer
 [security]
 allow_embedding = true
 ```
+
+### 3-3. Datasource 파일 생성
+
+prometheus datasource를 추가하기 위해, /etc/grafana/provisioning/datasources에 prometheus.yml파일 생성.
+
+> > 💡 **TIP:** 현재 디렉토리의 prometheus.yml를 복사하세요.
 
 설정 변경 후 Grafana 서비스를 재시작
 

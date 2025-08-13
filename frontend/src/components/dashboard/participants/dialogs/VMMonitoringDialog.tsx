@@ -45,7 +45,7 @@ export function VMMonitoringDialog({
 										<iframe
 											src={`${
 												selectedParticipant.openstack_endpoint
-											}:3000/d-solo/rYdddlPWk/node-exporter-full?orgId=1&from=1754794423153&to=1754880823153&timezone=browser&var-DS_PROMETHEUS=feudbfom5j5kwc&var-job=openstack-vm&var-nodename=${
+											}:3000/d-solo/rYdddlPWk/node-exporter-full?orgId=1&timezone=browser&var-DS_PROMETHEUS=prometheus-openstack&var-job=openstack-vm&var-nodename=${
 												selectedVM.name
 											}&var-node=${getVMIPAddress()}:9100&var-diskdevices=%5Ba-z%5D%2B%7Cnvme%5B0-9%5D%2Bn%5B0-9%5D%2B%7Cmmcblk%5B0-9%5D%2B&refresh=1m&theme=light&panelId=14&__feature.dashboardSceneSolo=true`}
 											width="70%"
@@ -58,7 +58,7 @@ export function VMMonitoringDialog({
 										<iframe
 											src={`${
 												selectedParticipant.openstack_endpoint
-											}:3000/d-solo/rYdddlPWk/node-exporter-full?orgId=1&from=1754794543348&to=1754880943348&timezone=browser&var-DS_PROMETHEUS=feudbfom5j5kwc&var-job=openstack-vm&var-nodename=${
+											}:3000/d-solo/rYdddlPWk/node-exporter-full?orgId=1&timezone=browser&var-DS_PROMETHEUS=prometheus-openstack&var-job=openstack-vm&var-nodename=${
 												selectedVM.name
 											}&var-node=${getVMIPAddress()}:9100&var-diskdevices=%5Ba-z%5D%2B%7Cnvme%5B0-9%5D%2Bn%5B0-9%5D%2B%7Cmmcblk%5B0-9%5D%2B&refresh=1m&theme=light&panelId=75&__feature.dashboardSceneSolo=true`}
 											width="70%"
@@ -73,7 +73,7 @@ export function VMMonitoringDialog({
 									<iframe
 										src={`${
 											selectedParticipant.openstack_endpoint
-										}:3000/d-solo/rYdddlPWk/node-exporter-full?orgId=1&from=1754798369210&to=1754884769210&timezone=browser&var-DS_PROMETHEUS=feudbfom5j5kwc&var-job=openstack-vm&var-nodename=${
+										}:3000/d-solo/rYdddlPWk/node-exporter-full?orgId=1&timezone=browser&var-DS_PROMETHEUS=prometheus-openstack&var-job=openstack-vm&var-nodename=${
 											selectedVM.name
 										}&var-node=${getVMIPAddress()}:9100&var-diskdevices=%5Ba-z%5D%2B%7Cnvme%5B0-9%5D%2Bn%5B0-9%5D%2B%7Cmmcblk%5B0-9%5D%2B&refresh=1m&theme=light&panelId=20&__feature.dashboardSceneSolo=true`}
 										width="90%"
@@ -87,7 +87,7 @@ export function VMMonitoringDialog({
 									<iframe
 										src={`${
 											selectedParticipant.openstack_endpoint
-										}:3000/d-solo/rYdddlPWk/node-exporter-full?orgId=1&from=1754798546254&to=1754884946254&timezone=browser&var-DS_PROMETHEUS=feudbfom5j5kwc&var-job=openstack-vm&var-nodename=${
+										}:3000/d-solo/rYdddlPWk/node-exporter-full?orgId=1&timezone=browser&var-DS_PROMETHEUS=prometheus-openstack&var-job=openstack-vm&var-nodename=${
 											selectedVM.name
 										}&var-node=${getVMIPAddress()}:9100&var-diskdevices=%5Ba-z%5D%2B%7Cnvme%5B0-9%5D%2Bn%5B0-9%5D%2B%7Cmmcblk%5B0-9%5D%2B&refresh=1m&theme=light&panelId=16&__feature.dashboardSceneSolo=true`}
 										width="90%"
@@ -100,7 +100,7 @@ export function VMMonitoringDialog({
 									<iframe
 										src={`${
 											selectedParticipant.openstack_endpoint
-										}:3000/d-solo/rYdddlPWk/node-exporter-full?orgId=1&from=1754799948036&to=1754886348036&timezone=browser&var-DS_PROMETHEUS=feudbfom5j5kwc&var-job=openstack-vm&var-nodename=${
+										}:3000/d-solo/rYdddlPWk/node-exporter-full?orgId=1&timezone=browser&var-DS_PROMETHEUS=prometheus-openstack&var-job=openstack-vm&var-nodename=${
 											selectedVM.name
 										}&var-node=${getVMIPAddress()}:9100&var-diskdevices=%5Ba-z%5D%2B%7Cnvme%5B0-9%5D%2Bn%5B0-9%5D%2B%7Cmmcblk%5B0-9%5D%2B&refresh=1m&theme=light&panelId=154&__feature.dashboardSceneSolo=true`}
 										width="90%"
@@ -116,7 +116,7 @@ export function VMMonitoringDialog({
 									<iframe
 										src={`${
 											selectedParticipant.openstack_endpoint
-										}:3000/d-solo/rYdddlPWk/node-exporter-full?orgId=1&from=1754794603353&to=1754881003353&timezone=browser&var-DS_PROMETHEUS=feudbfom5j5kwc&var-job=openstack-vm&var-nodename=${
+										}:3000/d-solo/rYdddlPWk/node-exporter-full?orgId=1&timezone=browser&var-DS_PROMETHEUS=prometheus-openstack&var-job=openstack-vm&var-nodename=${
 											selectedVM.name
 										}&var-node=${getVMIPAddress()}:9100&var-diskdevices=%5Ba-z%5D%2B%7Cnvme%5B0-9%5D%2Bn%5B0-9%5D%2B%7Cmmcblk%5B0-9%5D%2B&refresh=1m&theme=light&panelId=77&__feature.dashboardSceneSolo=true`}
 										width="100%"
@@ -129,7 +129,7 @@ export function VMMonitoringDialog({
 									<iframe
 										src={`${
 											selectedParticipant.openstack_endpoint
-										}:3000/d-solo/rYdddlPWk/node-exporter-full?orgId=1&from=1754794603353&to=1754881003353&timezone=browser&var-DS_PROMETHEUS=feudbfom5j5kwc&var-job=openstack-vm&var-nodename=${
+										}:3000/d-solo/rYdddlPWk/node-exporter-full?orgId=1&timezone=browser&var-DS_PROMETHEUS=prometheus-openstack&var-job=openstack-vm&var-nodename=${
 											selectedVM.name
 										}&var-node=${getVMIPAddress()}:9100&var-diskdevices=%5Ba-z%5D%2B%7Cnvme%5B0-9%5D%2Bn%5B0-9%5D%2B%7Cmmcblk%5B0-9%5D%2B&refresh=1m&theme=light&panelId=78&__feature.dashboardSceneSolo=true`}
 										width="100%"
@@ -145,7 +145,7 @@ export function VMMonitoringDialog({
 									<iframe
 										src={`${
 											selectedParticipant.openstack_endpoint
-										}:3000/d-solo/rYdddlPWk/node-exporter-full?orgId=1&from=1754799055654&to=1754885455654&timezone=browser&var-DS_PROMETHEUS=feudbfom5j5kwc&var-job=openstack-vm&var-nodename=${
+										}:3000/d-solo/rYdddlPWk/node-exporter-full?orgId=1&timezone=browser&var-DS_PROMETHEUS=prometheus-openstack&var-job=openstack-vm&var-nodename=${
 											selectedVM.name
 										}&var-node=${getVMIPAddress()}:9100&var-diskdevices=%5Ba-z%5D%2B%7Cnvme%5B0-9%5D%2Bn%5B0-9%5D%2B%7Cmmcblk%5B0-9%5D%2B&refresh=1m&theme=light&panelId=152&__feature.dashboardSceneSolo=true`}
 										width="100%"
@@ -158,7 +158,7 @@ export function VMMonitoringDialog({
 									<iframe
 										src={`${
 											selectedParticipant.openstack_endpoint
-										}:3000/d-solo/rYdddlPWk/node-exporter-full?orgId=1&from=1754799115711&to=1754885515711&timezone=browser&var-DS_PROMETHEUS=feudbfom5j5kwc&var-job=openstack-vm&var-nodename=${
+										}:3000/d-solo/rYdddlPWk/node-exporter-full?orgId=1&timezone=browser&var-DS_PROMETHEUS=prometheus-openstack&var-job=openstack-vm&var-nodename=${
 											selectedVM.name
 										}&var-node=${getVMIPAddress()}:9100&var-diskdevices=%5Ba-z%5D%2B%7Cnvme%5B0-9%5D%2Bn%5B0-9%5D%2B%7Cmmcblk%5B0-9%5D%2B&refresh=1m&theme=light&panelId=74&__feature.dashboardSceneSolo=true`}
 										width="100%"
