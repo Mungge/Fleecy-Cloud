@@ -138,7 +138,7 @@ func initializeCloudPrices(db *gorm.DB) error {
 	
 	for _, csvFile := range csvFiles {
 		if err := processCloudPriceCSV(db, csvFile); err != nil {
-			log.Printf("Warning: Failed to process %s: %v", csvFile, err)
+			log.Printf("Warning: Failed to process %s: %v. Cloud price data from this file will be missing, but initialization will continue with available data.", csvFile, err)
 			// 한 파일이 실패해도 다른 파일은 계속 처리
 			continue
 		}
