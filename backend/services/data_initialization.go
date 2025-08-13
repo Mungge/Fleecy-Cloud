@@ -105,6 +105,7 @@ func initializeProvidersAndRegions(db *gorm.DB) error {
 		"us-west1",
 		"us-east4",
 		"ap-northeast-1",
+		"asia-northeast3",
 	}
 
 	for _, regionName := range regions {
@@ -156,7 +157,7 @@ func initializeCloudPrices(db *gorm.DB) error {
 
 	var cloudPrices []models.CloudPrice
 	for i, record := range records {
-		if len(record) < 7 {
+		if len(record) < 6 {
 			log.Printf("Skipping invalid record at line %d: insufficient columns", i+2)
 			continue
 		}
@@ -173,9 +174,9 @@ func initializeCloudPrices(db *gorm.DB) error {
 			continue
 		}
 
-		onDemandPrice, err := strconv.ParseFloat(record[6], 64)
+		onDemandPrice, err := strconv.ParseFloat(record[5], 64)
 		if err != nil {
-			log.Printf("Skipping record at line %d: invalid on_demand_price %s", i+2, record[6])
+			log.Printf("Skipping record at line %d: invalid on_demand_price %s", i+2, record[5])
 			continue
 		}
 
@@ -211,7 +212,6 @@ func initializeCloudPrices(db *gorm.DB) error {
 			InstanceType:    strings.TrimSpace(record[2]),
 			VCPUCount:       vcpuCount,
 			MemoryGB:        memoryGB,
-			OperatingSystem: strings.TrimSpace(record[5]),
 			OnDemandPrice:   onDemandPrice,
 		}
 
@@ -220,9 +220,9 @@ func initializeCloudPrices(db *gorm.DB) error {
 
 	// 배치로 데이터 삽입
 	if len(cloudPrices) > 0 {
-		// 복합 유니크 인덱스(provider_id, region_id, instance_type, operating_system) 충돌 시 무시
+		// 복합 유니크 인덱스(provider_id, region_id, instance_type) 충돌 시 무시
 		if err := db.Clauses(clause.OnConflict{
-			Columns:   []clause.Column{{Name: "provider_id"}, {Name: "region_id"}, {Name: "instance_type"}, {Name: "operating_system"}},
+			Columns:   []clause.Column{{Name: "provider_id"}, {Name: "region_id"}, {Name: "instance_type"}},
 			DoNothing: true,
 		}).CreateInBatches(cloudPrices, 1000).Error; err != nil {
 			return fmt.Errorf("failed to insert cloud prices: %w", err)

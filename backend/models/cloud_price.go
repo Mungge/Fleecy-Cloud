@@ -10,7 +10,6 @@ type CloudPrice struct {
 	InstanceType    string  `json:"instance_type" gorm:"not null;index;size:30;uniqueIndex:idx_price_unique"`
 	VCPUCount       int     `json:"vcpu_count" gorm:"column:v_cpu_count;index"`
 	MemoryGB        int     `json:"memory_gb" gorm:"not null;index"`
-	OperatingSystem string  `json:"operating_system" gorm:"default:'Linux';size:50;uniqueIndex:idx_price_unique"`
 	OnDemandPrice   float64 `json:"on_demand_price" gorm:"not null;type:decimal(10,6)"`
 
 	// 관계 설정
