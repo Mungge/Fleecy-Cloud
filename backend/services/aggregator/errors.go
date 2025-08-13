@@ -13,4 +13,5 @@ var (
 	ErrTerraformDeployFailed  = errors.New("terraform deployment failed")
 	ErrInvalidMetricsData     = errors.New("invalid metrics data")
 	ErrInvalidStatus          = errors.New("invalid status")
+	ErrGCPNeedsProjectID      = errors.New("need project ID for GCP cloud provider")
 )
