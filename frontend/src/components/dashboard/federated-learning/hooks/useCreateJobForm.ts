@@ -49,6 +49,7 @@ export const useCreateJobForm = (participants: Participant[]) => {
           rounds: values.rounds,
           participants: selectedParticipants,
           modelFileName: modelFile?.name || null,
+          modelFileSize: modelFile ? modelFile.size : 0,
         };
   
         sessionStorage.setItem(
@@ -59,6 +60,7 @@ export const useCreateJobForm = (participants: Participant[]) => {
         // 모델 파일이 있는 경우 별도 저장
         if (modelFile) {
           sessionStorage.setItem("modelFileName", modelFile.name);
+          sessionStorage.setItem("modelFileSize", modelFile.size.toString());
         }
   
         // 폼 초기화 및 다이얼로그 닫기

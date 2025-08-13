@@ -19,7 +19,7 @@ const AggregatorCreateContent = () => {
 	const [federatedLearningData, setFederatedLearningData] = useState<FederatedLearningData | null>(null);
 	const [modelFileSize, setModelFileSize] = useState<number>(0);
 	const [aggregatorOptimizeConfig, setAggregatorOptimizeConfig] = useState<AggregatorOptimizeConfig>({
-		maxBudget: 500000,
+		maxBudget: 100000,
 		maxLatency: 150,
 	});
 

@@ -58,14 +58,14 @@ export const AggregatorSettings = ({
             onValueChange={([value]) => 
               onConfigChange({ ...config, maxBudget: value })
             }
-            max={1000000}
-            min={50000}
-            step={10000}
+            max={300000}
+            min={10000}
+            step={5000}
             className="w-full"
           />
           <div className="flex justify-between text-xs text-muted-foreground">
-            <span>10만원</span>
-            <span>200만원</span>
+            <span>1만원</span>
+            <span>30만원</span>
           </div>
         </div>
 
