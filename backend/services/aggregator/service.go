@@ -24,19 +24,27 @@ func NewAggregatorService(repo *repository.AggregatorRepository, flRepo *reposit
 
 // CreateAggregatorInput Aggregator 생성 입력
 type CreateAggregatorInput struct {
-	Name         string
-	Algorithm    string
-	Region       string
-	Storage      string
-	InstanceType string
-	UserID       int64
+	Name          string `json:"name" validate:"required"`
+	Algorithm     string `json:"algorithm" validate:"required"`
+	Storage       string `json:"storage" validate:"required"`
+	UserID        int64  `json:"user_id" validate:"required"`
+	CloudProvider string `json:"cloud_provider" validate:"required,oneof=aws gcp"`
+	
+	// 공통 필드
+	ProjectName   string `json:"project_name" validate:"required"`
+	Region        string `json:"region" validate:"required"`
+	Zone          string `json:"zone" validate:"required"`
+	InstanceType  string `json:"instance_type" validate:"required"`
+	
+	// GCP 전용 (선택적)
+	ProjectID     string `json:"project_id,omitempty"`
 }
 
 // CreateAggregatorResult Aggregator 생성 결과
 type CreateAggregatorResult struct {
-	AggregatorID    string
-	Status          string
-	TerraformStatus string
+	AggregatorID    string `json:"aggregator_id"`
+	Status          string `json:"status"`
+	TerraformStatus string `json:"terraform_status"`
 }
 
 // OptimizationRequest 최적화 요청 (기존 services.OptimizationRequest 대체)
@@ -71,6 +79,11 @@ type OptimizationService interface {
 
 // CreateAggregator는 새로운 Aggregator를 생성합니다
 func (s *AggregatorService) CreateAggregator(input CreateAggregatorInput) (*CreateAggregatorResult, error) {
+	// 입력 검증
+	if err := s.validateInput(input); err != nil {
+		return nil, err
+	}
+
 	// Aggregator 생성
 	aggregator := &models.Aggregator{
 		ID:            uuid.New().String(),
@@ -78,10 +91,17 @@ func (s *AggregatorService) CreateAggregator(input CreateAggregatorInput) (*Crea
 		Name:          input.Name,
 		Status:        "creating",
 		Algorithm:     input.Algorithm,
-		CloudProvider: "openstack",
+		CloudProvider: input.CloudProvider,
+		ProjectName:   input.ProjectName,
 		Region:        input.Region,
+		Zone:          input.Zone,
 		InstanceType:  input.InstanceType,
 		StorageSpecs:  input.Storage + "GB",
+	}
+
+	// GCP인 경우 ProjectID 설정
+	if input.CloudProvider == "gcp" && input.ProjectID != "" {
+		aggregator.ProjectID = &input.ProjectID
 	}
 
 	// DB에 저장
@@ -108,6 +128,14 @@ func (s *AggregatorService) CreateAggregator(input CreateAggregatorInput) (*Crea
 	}
 
 	return result, nil
+}
+
+// validateInput 입력값 검증
+func (s *AggregatorService) validateInput(input CreateAggregatorInput) error {
+	if input.CloudProvider == "gcp" && input.ProjectID == "" {
+		return ErrGCPNeedsProjectID
+	}
+	return nil
 }
 
 // GetAggregatorByID는 ID로 Aggregator를 조회하고 권한을 확인합니다
@@ -138,14 +166,25 @@ func (s *AggregatorService) DeleteAggregator(id string, userID int64) error {
 	return s.repo.DeleteAggregator(id)
 }
 
+// GetAggregatorsByUser는 사용자의 모든 Aggregator를 조회합니다
+func (s *AggregatorService) GetAggregatorsByUser(userID int64) ([]*models.Aggregator, error) {
+	return s.repo.GetAggregatorsByUserID(userID)
+}
+
 // deployWithTerraform은 Terraform을 사용하여 인프라를 배포합니다
 func (s *AggregatorService) deployWithTerraform(aggregator *models.Aggregator) error {
 	// Terraform 설정 생성
 	config := utils.TerraformConfig{
-		Region:       aggregator.Region,
-		InstanceType: aggregator.InstanceType,
-		ProjectName:  "fleecy-aggregator",
-		Environment:  "production",
+		CloudProvider: aggregator.CloudProvider,
+		ProjectName:   aggregator.ProjectName,
+		Region:        aggregator.Region,
+		Zone:          aggregator.Zone,
+		InstanceType:  aggregator.InstanceType,
+		Environment:   "production",
+		StorageSpecs:  aggregator.StorageSpecs,
+		AggregatorID:  aggregator.ID,
+		Algorithm:     aggregator.Algorithm,
+		ProjectID:     aggregator.ProjectID, // GCP인 경우만 값이 있음
 	}
 	
 	// Terraform 작업공간 생성
@@ -163,19 +202,6 @@ func (s *AggregatorService) deployWithTerraform(aggregator *models.Aggregator) e
 	// 배포 결과를 aggregator에 저장
 	aggregator.InstanceID = result.InstanceID
 	aggregator.Status = "running"
-	if aggregator.Configuration == nil {
-		aggregator.Configuration = make(map[string]interface{})
-	}
-	aggregator.Configuration["public_ip"] = result.PublicIP
-	aggregator.Configuration["private_ip"] = result.PrivateIP
-	aggregator.Configuration["workspace_dir"] = result.WorkspaceDir
 	
 	return nil
 }
-
-//GetAggregatorsByUser는 사용자의 모든 Aggregator를 조회합니다
-func (s *AggregatorService) GetAggregatorsByUser(userID int64) ([]*models.Aggregator, error) {
-	return s.repo.GetAggregatorsByUserID(userID)
-}
-
-// GetAggregator
