@@ -83,16 +83,16 @@ type OptimizationResult struct {
 // OptimizationService 구조체
 type OptimizationService struct {
 	pythonScriptPath string
-	inputDir         string
-	outputDir        string
+	tempBaseDir      string
+	inputDir         string // 각 실행마다 runTemp/input 으로 설정
+    outputDir        string // 각 실행마다 runTemp/output 으로 설정
 }
 
 // 새로운 OptimizationService 인스턴스 생성
 func NewOptimizationService() *OptimizationService {
 	return &OptimizationService{
 		pythonScriptPath: "./scripts/aggregator_optimization.py",
-		inputDir:         "./temp/input",
-		outputDir:        "./temp/output",
+		tempBaseDir:      "./temp",
 	}
 }
 
@@ -100,10 +100,33 @@ func NewOptimizationService() *OptimizationService {
 func (s *OptimizationService) RunOptimization(request OptimizationRequest) (*OptimizationResponse, error) {
 	startTime := time.Now()
 
-	// 1. 임시 디렉토리 생성
-	if err := s.createTempDirectories(); err != nil {
-		return nil, fmt.Errorf("임시 디렉토리 생성 실패: %v", err)
+	if err := os.MkdirAll(s.tempBaseDir, 0o755); err != nil {       // ✅ 베이스 temp 보장
+		return nil, fmt.Errorf("temp 베이스 디렉토리 생성 실패: %w", err)
 	}
+
+	runTemp, err := os.MkdirTemp(s.tempBaseDir, "run-")
+    if err != nil {
+        return nil, fmt.Errorf("임시 디렉토리 생성 실패: %w", err)
+    }
+    // 항상 정리
+    defer func() {
+        if err := os.RemoveAll(runTemp); err != nil {
+            fmt.Printf("임시 디렉토리 삭제 실패: %s, 오류: %v\n", runTemp, err)
+        }
+
+		if err := removeIfEmpty(s.tempBaseDir); err != nil {
+		}
+    }()
+
+	s.inputDir = filepath.Join(runTemp, "input")
+    s.outputDir = filepath.Join(runTemp, "output")
+	
+	if err := os.MkdirAll(s.inputDir, 0o755); err != nil {
+        return nil, fmt.Errorf("input 디렉토리 생성 실패: %w", err)
+    }
+    if err := os.MkdirAll(s.outputDir, 0o755); err != nil {
+        return nil, fmt.Errorf("output 디렉토리 생성 실패: %w", err)
+    }
 
 	// 2. 입력 데이터를 JSON 파일로 저장
 	inputFilePath, err := s.saveInputData(request)
@@ -111,7 +134,7 @@ func (s *OptimizationService) RunOptimization(request OptimizationRequest) (*Opt
 		return nil, fmt.Errorf("입력 데이터 저장 실패: %v", err)
 	}
 
-	// 3. Python 스크립트 실행
+	//3. Python 스크립트 실행
 	outputFilePath := filepath.Join(s.outputDir, "optimization_result.json")
 	if err := s.executePythonScript(inputFilePath, outputFilePath); err != nil {
 		return nil, fmt.Errorf("Python 스크립트 실행 실패: %v", err)
@@ -132,9 +155,6 @@ func (s *OptimizationService) RunOptimization(request OptimizationRequest) (*Opt
 	if result.Status == "error" {
 		return nil, fmt.Errorf("Python 최적화 에러: %s", result.Message)
 	}
-
-	// 6. 임시 파일 정리
-	s.cleanupTempFiles(inputFilePath, outputFilePath)
 
 	return result, nil
 }
@@ -170,18 +190,6 @@ func (s *OptimizationService) RunOptimizationLegacy(request OptimizationRequest)
 	}
 
 	return legacyResponse, nil
-}
-
-
-// 임시 디렉토리 생성
-func (s *OptimizationService) createTempDirectories() error {
-	dirs := []string{s.inputDir, s.outputDir}
-	for _, dir := range dirs {
-		if err := os.MkdirAll(dir, 0755); err != nil {
-			return err
-		}
-	}
-	return nil
 }
 
 // 입력 데이터를 JSON 파일로 저장
@@ -236,15 +244,17 @@ func (s *OptimizationService) readOptimizationResult(outputPath string) (*Optimi
 	return &result, nil
 }
 
-// 임시 파일 정리
-func (s *OptimizationService) cleanupTempFiles(filePaths ...string) {
-	for _, path := range filePaths {
-		if err := os.Remove(path); err != nil {
-			// 로그 출력만 하고 에러는 무시 (정리 실패가 전체 프로세스를 중단시키지 않도록)
-			fmt.Printf("임시 파일 삭제 실패: %s, 오류: %v\n", path, err)
-		}
-	}
+func removeIfEmpty(dir string) error {
+    entries, err := os.ReadDir(dir)
+    if err != nil {
+        return err // 존재하지 않음 등은 호출부에서 무시해도 됨
+    }
+    if len(entries) > 0 {
+        return fmt.Errorf("not empty")
+    }
+    return os.Remove(dir) // 비어 있을 때만 삭제됨
 }
+
 
 // Python 스크립트 존재 여부 확인
 func (s *OptimizationService) ValidatePythonScript() error {
