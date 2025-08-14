@@ -103,7 +103,7 @@ const AggregatorCreateContent = () => {
 					sessionStorage.removeItem("federatedLearningData");
 					sessionStorage.removeItem("modelFileName");
 					sessionStorage.removeItem("modelFileSize");
-					router.push("/dashboard/federated-learning");
+					router.push("/dashboard/aggregator/deploy");
 				},
 				(error) => {
 					// 에러 시 콜백 (선택적)
