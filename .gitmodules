@@ -1,0 +1,3 @@
+[submodule "Participant-Setting"]
+	path = Participant-Setting
+	url = https://github.com/Mungge/Participant-Setting.git
