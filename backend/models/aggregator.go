@@ -9,14 +9,21 @@ type Aggregator struct {
 	Status                 string                 `json:"status" gorm:"default:pending"` // pending, running, completed, error
 	Algorithm              string                 `json:"algorithm" gorm:"not null"`     // FedAvg, FedProx, FedAdam, etc.
 	CloudProvider          string                 `json:"cloud_provider" gorm:"not null"`
+	
+	// 클라우드 공통 필드
+	ProjectName            string                 `json:"project_name" gorm:"not null"`
 	Region                 string                 `json:"region" gorm:"not null"`
+	Zone                   string                 `json:"zone" gorm:"not null"`
 	InstanceType           string                 `json:"instance_type" gorm:"not null"`
+	
+	// GCP 전용 필드 (nullable)
+	ProjectID              *string                `json:"project_id,omitempty"` // GCP에서만 사용
+	
 	ParticipantCount       int                    `json:"participant_count" gorm:"default:0"`
-	Rounds                 int                    `json:"rounds" gorm:"default:0"` // 삭제
 	CurrentRound           int                    `json:"current_round" gorm:"default:0"`
 	Accuracy               *float64               `json:"accuracy,omitempty"`
 	CurrentCost            float64                `json:"current_cost" gorm:"default:0"`
-	EstimatedCost          float64                `json:"estimated_cost" gorm:"default:0"` // 삭제
+	EstimatedCost          float64                `json:"estimated_cost" gorm:"default:0"`
 	CPUSpecs               string                 `json:"cpu_specs"`
 	MemorySpecs            string                 `json:"memory_specs"`
 	StorageSpecs           string                 `json:"storage_specs"`
@@ -24,7 +31,7 @@ type Aggregator struct {
 	MemoryUsage            float64                `json:"memory_usage" gorm:"default:0"`
 	NetworkUsage           float64                `json:"network_usage" gorm:"default:0"`
 	InstanceID             string                 `json:"instance_id,omitempty"`
-	Configuration          map[string]interface{} `json:"configuration" gorm:"serializer:json"`
+	
 	CreatedAt              time.Time              `json:"created_at" gorm:"autoCreateTime"`
 	UpdatedAt              time.Time              `json:"updated_at" gorm:"autoUpdateTime"`
 	

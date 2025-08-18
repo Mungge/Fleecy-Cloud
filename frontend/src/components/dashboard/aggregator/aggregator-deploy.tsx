@@ -3,6 +3,7 @@
 
 import { useState, useEffect } from "react";
 import { useAggregatorCreation } from "./hooks/useAggregatorCreation";
+import { useAggregatorCreationStore } from "./aggregator.types";
 import { Button } from "@/components/ui/button";
 import {
   Card,
@@ -26,6 +27,7 @@ import {
 export default function AggregatorDeploy() {
   const { creationStatus, handleCreateAggregator, resetCreation } =
     useAggregatorCreation();
+  const payload = useAggregatorCreationStore((s) => s.payload);
 
   // 팝업에서 선택된 옵션 (실제로는 props로 받아올 것)
   const [selectedOption] = useState({
@@ -70,12 +72,22 @@ export default function AggregatorDeploy() {
     modelFileName: "neural_network_model.h5",
   });
 
+  // (선택) 없을 때의 안전장치: 사용자가 URL로 직접 들어온 경우 등
+  // 간단한 가드 + 안내(필요 시 대시보드로 리다이렉트)
+  useEffect(() => {
+    if (!payload) {
+      console.warn("배포 페이로드가 없습니다. 이전 단계에서 구성을 완료해주세요.");
+      // router.replace("/dashboard/aggregator"); // 필요하다면 활성화
+    }
+  }, [payload]);
+
   // 컴포넌트 마운트 시 자동으로 배포 시작
   useEffect(() => {
+    if (!payload) return;
     const timer = setTimeout(() => {
       handleCreateAggregator(
-        selectedOption,
-        federatedLearningData,
+        payload.selectedOption,
+        payload.federatedLearningData,
         () => {
           console.log("배포 성공!");
         },
