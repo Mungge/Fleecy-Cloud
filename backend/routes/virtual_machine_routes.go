@@ -31,5 +31,14 @@ func SetupVirtualMachineRoutes(r *gin.Engine, vmRepo *repository.VirtualMachineR
 
 		// Participant 소유의 모든 VM 조회
 		vmRoutes.GET("/all", vmHandler.GetVMRequests)
+
+		// VM 선택 (연합학습용)
+		vmRoutes.POST("/select", vmHandler.SelectOptimalVM)
+
+		// VM 사용률 조회 (모니터링용)
+		vmRoutes.GET("/utilizations", vmHandler.GetVMUtilizations)
+
+		// 라운드로빈 초기화
+		vmRoutes.POST("/reset-round-robin", vmHandler.ResetVMSelectionRoundRobin)
 	}
 }
