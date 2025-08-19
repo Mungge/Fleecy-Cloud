@@ -9,6 +9,7 @@ import (
 	"github.com/Mungge/Fleecy-Cloud/initialization"
 	"github.com/Mungge/Fleecy-Cloud/middlewares"
 	"github.com/Mungge/Fleecy-Cloud/routes"
+	"github.com/Mungge/Fleecy-Cloud/services"
 
 	"github.com/gin-gonic/gin"
 )
@@ -38,6 +39,10 @@ func main() {
 	participantHandler := handlers.NewParticipantHandler(repos.ParticipantRepo)
 	aggregatorHandler := aggregatorDeps.AggregatorHandler
 
+	// SSH 키페어 핸들러 초기화
+	sshKeypairService := services.NewSSHKeypairService(repos.SSHKeypairRepo)
+	sshKeypairHandler := handlers.NewSSHKeypairHandler(sshKeypairService)
+
 	// Gin 라우터 설정
 	r := gin.Default()
 
@@ -47,7 +52,7 @@ func main() {
 		c.Writer.Header().Set("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS")
 		c.Writer.Header().Set("Access-Control-Allow-Headers", "Content-Type, Authorization")
 		c.Writer.Header().Set("Access-Control-Allow-Credentials", "true")
-		
+
 		if c.Request.Method == "OPTIONS" {
 			c.AbortWithStatus(204)
 			return
@@ -68,7 +73,8 @@ func main() {
 	routes.SetupParticipantRoutes(authorized, participantHandler)
 	routes.SetupFederatedLearningRoutes(authorized, flHandler)
 	routes.SetupAggregatorRoutes(authorized, aggregatorHandler)
-	
+	routes.SetupSSHKeypairRoutes(authorized, sshKeypairHandler)
+
 	// VM 라우트 설정 (전체 엔진에 설정, 인증은 내부에서 처리)
 	routes.SetupVirtualMachineRoutes(r, repos.VMRepo, repos.ParticipantRepo)
 
