@@ -1,11 +1,30 @@
-# Ubuntu AMI 조회
+# 인스턴스 타입에 따른 아키텍처 결정
+locals {
+  # ARM 기반 인스턴스 타입들 (Graviton)
+  arm_instance_types = [
+    "t4g", "t3g", "c6g", "c6gd", "c6gn", "c7g", "c7gd", "c7gn",
+    "m6g", "m6gd", "m7g", "m7gd", "r6g", "r6gd", "r7g", "r7gd",
+    "x2gd", "im4gn", "is4gen"
+  ]
+  
+  # 인스턴스 타입에서 패밀리 추출 (예: t4g.medium -> t4g)
+  instance_family = split(".", var.instance_type)[0]
+  
+  # ARM 기반인지 확인
+  is_arm = contains(local.arm_instance_types, local.instance_family)
+  
+  # 아키텍처에 따른 AMI 이름 패턴
+  ami_architecture = local.is_arm ? "arm64" : "amd64"
+}
+
+# Ubuntu AMI 조회 (아키텍처 자동 선택)
 data "aws_ami" "ubuntu" {
   most_recent = true
   owners      = ["099720109477"] # Canonical
 
   filter {
     name   = "name"
-    values = ["ubuntu/images/hvm-ssd/ubuntu-jammy-22.04-amd64-server-*"]
+    values = ["ubuntu/images/hvm-ssd/ubuntu-jammy-22.04-${local.ami_architecture}-server-*"]
   }
 
   filter {
@@ -14,82 +33,12 @@ data "aws_ami" "ubuntu" {
   }
 }
 
-# 개발환경: 새 키 생성 (기존 키가 없을 때만)
-resource "tls_private_key" "dev" {
-  count = var.environment == "dev" && !local.dev_key_exists ? 1 : 0
-  
-  algorithm = "RSA"
-  rsa_bits  = 4096
-}
+# AWS Key Pair는 백엔드에서 이미 생성되었으므로 여기서는 생성하지 않음
+# 인스턴스에서 key_name으로 직접 참조
 
-# 개발환경: 생성된 개인키를 로컬에 저장
-resource "local_file" "private_key_dev" {
-  count = var.environment == "dev" && !local.dev_key_exists ? 1 : 0
-  
-  content         = tls_private_key.dev[0].private_key_pem
-  filename        = local.dev_private_key_path
-  file_permission = "0600"
-}
-
-# 배포환경: DB에 키가 없으면 새로 생성
-resource "tls_private_key" "prod" {
-  count = var.environment != "dev" && !local.db_keypair_exists ? 1 : 0
-  
-  algorithm = "RSA"
-  rsa_bits  = 4096
-}
-
-# 배포환경: 새로 생성한 키를 DB에 저장
-resource "null_resource" "save_keypair_to_db" {
-  count = var.environment != "dev" && !local.db_keypair_exists ? 1 : 0
-  
-  triggers = {
-    public_key = tls_private_key.prod[0].public_key_openssh
-    private_key = tls_private_key.prod[0].private_key_pem
-  }
-  
-  provisioner "local-exec" {
-    command = <<-EOT
-      curl -X POST "${var.api_endpoint}/keypairs/${var.project_name}/${var.environment}" \
-        -H "Content-Type: application/json" \
-        -H "Authorization: Bearer ${var.api_token}" \
-        -d '{
-          "public_key": "${replace(tls_private_key.prod[0].public_key_openssh, "\n", "")}",
-          "private_key": "${replace(tls_private_key.prod[0].private_key_pem, "\n", "\\n")}"
-        }'
-    EOT
-  }
-}
-
-# AWS Key Pair 등록
-resource "aws_key_pair" "main" {
-  key_name = local.key_name
-  
-  public_key = (
-    # 개발환경: tls_private_key.dev가 존재할 때만 접근
-    var.environment == "dev" && length(tls_private_key.dev) > 0 ? 
-      tls_private_key.dev[0].public_key_openssh :
-    # 배포환경: tls_private_key.prod가 존재할 때 체크
-    var.environment != "dev" && local.db_keypair_exists ? 
-      local.db_public_key :
-    var.environment != "dev" && length(tls_private_key.prod) > 0 ?
-      tls_private_key.prod[0].public_key_openssh :
-    # 기본값 (이 경우는 발생하지 않아야 함)
-    ""
-  )
-
-  tags = {
-    Name        = local.key_name
-    Environment = var.environment
-    Project     = var.project_name
-  }
-  
-  depends_on = [null_resource.save_keypair_to_db]
-}
-
-# 환경에 따라 사용할 키 페어 이름
+# 환경에 따라 사용할 키 페어 이름 (백엔드에서 생성된 키 사용)
 locals {
-  key_pair_name = aws_key_pair.main.key_name
+  key_pair_name = local.key_name
 }
 
 # VPC 생성

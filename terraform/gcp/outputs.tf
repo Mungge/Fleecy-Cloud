@@ -1,10 +1,19 @@
-# outputs.tf
-
 output "instance_id" {
   description = "생성된 인스턴스의 ID"
   value       = google_compute_instance.main.id
 }
 
+output "public_ip" {
+  description = "인스턴스의 외부 IP 주소"
+  value       = google_compute_instance.main.network_interface[0].access_config[0].nat_ip
+}
+
+output "private_ip" {
+  description = "인스턴스의 내부 IP 주소"
+  value       = google_compute_instance.main.network_interface[0].network_ip
+}
+
+# 기존 outputs (호환성 유지)
 output "instance_name" {
   description = "생성된 인스턴스의 이름"
   value       = google_compute_instance.main.name
