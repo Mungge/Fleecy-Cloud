@@ -35,7 +35,7 @@ const Header: React.FC<HeaderProps> = ({ isSidebarOpen }) => {
 		<header className="h-16 border-b bg-card">
 			<div className="px-6 h-full flex justify-between items-center">
 				<div className="flex gap-4 items-center">
-					<h2 className="text-xl font-semibold">대시보드</h2>
+					<h2 className="text-xl font-bold">Fleecy Cloud</h2>
 					<div className="relative w-64 hidden md:block">
 						<Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
 						<Input placeholder="검색..." className="pl-8" />
