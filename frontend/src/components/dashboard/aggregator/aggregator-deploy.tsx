@@ -4,6 +4,7 @@
 import { useState, useEffect } from "react";
 import { useAggregatorCreation } from "./hooks/useAggregatorCreation";
 import { useAggregatorCreationStore } from "./aggregator.types";
+import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import {
   Card,
@@ -24,53 +25,15 @@ import {
   Zap,
 } from "lucide-react";
 
-export default function AggregatorDeploy() {
-  const { creationStatus, handleCreateAggregator, resetCreation } =
-    useAggregatorCreation();
+const AggregatorDeploy = () => {
+  const router = useRouter();
+  const { creationStatus, handleCreateAggregator, resetCreation } = useAggregatorCreation();
   const payload = useAggregatorCreationStore((s) => s.payload);
+  const [hasStartedDeployment, setHasStartedDeployment] = useState(false);
 
-  // 팝업에서 선택된 옵션 (실제로는 props로 받아올 것)
-  const [selectedOption] = useState({
-    rank: 1,
-    region: "af-south-1",
-    instanceType: "m6gd.medium",
-    cloudProvider: "AWS",
-    estimatedMonthlyCost: 56.16,
-    estimatedHourlyPrice: 0.06,
-    avgLatency: 5.0,
-    maxLatency: 5.0,
-    vcpu: 1,
-    memory: 4096, // 4GB
-    recommendationScore: 4.3,
-  });
-
-  const [federatedLearningData] = useState({
-    name: "Neural Network Federated Learning",
-    description: "분산 신경망 모델을 이용한 연합 학습 프로젝트",
-    modelType: "neural_network",
-    algorithm: "FedAvg",
-    rounds: 10,
-    participants: [
-      {
-        id: "participant_1",
-        name: "Medical Center A",
-        status: "active",
-        openstackEndpoint: "https://openstack-a.example.com",
-      },
-      {
-        id: "participant_2",
-        name: "Medical Center B",
-        status: "active",
-        openstackEndpoint: "https://openstack-b.example.com",
-      },
-      {
-        id: "participant_3",
-        name: "Medical Center C",
-        status: "pending",
-      },
-    ],
-    modelFileName: "neural_network_model.h5",
-  });
+  // payload에서 실제 선택된 옵션과 연합학습 데이터 사용
+  const selectedOption = payload?.selectedOption;
+  const federatedLearningData = payload?.federatedLearningData;
 
   // (선택) 없을 때의 안전장치: 사용자가 URL로 직접 들어온 경우 등
   // 간단한 가드 + 안내(필요 시 대시보드로 리다이렉트)
@@ -81,9 +44,11 @@ export default function AggregatorDeploy() {
     }
   }, [payload]);
 
-  // 컴포넌트 마운트 시 자동으로 배포 시작
+  // 컴포넌트 마운트 시 자동으로 배포 시작 (한 번만 실행)
   useEffect(() => {
-    if (!payload) return;
+    if (!payload || hasStartedDeployment) return;
+    
+    setHasStartedDeployment(true);
     const timer = setTimeout(() => {
       handleCreateAggregator(
         payload.selectedOption,
@@ -93,12 +58,20 @@ export default function AggregatorDeploy() {
         },
         (error) => {
           console.error("배포 실패:", error);
+          setHasStartedDeployment(false); // 실패 시 재시도 가능하도록
         }
       );
-    }, 1000); // 1초 후 자동 시작
+    }, 500);
 
     return () => clearTimeout(timer);
-  }, [handleCreateAggregator, selectedOption, federatedLearningData]); // 의존성 배열 추가
+  }, [payload]); // handleCreateAggregator 의존성 제거
+
+  useEffect(() => {
+    if (!payload) {
+      // 이전 단계 없이 직접 진입 시 되돌리기
+      router.replace("/dashboard/federated-learning");
+    }
+  }, [payload, router]);
 
   const getStatusIcon = () => {
     if (!creationStatus)
@@ -146,6 +119,15 @@ export default function AggregatorDeploy() {
     }
   };
 
+  // payload가 없으면 로딩 표시
+  if (!payload || !selectedOption || !federatedLearningData) {
+    return (
+      <div className="flex justify-center items-center min-h-screen">
+        <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-primary"></div>
+      </div>
+    );
+  }
+
   return (
     <div className="container mx-auto p-6 space-y-6">
       {/* 메인 상태 헤더 */}
@@ -157,7 +139,7 @@ export default function AggregatorDeploy() {
           </h1>
         </div>
         <p className="text-muted-foreground">
-          선택하신 AWS 인스턴스로 집계자를 배포하고 있습니다
+          선택하신 {selectedOption?.cloudProvider || "클라우드"} 인스턴스로 집계자를 배포하고 있습니다
         </p>
       </div>
 
@@ -169,31 +151,31 @@ export default function AggregatorDeploy() {
             선택된 배포 스펙
           </CardTitle>
           <CardDescription>
-            팝업에서 선택하신 최적화된 인스턴스 구성
+            최적화에서 선택하신 인스턴스 구성
           </CardDescription>
         </CardHeader>
         <CardContent className="grid gap-4 md:grid-cols-2">
           <div className="space-y-3">
             <div className="flex items-center justify-between">
               <span className="text-sm font-medium">순위</span>
-              <Badge variant="secondary">#{selectedOption.rank}</Badge>
+              <Badge variant="secondary">#{selectedOption?.rank}</Badge>
             </div>
             <div className="flex items-center justify-between">
               <span className="text-sm font-medium">클라우드 제공자</span>
               <Badge className="bg-orange-500">
-                {selectedOption.cloudProvider}
+                {selectedOption?.cloudProvider}
               </Badge>
             </div>
             <div className="flex items-center justify-between">
               <span className="text-sm font-medium">리전</span>
-              <Badge variant="outline">{selectedOption.region}</Badge>
+              <Badge variant="outline">{selectedOption?.region}</Badge>
             </div>
             <div className="flex items-center justify-between">
               <span className="text-sm font-medium">인스턴스 타입</span>
               <div className="flex items-center gap-1">
                 <Server className="h-3 w-3" />
                 <span className="text-sm font-mono">
-                  {selectedOption.instanceType}
+                  {selectedOption?.instanceType}
                 </span>
               </div>
             </div>
@@ -201,30 +183,62 @@ export default function AggregatorDeploy() {
           <div className="space-y-3">
             <div className="flex items-center justify-between">
               <span className="text-sm font-medium">vCPU</span>
-              <span className="text-sm">{selectedOption.vcpu} 코어</span>
+              <span className="text-sm">{selectedOption?.vcpu} 코어</span>
             </div>
             <div className="flex items-center justify-between">
               <span className="text-sm font-medium">메모리</span>
               <div className="flex items-center gap-1">
                 <HardDrive className="h-3 w-3" />
                 <span className="text-sm">
-                  {(selectedOption.memory / 1024).toFixed(1)}GB
+                  {((selectedOption?.memory || 0) / 1024).toFixed(1)}GB
                 </span>
               </div>
             </div>
             <div className="flex items-center justify-between">
               <span className="text-sm font-medium">지연시간</span>
               <span className="text-sm text-green-600">
-                {selectedOption.avgLatency}ms
+                {selectedOption?.avgLatency}ms
               </span>
             </div>
             <div className="flex items-center justify-between">
               <span className="text-sm font-medium">월 예상 비용</span>
               <span className="text-sm font-semibold">
-                ₩{selectedOption.estimatedMonthlyCost.toLocaleString()}
+                ₩{selectedOption?.estimatedMonthlyCost.toLocaleString()}
               </span>
             </div>
           </div>
+        </CardContent>
+      </Card>
+
+      {/* 연합학습 정보 카드 */}
+      <Card>
+        <CardHeader>
+          <CardTitle>연합학습 정보</CardTitle>
+          <CardDescription>배포할 연합학습 작업 정보</CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-3">
+          <div className="flex items-center justify-between">
+            <span className="text-sm font-medium">작업 이름</span>
+            <span className="text-sm">{federatedLearningData.name}</span>
+          </div>
+          <div className="flex items-center justify-between">
+            <span className="text-sm font-medium">알고리즘</span>
+            <Badge variant="outline">{federatedLearningData.algorithm}</Badge>
+          </div>
+          <div className="flex items-center justify-between">
+            <span className="text-sm font-medium">라운드 수</span>
+            <span className="text-sm">{federatedLearningData.rounds}회</span>
+          </div>
+          <div className="flex items-center justify-between">
+            <span className="text-sm font-medium">참여자 수</span>
+            <span className="text-sm">{federatedLearningData.participants.length}명</span>
+          </div>
+          {federatedLearningData.modelFileName && (
+            <div className="flex items-center justify-between">
+              <span className="text-sm font-medium">모델 파일</span>
+              <span className="text-sm font-mono">{federatedLearningData.modelFileName}</span>
+            </div>
+          )}
         </CardContent>
       </Card>
 
@@ -289,7 +303,10 @@ export default function AggregatorDeploy() {
         {creationStatus?.step === "error" && (
           <Button
             variant="outline"
-            onClick={() => window.location.reload()}
+            onClick={() => {
+              setHasStartedDeployment(false);
+              window.location.reload();
+            }}
             size="lg"
           >
             다시 시도
@@ -305,4 +322,6 @@ export default function AggregatorDeploy() {
       </div>
     </div>
   );
-}
+};
+
+export default AggregatorDeploy;
