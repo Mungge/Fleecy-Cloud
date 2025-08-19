@@ -1,4 +1,20 @@
-# 기존 outputs 수정 (EC2 인스턴스 관련)
+# 백엔드가 기대하는 출력 형식
+output "instance_id" {
+  value       = aws_instance.main.id
+  description = "EC2 인스턴스 ID"
+}
+
+output "public_ip" {
+  value       = aws_instance.main.public_ip
+  description = "EC2 인스턴스 공인 IP"
+}
+
+output "private_ip" {
+  value       = aws_instance.main.private_ip
+  description = "EC2 인스턴스 사설 IP"
+}
+
+# 기존 outputs (호환성 유지)
 output "ssh_command" {
   value       = "ssh -i ~/.ssh/${local.key_name}.pem ${var.ssh_username}@${aws_instance.main.public_ip}"
   description = "SSH 연결 명령어"
@@ -19,36 +35,24 @@ output "key_management_info" {
   value = {
     environment = var.environment
     key_name = local.key_name
-    
-    # 개발환경 정보
-    dev_existing_key = var.environment == "dev" ? local.dev_key_exists : null
-    dev_private_key_path = var.environment == "dev" ? local.dev_private_key_path : null
-    
-    # 배포환경 정보
-    prod_key_source = var.environment != "dev" ? (
-      local.db_keypair_exists ? "existing_db" : "newly_created"
-    ) : null
-    
-    db_key_exists = var.environment != "dev" ? local.db_keypair_exists : null
   }
   description = "SSH 키 관리 상태 정보"
 }
 
-# 개발환경 SSH 연결 정보
+# SSH 연결 정보
 output "ssh_connection_info" {
-  value = var.environment == "dev" ? {
-    ssh_command = "ssh -i ${local.dev_private_key_path} ${var.ssh_username}@${aws_instance.main.public_ip}"
-    private_key_path = local.dev_private_key_path
-    key_exists = local.dev_key_exists
-  } : null
-  description = "개발환경 SSH 연결 정보"
+  value = {
+    ssh_command = "ssh -i ~/.ssh/${local.key_name}.pem ${var.ssh_username}@${aws_instance.main.public_ip}"
+    key_name = local.key_name
+  }
+  description = "SSH 연결 정보"
 }
 
-# 새로 생성된 키 정보 (배포환경)
+# 키페어 생성 정보
 output "new_keypair_created" {
-  value = var.environment != "dev" && !local.db_keypair_exists ? {
-    message = "새 키페어가 생성되어 DB에 저장되었습니다"
+  value = {
+    message = "키페어가 생성되어 DB에 저장되었습니다"
     key_name = local.key_name
-  } : null
-  description = "새로 생성된 키페어 정보"
+  }
+  description = "생성된 키페어 정보"
 }

@@ -13,6 +13,7 @@ import { ProgressSteps } from "./components/ProgressSteps";
 import { CreationStatusDisplay } from "./components/CreationStatus";
 import { FederatedLearningInfo } from "./components/FederatedLearningInfo";
 import { AggregatorSettings } from "./components/AggregatorSettings";
+import { useAggregatorCreationStore } from "./aggregator.types";
 
 const AggregatorCreateContent = () => {
 	const router = useRouter();
@@ -39,8 +40,6 @@ const AggregatorCreateContent = () => {
 	const {
 		isCreating,
 		creationStatus: actualCreationStatus,
-		//setCreationStatus: setActualCreationStatus,
-		handleCreateAggregator,
 		resetCreation
 	} = useAggregatorCreation();
 
@@ -91,26 +90,28 @@ const AggregatorCreateContent = () => {
 
 	// 집계자 선택 후 생성
 	const onSelectAggregator = (option: AggregatorOption) => {
-		if (federatedLearningData) {
-			// 최적화 상태를 생성 상태로 전환
-			setShowAggregatorSelection(false);
-			
-			handleCreateAggregator(
-				option, 
-				federatedLearningData, 
-				() => {
-					// 성공 시 콜백
-					sessionStorage.removeItem("federatedLearningData");
-					sessionStorage.removeItem("modelFileName");
-					sessionStorage.removeItem("modelFileSize");
-					router.push("/dashboard/aggregator/deploy");
-				},
-				(error) => {
-					// 에러 시 콜백 (선택적)
-					console.error("생성 실패:", error);
-				}
-			);
-		}
+		if (!federatedLearningData) return;
+		// 최적화 상태를 생성 상태로 전환
+		setShowAggregatorSelection(false);
+
+		// 스토어에 페이로드 저장 후 배포 페이지로 이동
+		const { setPayload } = useAggregatorCreationStore.getState();
+		setPayload({
+			federatedLearningData,
+			aggregatorConfig: {
+				cloudProvider: option.cloudProvider,
+				region: option.region,
+				instanceType: option.instanceType,
+				memory: option.memory,
+			},
+			selectedOption: option,
+		});
+
+		// 세션 정리 및 이동
+		sessionStorage.removeItem("federatedLearningData");
+		sessionStorage.removeItem("modelFileName");
+		sessionStorage.removeItem("modelFileSize");
+		router.push("/dashboard/aggregator/deploy");
 	};
 
 	// 모달 취소 시

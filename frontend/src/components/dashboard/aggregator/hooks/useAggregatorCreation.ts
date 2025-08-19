@@ -1,6 +1,6 @@
 // hooks/useAggregatorCreation.ts
 import { useState } from "react";
-import { useRouter } from "next/navigation";
+// import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { createAggregator} from "@/api/aggregator";
 import { 
@@ -12,7 +12,7 @@ import {
 } from "../aggregator.types";
 
 export const useAggregatorCreation = () => {
-  const router = useRouter();
+  // const router = useRouter();
   const [isCreating, setIsCreating] = useState(false);
   const [creationStatus, setCreationStatus] = useState<CreationStatus | null>(null);
   const { setPayload } = useAggregatorCreationStore.getState();
@@ -46,8 +46,7 @@ export const useAggregatorCreation = () => {
         selectedOption, // 배포 화면 상단 카드에 그대로 쓰려면 같이 보관
       });
   
-      // createAggregator API 호출
-      router.push("/dashboard/aggregator/deploy");
+      // createAggregator API 호출 (라우팅은 호출자에서 수행)
       const result = await createAggregator(
         federatedLearningData,
         aggregatorConfig

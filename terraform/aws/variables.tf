@@ -66,15 +66,9 @@ variable "aws_secret_key" {
   sensitive   = true
 }
 
-variable "api_endpoint" {
-  description = "키 관리 API 엔드포인트"
-  type        = string
-  default     = ""
-}
 
-variable "api_token" {
-  description = "API 인증 토큰"
+
+variable "aggregator_id" {
+  description = "집계자 고유 ID"
   type        = string
-  default     = ""
-  sensitive   = true
 }

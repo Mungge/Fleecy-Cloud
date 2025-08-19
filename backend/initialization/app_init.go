@@ -17,30 +17,31 @@ import (
 
 // Repositories는 애플리케이션에서 사용되는 모든 리포지토리를 포함합니다
 type Repositories struct {
-	UserRepo           *repository.UserRepository
-	RefreshTokenRepo   *repository.RefreshTokenRepository
-	CloudRepo          *repository.CloudRepository
-	FLRepo             *repository.FederatedLearningRepository
-	ParticipantRepo    *repository.ParticipantRepository
-	AggregatorRepo     *repository.AggregatorRepository
-	VMRepo             *repository.VirtualMachineRepository
-	ProviderRepo       *repository.ProviderRepository
-	RegionRepo         *repository.RegionRepository
-	CloudPriceRepo     *repository.CloudPriceRepository
-	CloudLatencyRepo   *repository.CloudLatencyRepository
+	UserRepo         *repository.UserRepository
+	RefreshTokenRepo *repository.RefreshTokenRepository
+	CloudRepo        *repository.CloudRepository
+	FLRepo           *repository.FederatedLearningRepository
+	ParticipantRepo  *repository.ParticipantRepository
+	AggregatorRepo   *repository.AggregatorRepository
+	VMRepo           *repository.VirtualMachineRepository
+	ProviderRepo     *repository.ProviderRepository
+	RegionRepo       *repository.RegionRepository
+	CloudPriceRepo   *repository.CloudPriceRepository
+	CloudLatencyRepo *repository.CloudLatencyRepository
+	SSHKeypairRepo   *repository.SSHKeypairRepository
 }
 
 // Dependencies는 애플리케이션의 모든 의존성을 관리합니다
 type Dependencies struct {
 	// Repositories
 	Repositories *Repositories
-	
+
 	// Aggregator Services
 	AggregatorService   *aggregatorservice.AggregatorService
 	MetricsService      *aggregatorservice.AggregatorMetricsService
 	TrainingService     *aggregatorservice.AggregatorTrainingService
-	OptimizationService aggregatorservice.OptimizationService 
-	
+	OptimizationService aggregatorservice.OptimizationService
+
 	// Aggregator Handler
 	AggregatorHandler *aggregatorhandler.AggregatorHandler
 }
@@ -74,7 +75,7 @@ func InitializeApplication() error {
 // RunDatabaseMigration은 데이터베이스 마이그레이션을 실행합니다
 func RunDatabaseMigration() error {
 	log.Println("데이터베이스 마이그레이션 시작...")
-	
+
 	db := config.GetDB()
 	err := db.AutoMigrate(
 		&models.Provider{},
@@ -90,11 +91,12 @@ func RunDatabaseMigration() error {
 		&models.ParticipantFederatedLearning{},
 		&models.Aggregator{},
 		&models.TrainingRound{},
+		&models.SSHKeypair{},
 	)
 	if err != nil {
 		return err
 	}
-	
+
 	log.Println("데이터베이스 마이그레이션 완료")
 	return nil
 }
@@ -102,12 +104,12 @@ func RunDatabaseMigration() error {
 // LoadInitialData는 Asset 파일로부터 초기 데이터를 로드합니다
 func LoadInitialData() error {
 	log.Println("초기 데이터 로드 시작...")
-	
+
 	db := config.GetDB()
 	if err := services.InitializeDataFromAssets(db); err != nil {
 		return err
 	}
-	
+
 	log.Println("초기 데이터 로드 완료")
 	return nil
 }
@@ -115,10 +117,10 @@ func LoadInitialData() error {
 // loadDotEnv는 .env 파일을 찾아 로드합니다. (백엔드 디렉토리/루트 등 공통 위치 검색)
 func loadDotEnv() {
 	candidates := []string{
-		".env",              // 현재 작업 디렉토리
-		"../.env",           // 백엔드 하위에서 실행 시 루트의 .env
-		"../../.env",        // 더 상위
-		"backend/.env",      // 루트에서 백엔드 하위
+		".env",         // 현재 작업 디렉토리
+		"../.env",      // 백엔드 하위에서 실행 시 루트의 .env
+		"../../.env",   // 더 상위
+		"backend/.env", // 루트에서 백엔드 하위
 	}
 
 	for _, p := range candidates {
@@ -135,9 +137,9 @@ func loadDotEnv() {
 // InitializeRepositories는 모든 리포지토리를 초기화합니다
 func InitializeRepositories() *Repositories {
 	log.Println("리포지토리 초기화 시작...")
-	
+
 	db := config.GetDB()
-	
+
 	repos := &Repositories{
 		UserRepo:         repository.NewUserRepository(db),
 		RefreshTokenRepo: repository.NewRefreshTokenRepository(db),
@@ -146,28 +148,29 @@ func InitializeRepositories() *Repositories {
 		ParticipantRepo:  repository.NewParticipantRepository(db),
 		AggregatorRepo:   repository.NewAggregatorRepository(db),
 		VMRepo:           repository.NewVirtualMachineRepository(db),
+		SSHKeypairRepo:   repository.NewSSHKeypairRepository(db),
 	}
-	
+
 	log.Println("리포지토리 초기화 완료")
 	return repos
 }
 
-// NewDependencies는 모든 의존성을 초기화하고 주입합니다 
+// NewDependencies는 모든 의존성을 초기화하고 주입합니다
 func NewDependencies() *Dependencies {
 	log.Println("Aggregator 의존성 초기화 시작...")
-	
+
 	// Repository 초기화
 	repos := InitializeRepositories()
-	
+
 	// Aggregator Service 초기화 (새로운 구조)
-	aggregatorService := aggregatorservice.NewAggregatorService(repos.AggregatorRepo, repos.FLRepo)
+	aggregatorService := aggregatorservice.NewAggregatorService(repos.AggregatorRepo, repos.FLRepo, repos.SSHKeypairRepo, repos.CloudRepo)
 	metricsService := aggregatorservice.NewAggregatorMetricsService(repos.AggregatorRepo)
 	trainingService := aggregatorservice.NewAggregatorTrainingService(repos.AggregatorRepo)
-	
+
 	// OptimizationService 어댑터 사용
 	originalOptimizationService := services.NewOptimizationService()
 	optimizationService := aggregatorservice.NewOptimizationServiceAdapter(originalOptimizationService)
-	
+
 	// Aggregator Handler 초기화 (새로운 구조)
 	aggregatorHandler := aggregatorhandler.NewAggregatorHandler(
 		aggregatorService,
@@ -175,9 +178,9 @@ func NewDependencies() *Dependencies {
 		trainingService,
 		optimizationService,
 	)
-	
+
 	log.Println("Aggregator 의존성 초기화 완료")
-	
+
 	return &Dependencies{
 		Repositories:        repos,
 		AggregatorService:   aggregatorService,

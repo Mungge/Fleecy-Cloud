@@ -56,16 +56,18 @@ export interface FederatedLearningData {
 
 // Aggregator 생성 요청 타입
 export interface CreateAggregatorRequest {
-	federatedLearning: FederatedLearningData;
-	aggregatorConfig: AggregatorConfig;
+	name: string;
+	algorithm: string;
+	region: string;
+	storage: string; // GB as string
+	instanceType: string;
 }
 
 // Aggregator 생성 응답 타입
 export interface CreateAggregatorResponse {
 	aggregatorId: string;
-	federatedLearningId: string;
 	status: string;
-	terraformOutput?: TerraformOutput;
+	terraformStatus?: string;
 }
 
 // Aggregator 생성 함수
@@ -74,9 +76,18 @@ export const createAggregator = async (
 	aggregatorConfig: AggregatorConfig
 ): Promise<CreateAggregatorResponse> => {
 	try {
+		// Derive simple storage size in GB (fallback to 20GB)
+		const derivedStorageGB = Math.max(
+			20,
+			Math.ceil(((federatedLearningData.modelFileSize || 0) / (1024 * 1024 * 1024)) + 5)
+		);
+
 		const requestBody: CreateAggregatorRequest = {
-			federatedLearning: federatedLearningData,
-			aggregatorConfig: aggregatorConfig,
+			name: federatedLearningData.name,
+			algorithm: federatedLearningData.algorithm,
+			region: aggregatorConfig.region,
+			storage: String(derivedStorageGB),
+			instanceType: aggregatorConfig.instanceType,
 		};
 
 		const response = await fetch(`${API_URL}/api/aggregators`, {
@@ -110,25 +121,27 @@ export const getAggregatorStatus = async (
 	status: string;
 	progress?: number;
 	message?: string;
-	terraformLogs?: string[];
+	terraformStatus?: string;
 }> => {
 	try {
-		const response = await fetch(
-			`${API_URL}/api/aggregators/${aggregatorId}/status`,
-			{
-				credentials: "include",
-				headers: {
-					"Content-Type": "application/json",
-				},
-			}
-		);
+		// Backend exposes GET /api/aggregators/{id}
+		const response = await fetch(`${API_URL}/api/aggregators/${aggregatorId}`, {
+			credentials: "include",
+			headers: {
+				"Content-Type": "application/json",
+			},
+		});
 
 		if (!response.ok) {
 			throw new Error(`HTTP error! status: ${response.status}`);
 		}
 
 		const data = await response.json();
-		return data.data;
+		const agg = data?.data ?? data;
+		return {
+			status: agg.status,
+			terraformStatus: agg.terraformStatus,
+		};
 	} catch (error) {
 		console.error("Aggregator 상태 조회에 실패했습니다:", error);
 		throw error;
@@ -150,7 +163,7 @@ export const getAggregators = async (): Promise<AggregatorInfo[]> => {
 		}
 
 		const data = await response.json();
-		return data.data;
+		return Array.isArray(data) ? data : data.data;
 	} catch (error) {
 		console.error("Aggregator 목록 조회에 실패했습니다:", error);
 		throw error;

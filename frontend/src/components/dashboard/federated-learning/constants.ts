@@ -16,7 +16,7 @@ export const AGGREGATION_ALGORITHMS = [
   ];
   
   // 파일 형식
-  export const SUPPORTED_FILE_FORMATS = ".h5,.pb,.pt,.pth,.onnx,.pkl";
+  export const SUPPORTED_FILE_FORMATS = ".py";
   
   // 폼 기본값
   export const FORM_DEFAULTS = {

@@ -135,9 +135,8 @@ resource "google_compute_instance" "main" {
     }
   }
 
-  # 메타데이터
+  # 메타데이터 (SSH 키는 클라우드 API를 통해 이미 설정됨)
   metadata = {
-    ssh-keys = local.ssh_keys
     startup-script = file("${path.module}/../common/scripts/setup-monitoring.sh")
   }
 

@@ -130,14 +130,17 @@ func (h *AggregatorHandler) CreateAggregator(c *gin.Context) {
 		return
 	}
 
-	// 서비스 입력 구성
+	// 서비스 입력 구성 (누락된 필드들을 기본값으로 채움)
 	input := aggregator.CreateAggregatorInput{
-		Name:         request.Name,
-		Algorithm:    request.Algorithm,
-		Region:       request.Region,
-		Storage:      request.Storage,
-		InstanceType: request.InstanceType,
-		UserID:       userID,
+		Name:          request.Name,
+		Algorithm:     request.Algorithm,
+		Region:        request.Region,
+		Storage:       request.Storage,
+		InstanceType:  request.InstanceType,
+		UserID:        userID,
+		CloudProvider: "aws",                     // 기본값으로 AWS 사용
+		ProjectName:   request.Name + "-project", // 이름 기반으로 프로젝트명 생성
+		Zone:          request.Region + "a",      // 리전에 'a' 추가하여 존 생성
 	}
 
 	// Aggregator 생성
@@ -177,7 +180,7 @@ func (h *AggregatorHandler) DeleteAggregator(c *gin.Context) {
 	}
 
 	id := c.Param("id")
-	
+
 	if err := h.aggregatorService.DeleteAggregator(id, userID); err != nil {
 		if err == aggregator.ErrAggregatorNotFound {
 			c.JSON(http.StatusNotFound, gin.H{"error": "Aggregator를 찾을 수 없습니다"})

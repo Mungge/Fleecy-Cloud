@@ -3,7 +3,6 @@ package services
 import (
 	"encoding/json"
 	"fmt"
-	"io/ioutil"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -13,13 +12,13 @@ import (
 // 최적화 요청 구조체
 type OptimizationRequest struct {
 	FederatedLearning struct {
-		Name         string        `json:"name"`
-		Description  string        `json:"description"`
-		ModelType    string        `json:"modelType"`
-		Algorithm    string        `json:"algorithm"`
-		Rounds       int           `json:"rounds"`
-		Participants []Participant `json:"participants"`
-		ModelFileName *string      `json:"modelFileName,omitempty"`
+		Name          string        `json:"name"`
+		Description   string        `json:"description"`
+		ModelType     string        `json:"modelType"`
+		Algorithm     string        `json:"algorithm"`
+		Rounds        int           `json:"rounds"`
+		Participants  []Participant `json:"participants"`
+		ModelFileName *string       `json:"modelFileName,omitempty"`
 	} `json:"federatedLearning"`
 	AggregatorConfig struct {
 		MaxBudget  int `json:"maxBudget"`
@@ -38,46 +37,46 @@ type Participant struct {
 
 // 최적화 응답 구조체
 type OptimizationResponse struct {
-	Status           string            `json:"status"`
+	Status           string              `json:"status"`
 	Summary          OptimizationSummary `json:"summary"`
-	OptimizedOptions []AggregatorOption `json:"optimizedOptions"`
-	Message          string            `json:"message"`
-	ExecutionTime    float64           `json:"executionTime,omitempty"` // Go에서 추가
+	OptimizedOptions []AggregatorOption  `json:"optimizedOptions"`
+	Message          string              `json:"message"`
+	ExecutionTime    float64             `json:"executionTime,omitempty"` // Go에서 추가
 }
 
 // 최적화 요약 정보
 type OptimizationSummary struct {
-	TotalParticipants      int      `json:"totalParticipants"`
-	ParticipantRegions     []string `json:"participantRegions"`
-	TotalCandidateOptions  int      `json:"totalCandidateOptions"`
-	FeasibleOptions        int      `json:"feasibleOptions"`
-	Constraints            interface{} `json:"constraints"`
-	ModelInfo              interface{} `json:"modelInfo"`
+	TotalParticipants     int         `json:"totalParticipants"`
+	ParticipantRegions    []string    `json:"participantRegions"`
+	TotalCandidateOptions int         `json:"totalCandidateOptions"`
+	FeasibleOptions       int         `json:"feasibleOptions"`
+	Constraints           interface{} `json:"constraints"`
+	ModelInfo             interface{} `json:"modelInfo"`
 }
 
 // 집계자 옵션 (새로운 구조)
 type AggregatorOption struct {
-	Rank                   int     `json:"rank"`
-	Region                 string  `json:"region"`
-	InstanceType           string  `json:"instanceType"`
-	CloudProvider          string  `json:"cloudProvider"`
-	EstimatedMonthlyCost   float64 `json:"estimatedMonthlyCost"`
-	EstimatedHourlyPrice   float64 `json:"estimatedHourlyPrice"`
-	AvgLatency             float64 `json:"avgLatency"`
-	MaxLatency             float64 `json:"maxLatency"`
-	VCPU                   int     `json:"vcpu"`
-	Memory                 int     `json:"memory"`
-	RecommendationScore    float64 `json:"recommendationScore"`
+	Rank                 int     `json:"rank"`
+	Region               string  `json:"region"`
+	InstanceType         string  `json:"instanceType"`
+	CloudProvider        string  `json:"cloudProvider"`
+	EstimatedMonthlyCost float64 `json:"estimatedMonthlyCost"`
+	EstimatedHourlyPrice float64 `json:"estimatedHourlyPrice"`
+	AvgLatency           float64 `json:"avgLatency"`
+	MaxLatency           float64 `json:"maxLatency"`
+	VCPU                 int     `json:"vcpu"`
+	Memory               int     `json:"memory"`
+	RecommendationScore  float64 `json:"recommendationScore"`
 }
 
 // 최적화 결과 구조체
 type OptimizationResult struct {
-	Rank            int     `json:"rank"`
-	Region          string  `json:"region"`
-	InstanceType    string  `json:"instanceType"`
-	EstimatedCost   float64 `json:"estimatedCost"`
+	Rank             int     `json:"rank"`
+	Region           string  `json:"region"`
+	InstanceType     string  `json:"instanceType"`
+	EstimatedCost    float64 `json:"estimatedCost"`
 	EstimatedLatency float64 `json:"estimatedLatency"`
-	CloudProvider   string  `json:"cloudProvider"`
+	CloudProvider    string  `json:"cloudProvider"`
 }
 
 // OptimizationService 구조체
@@ -85,7 +84,7 @@ type OptimizationService struct {
 	pythonScriptPath string
 	tempBaseDir      string
 	inputDir         string // 각 실행마다 runTemp/input 으로 설정
-    outputDir        string // 각 실행마다 runTemp/output 으로 설정
+	outputDir        string // 각 실행마다 runTemp/output 으로 설정
 }
 
 // 새로운 OptimizationService 인스턴스 생성
@@ -100,33 +99,33 @@ func NewOptimizationService() *OptimizationService {
 func (s *OptimizationService) RunOptimization(request OptimizationRequest) (*OptimizationResponse, error) {
 	startTime := time.Now()
 
-	if err := os.MkdirAll(s.tempBaseDir, 0o755); err != nil {       // ✅ 베이스 temp 보장
+	if err := os.MkdirAll(s.tempBaseDir, 0o755); err != nil { // ✅ 베이스 temp 보장
 		return nil, fmt.Errorf("temp 베이스 디렉토리 생성 실패: %w", err)
 	}
 
 	runTemp, err := os.MkdirTemp(s.tempBaseDir, "run-")
-    if err != nil {
-        return nil, fmt.Errorf("임시 디렉토리 생성 실패: %w", err)
-    }
-    // 항상 정리
-    defer func() {
-        if err := os.RemoveAll(runTemp); err != nil {
-            fmt.Printf("임시 디렉토리 삭제 실패: %s, 오류: %v\n", runTemp, err)
-        }
+	if err != nil {
+		return nil, fmt.Errorf("임시 디렉토리 생성 실패: %w", err)
+	}
+	// 항상 정리
+	defer func() {
+		if err := os.RemoveAll(runTemp); err != nil {
+			fmt.Printf("임시 디렉토리 삭제 실패: %s, 오류: %v\n", runTemp, err)
+		}
 
 		if err := removeIfEmpty(s.tempBaseDir); err != nil {
 		}
-    }()
+	}()
 
 	s.inputDir = filepath.Join(runTemp, "input")
-    s.outputDir = filepath.Join(runTemp, "output")
-	
+	s.outputDir = filepath.Join(runTemp, "output")
+
 	if err := os.MkdirAll(s.inputDir, 0o755); err != nil {
-        return nil, fmt.Errorf("input 디렉토리 생성 실패: %w", err)
-    }
-    if err := os.MkdirAll(s.outputDir, 0o755); err != nil {
-        return nil, fmt.Errorf("output 디렉토리 생성 실패: %w", err)
-    }
+		return nil, fmt.Errorf("input 디렉토리 생성 실패: %w", err)
+	}
+	if err := os.MkdirAll(s.outputDir, 0o755); err != nil {
+		return nil, fmt.Errorf("output 디렉토리 생성 실패: %w", err)
+	}
 
 	// 2. 입력 데이터를 JSON 파일로 저장
 	inputFilePath, err := s.saveInputData(request)
@@ -206,7 +205,7 @@ func (s *OptimizationService) saveInputData(request OptimizationRequest) (string
 	}
 
 	// 파일로 저장
-	if err := ioutil.WriteFile(filePath, jsonData, 0644); err != nil {
+	if err := os.WriteFile(filePath, jsonData, 0644); err != nil {
 		return "", err
 	}
 
@@ -215,22 +214,22 @@ func (s *OptimizationService) saveInputData(request OptimizationRequest) (string
 
 // Python 스크립트 실행
 func (s *OptimizationService) executePythonScript(inputPath, outputPath string) error {
-    cmd := exec.Command("bash", "./scripts/run_optimizer.sh", inputPath, outputPath)
-    cmd.Env = os.Environ() // .env는 파이썬 쪽에서 python-dotenv가 읽습니다.
-    out, err := cmd.CombinedOutput()
-    if err != nil {
-        return fmt.Errorf("쉘 스크립트 실행 오류: %v, 출력: %s", err, string(out))
-    }
-    if _, err := os.Stat(outputPath); os.IsNotExist(err) {
-        return fmt.Errorf("결과 파일이 생성되지 않았습니다: %s", outputPath)
-    }
-    return nil
+	cmd := exec.Command("bash", "./scripts/run_optimizer.sh", inputPath, outputPath)
+	cmd.Env = os.Environ() // .env는 파이썬 쪽에서 python-dotenv가 읽습니다.
+	out, err := cmd.CombinedOutput()
+	if err != nil {
+		return fmt.Errorf("쉘 스크립트 실행 오류: %v, 출력: %s", err, string(out))
+	}
+	if _, err := os.Stat(outputPath); os.IsNotExist(err) {
+		return fmt.Errorf("결과 파일이 생성되지 않았습니다: %s", outputPath)
+	}
+	return nil
 }
 
 // 최적화 결과 파일 읽기
 func (s *OptimizationService) readOptimizationResult(outputPath string) (*OptimizationResponse, error) {
 	// 파일 읽기
-	jsonData, err := ioutil.ReadFile(outputPath)
+	jsonData, err := os.ReadFile(outputPath)
 	if err != nil {
 		return nil, err
 	}
@@ -245,16 +244,15 @@ func (s *OptimizationService) readOptimizationResult(outputPath string) (*Optimi
 }
 
 func removeIfEmpty(dir string) error {
-    entries, err := os.ReadDir(dir)
-    if err != nil {
-        return err // 존재하지 않음 등은 호출부에서 무시해도 됨
-    }
-    if len(entries) > 0 {
-        return fmt.Errorf("not empty")
-    }
-    return os.Remove(dir) // 비어 있을 때만 삭제됨
+	entries, err := os.ReadDir(dir)
+	if err != nil {
+		return err // 존재하지 않음 등은 호출부에서 무시해도 됨
+	}
+	if len(entries) > 0 {
+		return fmt.Errorf("not empty")
+	}
+	return os.Remove(dir) // 비어 있을 때만 삭제됨
 }
-
 
 // Python 스크립트 존재 여부 확인
 func (s *OptimizationService) ValidatePythonScript() error {
@@ -276,13 +274,13 @@ func (s *OptimizationService) ValidatePythonEnvironment() error {
 // 의존성 패키지 확인
 func (s *OptimizationService) ValidatePythonDependencies() error {
 	requiredPackages := []string{"psycopg2", "deap", "numpy", "python-dotenv"}
-	
+
 	for _, pkg := range requiredPackages {
 		cmd := exec.Command("python3", "-c", fmt.Sprintf("import %s", pkg))
 		if err := cmd.Run(); err != nil {
 			return fmt.Errorf("필수 Python 패키지가 설치되지 않았습니다: %s", pkg)
 		}
 	}
-	
+
 	return nil
 }
