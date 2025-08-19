@@ -40,8 +40,6 @@ const AggregatorCreateContent = () => {
 	const {
 		isCreating,
 		creationStatus: actualCreationStatus,
-		//setCreationStatus: setActualCreationStatus,
-		handleCreateAggregator,
 		resetCreation
 	} = useAggregatorCreation();
 

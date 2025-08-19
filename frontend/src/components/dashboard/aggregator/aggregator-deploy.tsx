@@ -64,7 +64,7 @@ const AggregatorDeploy = () => {
     }, 500);
 
     return () => clearTimeout(timer);
-  }, [payload]); // handleCreateAggregator 의존성 제거
+  }, [payload, handleCreateAggregator, hasStartedDeployment]);
 
   useEffect(() => {
     if (!payload) {
