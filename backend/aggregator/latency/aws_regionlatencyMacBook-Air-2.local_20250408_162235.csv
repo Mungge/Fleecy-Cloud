@@ -1,4 +1,0 @@
-Source,SourceRegion,Target,TargetRegion,Timestamp,MinLatency(ms),AvgLatency(ms),MaxLatency(ms),StdDev(ms),PacketLoss(%)
-MacBook-Air-2.local,ap-northeast-2,3.80.156.106,us-east-1,2025-04-08 16:22:37,215.39,217.54,219.69,2.15,0.0
-MacBook-Air-2.local,ap-northeast-2,13.231.217.241,ap-northeast-1,2025-04-08 16:22:37,48.82,49.14,49.47,0.33,0.0
-MacBook-Air-2.local,ap-northeast-2,52.77.229.124,ap-southeast-1,2025-04-08 16:22:37,87.71,90.24,92.77,2.53,0.0
