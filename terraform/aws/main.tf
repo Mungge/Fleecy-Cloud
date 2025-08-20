@@ -59,11 +59,16 @@ resource "aws_internet_gateway" "main" {
   }
 }
 
+# 사용 가능한 가용영역 조회
+data "aws_availability_zones" "available" {
+  state = "available"
+}
+
 # 퍼블릭 서브넷
 resource "aws_subnet" "public" {
   vpc_id                  = aws_vpc.main.id
   cidr_block              = "10.0.1.0/24"
-  availability_zone       = var.availability_zone
+  availability_zone       = var.availability_zone != "" ? var.availability_zone : data.aws_availability_zones.available.names[0]
   map_public_ip_on_launch = true
 
   tags = {

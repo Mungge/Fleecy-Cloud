@@ -16,11 +16,13 @@ type UpdateMetricsRequest struct {
 
 // CreateAggregatorRequest Aggregator 생성 요청
 type CreateAggregatorRequest struct {
-	Name         string `json:"name" binding:"required"`
-	Algorithm    string `json:"algorithm" binding:"required"`
-	Region       string `json:"region" binding:"required"`
-	Storage      string `json:"storage" binding:"required"`
-	InstanceType string `json:"instanceType" binding:"required"`
+	Name          string  `json:"name" binding:"required"`
+	Algorithm     string  `json:"algorithm" binding:"required"`
+	Region        string  `json:"region" binding:"required"`
+	Storage       string  `json:"storage" binding:"required"`
+	InstanceType  string  `json:"instanceType" binding:"required"`
+	CloudProvider string  `json:"cloudProvider" binding:"required,oneof=aws gcp"`
+	ProjectID     *string `json:"projectId,omitempty"` // GCP용 프로젝트 ID (선택적)
 }
 
 // CreateAggregatorResponse Aggregator 생성 응답

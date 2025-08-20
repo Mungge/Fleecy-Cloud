@@ -46,14 +46,15 @@ func (s *CloudKeypairService) GetOrCreateAWSKeypair(userID int64, region, keyNam
 
 	var awsConn *models.CloudConnection
 	for _, conn := range cloudConnections {
-		if conn.Provider == "AWS" && conn.Region == region && conn.Status == "active" {
+		if strings.EqualFold(conn.Provider, "AWS") && conn.Status == "active" {
+			// 활성 AWS 연결 찾기 (리전 무관하게)
 			awsConn = conn
 			break
 		}
 	}
 
 	if awsConn == nil {
-		return nil, fmt.Errorf("active AWS connection not found for region %s", region)
+		return nil, fmt.Errorf("active AWS connection not found for user %d", userID)
 	}
 
 	// AWS 자격증명 파싱
@@ -160,7 +161,7 @@ func (s *CloudKeypairService) GetOrCreateGCPKeypair(userID int64, projectID, key
 
 	var gcpConn *models.CloudConnection
 	for _, conn := range cloudConnections {
-		if conn.Provider == "GCP" && conn.Status == "active" {
+		if strings.EqualFold(conn.Provider, "GCP") && conn.Status == "active" {
 			// GCP 자격증명에서 프로젝트 ID 확인
 			var creds map[string]interface{}
 			if err := json.Unmarshal(conn.CredentialFile, &creds); err == nil {

@@ -1,7 +1,9 @@
 package aggregator
 
 import (
+	"context"
 	"net/http"
+	"time"
 
 	"github.com/gin-gonic/gin"
 
@@ -138,26 +140,43 @@ func (h *AggregatorHandler) CreateAggregator(c *gin.Context) {
 		Storage:       request.Storage,
 		InstanceType:  request.InstanceType,
 		UserID:        userID,
-		CloudProvider: "aws",                     // 기본값으로 AWS 사용
+		CloudProvider: request.CloudProvider,     // 요청에서 받은 클라우드 제공업체 사용
 		ProjectName:   request.Name + "-project", // 이름 기반으로 프로젝트명 생성
 		Zone:          request.Region + "a",      // 리전에 'a' 추가하여 존 생성
+		ProjectID:     getStringValue(request.ProjectID), // GCP용 프로젝트 ID
 	}
 
-	// Aggregator 생성
-	result, err := h.aggregatorService.CreateAggregator(input)
+	// 타임아웃 설정 (최대 10분)
+	ctx, cancel := context.WithTimeout(c.Request.Context(), 10*time.Minute)
+	defer cancel()
+
+	// Aggregator 생성 및 배포 (동기 처리)
+	result, err := h.aggregatorService.CreateAggregatorWithContext(ctx, input)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Aggregator 생성 실패: " + err.Error()})
+		if ctx.Err() == context.DeadlineExceeded {
+			c.JSON(http.StatusRequestTimeout, gin.H{
+				"error": "Aggregator 배포가 타임아웃되었습니다. 나중에 상태를 확인해주세요.",
+			})
+		} else {
+			c.JSON(http.StatusInternalServerError, gin.H{
+				"error": "Aggregator 생성 및 배포 실패: " + err.Error(),
+			})
+		}
 		return
 	}
 
-	// 응답 반환
+	// 응답 반환 (배포 완료된 상태)
 	response := CreateAggregatorResponse{
 		AggregatorID:    result.AggregatorID,
-		Status:          result.Status,
-		TerraformStatus: result.TerraformStatus,
+		Status:          result.Status,          // "running" 또는 "failed"
+		TerraformStatus: result.TerraformStatus, // "completed"
 	}
 
-	c.JSON(http.StatusCreated, gin.H{"data": response})
+	// 성공 시 201, 배포 완료 메시지와 함께 반환
+	c.JSON(http.StatusCreated, gin.H{
+		"message": "Aggregator가 성공적으로 생성되고 배포되었습니다",
+		"data":    response,
+	})
 }
 
 // DeleteAggregator godoc
@@ -191,4 +210,43 @@ func (h *AggregatorHandler) DeleteAggregator(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, gin.H{"message": "Aggregator가 삭제되었습니다"})
+}
+
+// getStringValue 헬퍼 함수: *string을 string으로 변환
+func getStringValue(s *string) string {
+	if s == nil {
+		return ""
+	}
+	return *s
+}
+
+// WebSocketProgress godoc
+// @Summary 집계자 배포 진행 상황 WebSocket 연결
+// @Description 집계자 배포의 실시간 진행 상황을 WebSocket으로 전송합니다.
+// @Tags aggregators
+// @Param id path string true "Aggregator ID"
+// @Router /api/aggregators/{id}/progress/ws [get]
+func (h *AggregatorHandler) WebSocketProgress(c *gin.Context) {
+	userID, err := utils.GetUserIDFromContext(c)
+	if err != nil {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "인증이 필요합니다"})
+		return
+	}
+
+	aggregatorID := c.Param("id")
+
+	// 권한 확인
+	aggregator, err := h.aggregatorService.GetAggregatorByID(aggregatorID, userID)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Aggregator 조회 실패"})
+		return
+	}
+
+	if aggregator == nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "Aggregator를 찾을 수 없습니다"})
+		return
+	}
+
+	// WebSocket 연결 업그레이드
+	h.aggregatorService.HandleWebSocketProgress(c.Writer, c.Request, aggregatorID)
 }
