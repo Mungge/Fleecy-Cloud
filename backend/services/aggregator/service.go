@@ -2,10 +2,12 @@ package aggregator
 
 import (
 	"bytes"
+	"context"
 	"encoding/csv"
 	"encoding/json"
 	"fmt"
 	"log"
+	"net/http"
 	"os"
 	"strings"
 
@@ -23,15 +25,17 @@ type AggregatorService struct {
 	flRepo         *repository.FederatedLearningRepository
 	sshKeypairRepo *repository.SSHKeypairRepository
 	cloudRepo      *repository.CloudRepository
+	progressTracker *SSEProgressTracker
 }
 
 // NewAggregatorService는 새 AggregatorService 인스턴스를 생성합니다
 func NewAggregatorService(repo *repository.AggregatorRepository, flRepo *repository.FederatedLearningRepository, sshKeypairRepo *repository.SSHKeypairRepository, cloudRepo *repository.CloudRepository) *AggregatorService {
 	return &AggregatorService{
-		repo:           repo,
-		flRepo:         flRepo,
-		sshKeypairRepo: sshKeypairRepo,
-		cloudRepo:      cloudRepo,
+		repo:            repo,
+		flRepo:          flRepo,
+		sshKeypairRepo:  sshKeypairRepo,
+		cloudRepo:       cloudRepo,
+		progressTracker: NewWebSocketProgressTracker(),
 	}
 }
 
@@ -90,8 +94,13 @@ type OptimizationService interface {
 	RunOptimization(request OptimizationRequest) (interface{}, error)
 }
 
-// CreateAggregator는 새로운 Aggregator를 생성합니다
+// CreateAggregator는 새로운 Aggregator를 생성합니다 (기본 컨텍스트 사용)
 func (s *AggregatorService) CreateAggregator(input CreateAggregatorInput) (*CreateAggregatorResult, error) {
+	return s.CreateAggregatorWithContext(context.Background(), input)
+}
+
+// CreateAggregatorWithContext는 컨텍스트를 지원하는 새로운 Aggregator 생성 메서드입니다
+func (s *AggregatorService) CreateAggregatorWithContext(ctx context.Context, input CreateAggregatorInput) (*CreateAggregatorResult, error) {
 	// 입력 검증
 	if err := s.validateInput(input); err != nil {
 		return nil, err
@@ -117,29 +126,51 @@ func (s *AggregatorService) CreateAggregator(input CreateAggregatorInput) (*Crea
 		aggregator.ProjectID = &input.ProjectID
 	}
 
-	// DB에 저장
+	// DB에 저장 (creating 상태로)
 	if err := s.repo.CreateAggregator(aggregator); err != nil {
 		return nil, err
 	}
 
-	// Terraform 배포 시작 (비동기) - terraform-exec 기반
-	go func() {
-		if err := s.deployWithTerraform(aggregator); err != nil {
-			log.Printf("Terraform deployment failed for aggregator %s: %v", aggregator.ID, err)
-			aggregator.Status = "failed"
-			s.repo.UpdateAggregator(aggregator)
-			return
+	// Terraform 배포 시작 (동기) - 사용자가 결과를 즉시 확인 가능
+	log.Printf("Starting synchronous Terraform deployment for aggregator %s", aggregator.ID)
+	
+	if err := s.deployWithTerraformContext(ctx, aggregator); err != nil {
+		log.Printf("Terraform deployment failed for aggregator %s: %v", aggregator.ID, err)
+		
+		// 배포 실패 시 상태 업데이트
+		aggregator.Status = "failed"
+		if updateErr := s.repo.UpdateAggregator(aggregator); updateErr != nil {
+			log.Printf("Failed to update aggregator status to failed: %v", updateErr)
 		}
-		log.Printf("Terraform deployment successful for aggregator %s", aggregator.ID)
-		aggregator.Status = "running"
-		s.repo.UpdateAggregator(aggregator)
-	}()
+		
+		// 사용자 친화적인 에러 메시지 생성
+		var userMessage string
+		if strings.Contains(err.Error(), "active AWS connection not found") {
+			userMessage = "AWS 클라우드 연결이 설정되지 않았습니다. 먼저 클라우드 인증 정보를 등록해주세요."
+		} else if strings.Contains(err.Error(), "active GCP connection not found") {
+			userMessage = "GCP 클라우드 연결이 설정되지 않았습니다. 먼저 클라우드 인증 정보를 등록해주세요."
+		} else if strings.Contains(err.Error(), "AWS credentials") {
+			userMessage = "AWS 자격증명이 올바르지 않습니다. 클라우드 인증 정보를 다시 확인해주세요."
+		} else {
+			userMessage = fmt.Sprintf("집계자 배포 실패: %v", err)
+		}
+		
+		return nil, fmt.Errorf(userMessage)
+	}
+	
+	// 배포 성공 시 상태 업데이트
+	log.Printf("Terraform deployment successful for aggregator %s", aggregator.ID)
+	aggregator.Status = "running"
+	if updateErr := s.repo.UpdateAggregator(aggregator); updateErr != nil {
+		log.Printf("Failed to update aggregator status to running: %v", updateErr)
+		// 상태 업데이트 실패해도 배포는 성공했으므로 계속 진행
+	}
 
 	// 결과 반환
 	result := &CreateAggregatorResult{
 		AggregatorID:    aggregator.ID,
-		Status:          "creating",
-		TerraformStatus: "deploying",
+		Status:          aggregator.Status, // 실제 상태 반환
+		TerraformStatus: "completed",       // 배포 완료
 	}
 
 	return result, nil
@@ -186,8 +217,22 @@ func (s *AggregatorService) GetAggregatorsByUser(userID int64) ([]*models.Aggreg
 	return s.repo.GetAggregatorsByUserID(userID)
 }
 
-// deployWithTerraform은 Terraform을 사용하여 Aggregator를 배포합니다
+// deployWithTerraform은 Terraform을 사용하여 Aggregator를 배포합니다 (기본 컨텍스트 사용)
 func (s *AggregatorService) deployWithTerraform(aggregator *models.Aggregator) error {
+	return s.deployWithTerraformContext(context.Background(), aggregator)
+}
+
+// deployWithTerraformContext는 컨텍스트를 지원하는 Terraform 배포 메서드입니다
+func (s *AggregatorService) deployWithTerraformContext(ctx context.Context, aggregator *models.Aggregator) error {
+	log.Printf("[%s] 1/5 클라우드 연결 정보 조회 중...", aggregator.ID)
+	s.progressTracker.SendProgress(aggregator.ID, 1, "클라우드 연결 정보 조회 중...")
+	
+	// 컨텍스트 취소 확인
+	if ctx.Err() != nil {
+		s.progressTracker.SendError(aggregator.ID, 1, "배포 취소됨", ctx.Err())
+		return fmt.Errorf("deployment cancelled: %v", ctx.Err())
+	}
+	
 	// 사용자의 클라우드 연결 정보 가져오기
 	cloudConnections, err := s.cloudRepo.GetCloudConnectionsByUserID(aggregator.UserID)
 	if err != nil {
@@ -197,7 +242,7 @@ func (s *AggregatorService) deployWithTerraform(aggregator *models.Aggregator) e
 	// 해당 클라우드 제공업체의 연결 찾기 (대소문자 구분 없이)
 	var cloudConn *models.CloudConnection
 	for _, conn := range cloudConnections {
-		if strings.EqualFold(conn.Provider, aggregator.CloudProvider) {
+		if strings.EqualFold(conn.Provider, aggregator.CloudProvider) && conn.Status == "active" {
 			cloudConn = conn
 			break
 		}
@@ -207,6 +252,9 @@ func (s *AggregatorService) deployWithTerraform(aggregator *models.Aggregator) e
 		return fmt.Errorf("no %s cloud connection found for user %d", aggregator.CloudProvider, aggregator.UserID)
 	}
 
+	log.Printf("[%s] 2/5 클라우드 자격증명 파싱 중...", aggregator.ID)
+	s.progressTracker.SendProgress(aggregator.ID, 2, "클라우드 자격증명 파싱 중...")
+	
 	// 자격증명 파싱
 	var awsAccessKey, awsSecretKey string
 	if aggregator.CloudProvider == "aws" {
@@ -253,6 +301,15 @@ func (s *AggregatorService) deployWithTerraform(aggregator *models.Aggregator) e
 		}
 	}
 
+	log.Printf("[%s] 3/5 SSH 키페어 생성/조회 중...", aggregator.ID)
+	s.progressTracker.SendProgress(aggregator.ID, 3, "SSH 키페어 생성/조회 중...")
+	
+	// 컨텍스트 취소 확인
+	if ctx.Err() != nil {
+		s.progressTracker.SendError(aggregator.ID, 3, "배포 취소됨", ctx.Err())
+		return fmt.Errorf("deployment cancelled: %v", ctx.Err())
+	}
+	
 	// 클라우드 키페어 서비스 초기화
 	keypairService := services.NewCloudKeypairService(s.cloudRepo)
 
@@ -261,14 +318,17 @@ func (s *AggregatorService) deployWithTerraform(aggregator *models.Aggregator) e
 
 	var privateKey string
 
-	switch aggregator.CloudProvider {
+	switch strings.ToLower(aggregator.CloudProvider) {
 	case "aws":
+		log.Printf("Creating AWS keypair for aggregator %s in region %s", aggregator.ID, aggregator.Region)
 		keypairInfo, err := keypairService.GetOrCreateAWSKeypair(aggregator.UserID, aggregator.Region, keyName)
 		if err != nil {
 			return fmt.Errorf("failed to get or create AWS keypair: %v", err)
 		}
 		privateKey = keypairInfo.PrivateKey
+		log.Printf("AWS keypair created successfully: %s", keypairInfo.KeyName)
 	case "gcp":
+		log.Printf("Creating GCP keypair for aggregator %s", aggregator.ID)
 		// GCP의 경우 SSH 키를 직접 생성해서 전달
 		keyPair, err := utils.GenerateSSHKeyPair()
 		if err != nil {
@@ -280,11 +340,18 @@ func (s *AggregatorService) deployWithTerraform(aggregator *models.Aggregator) e
 			projectID = *aggregator.ProjectID
 		}
 
+		if projectID == "" {
+			return fmt.Errorf("project ID is required for GCP deployment")
+		}
+
 		_, err = keypairService.GetOrCreateGCPKeypair(aggregator.UserID, projectID, keyName, keyPair.PublicKey, keyPair.PrivateKey)
 		if err != nil {
 			return fmt.Errorf("failed to get or create GCP keypair: %v", err)
 		}
 		privateKey = keyPair.PrivateKey
+		log.Printf("GCP keypair created successfully: %s", keyName)
+	default:
+		return fmt.Errorf("unsupported cloud provider: %s", aggregator.CloudProvider)
 	}
 
 	// SSH 키페어를 DB에 암호화 저장 (Private Key가 있는 경우만)
@@ -305,6 +372,15 @@ func (s *AggregatorService) deployWithTerraform(aggregator *models.Aggregator) e
 		}
 	}
 
+	log.Printf("[%s] 4/5 Terraform 워크스페이스 생성 중...", aggregator.ID)
+	s.progressTracker.SendProgress(aggregator.ID, 4, "Terraform 워크스페이스 생성 중...")
+	
+	// 컨텍스트 취소 확인
+	if ctx.Err() != nil {
+		s.progressTracker.SendError(aggregator.ID, 4, "배포 취소됨", ctx.Err())
+		return fmt.Errorf("deployment cancelled: %v", ctx.Err())
+	}
+	
 	// Terraform 설정 생성
 	config := utils.TerraformConfig{
 		CloudProvider: aggregator.CloudProvider,
@@ -327,8 +403,16 @@ func (s *AggregatorService) deployWithTerraform(aggregator *models.Aggregator) e
 		return err
 	}
 
-	// Terraform 배포 실행 (terraform-exec 사용)
-	result, err := utils.DeployWithTerraform(workspaceDir)
+	s.progressTracker.SendProgress(aggregator.ID, 5, "Terraform 배포 실행 중... (시간이 소요될 수 있습니다)")
+	
+	// 컨텍스트 취소 확인
+	if ctx.Err() != nil {
+		s.progressTracker.SendError(aggregator.ID, 5, "배포 취소됨", ctx.Err())
+		return fmt.Errorf("deployment cancelled: %v", ctx.Err())
+	}
+	
+	// Terraform 배포 실행 (terraform-exec 사용, 컨텍스트 지원)
+	result, err := utils.DeployWithTerraformContext(ctx, workspaceDir)
 
 	// 배포 완료 후 workspace 디렉토리 정리 (성공/실패 상관없이)
 	defer func() {
@@ -340,12 +424,21 @@ func (s *AggregatorService) deployWithTerraform(aggregator *models.Aggregator) e
 	}()
 
 	if err != nil {
+		s.progressTracker.SendError(aggregator.ID, 5, "Terraform 배포 실패", err)
 		return err
 	}
+
+	// 배포 성공
+	s.progressTracker.SendSuccess(aggregator.ID, "집계자 배포가 성공적으로 완료되었습니다")
 
 	// 배포 결과를 aggregator에 저장
 	aggregator.InstanceID = result.InstanceID
 	aggregator.Status = "running"
 
 	return nil
+}
+
+// HandleWebSocketProgress WebSocket 진행 상황 연결 처리
+func (s *AggregatorService) HandleWebSocketProgress(w http.ResponseWriter, r *http.Request, aggregatorID string) {
+	s.progressTracker.HandleWebSocket(w, r, aggregatorID)
 }
