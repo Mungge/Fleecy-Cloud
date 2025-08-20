@@ -35,6 +35,7 @@ export interface AggregatorConfig {
 	region: string;
 	instanceType: string;
 	memory: number;
+	projectId?: string; // GCP용 프로젝트 ID (선택적)
 }
 
 // 연합학습 데이터 타입 정의
@@ -61,6 +62,8 @@ export interface CreateAggregatorRequest {
 	region: string;
 	storage: string; // GB as string
 	instanceType: string;
+	cloudProvider: string; // "aws" | "gcp"
+	projectId?: string; // GCP용 프로젝트 ID (선택적)
 }
 
 // Aggregator 생성 응답 타입
@@ -79,7 +82,9 @@ export const createAggregator = async (
 		// Derive simple storage size in GB (fallback to 20GB)
 		const derivedStorageGB = Math.max(
 			20,
-			Math.ceil(((federatedLearningData.modelFileSize || 0) / (1024 * 1024 * 1024)) + 5)
+			Math.ceil(
+				(federatedLearningData.modelFileSize || 0) / (1024 * 1024 * 1024) + 5
+			)
 		);
 
 		const requestBody: CreateAggregatorRequest = {
@@ -88,6 +93,8 @@ export const createAggregator = async (
 			region: aggregatorConfig.region,
 			storage: String(derivedStorageGB),
 			instanceType: aggregatorConfig.instanceType,
+			cloudProvider: aggregatorConfig.cloudProvider || "aws", // 기본값 AWS
+			projectId: aggregatorConfig.projectId, // GCP용
 		};
 
 		const response = await fetch(`${API_URL}/api/aggregators`, {
@@ -101,12 +108,14 @@ export const createAggregator = async (
 
 		if (!response.ok) {
 			const errorData = await response.json().catch(() => ({}));
+			console.error("API 호출 실패:", errorData);
 			throw new Error(
 				errorData.error || `HTTP error! status: ${response.status}`
 			);
 		}
 
 		const data = await response.json();
+		console.log("API 응답 성공:", data);
 		return data.data;
 	} catch (error) {
 		console.error("Aggregator 생성에 실패했습니다:", error);
@@ -206,27 +215,27 @@ export interface AggregatorOption {
 	vcpu: number;
 	memory: number;
 	recommendationScore: number;
-  }
+}
 export interface OptimizationResponse {
 	status: string;
 	summary: {
-	  totalParticipants: number;
-	  participantRegions: string[];
-	  totalCandidateOptions: number;
-	  feasibleOptions: number;
-	  constraints: {
-		maxBudget: number;
-		maxLatency: number;
-	  };
-	  modelInfo: {
-		modelType: string;
-		algorithm: string;
-		rounds: number;
-	  };
+		totalParticipants: number;
+		participantRegions: string[];
+		totalCandidateOptions: number;
+		feasibleOptions: number;
+		constraints: {
+			maxBudget: number;
+			maxLatency: number;
+		};
+		modelInfo: {
+			modelType: string;
+			algorithm: string;
+			rounds: number;
+		};
 	};
 	optimizedOptions: AggregatorOption[];
 	message: string;
-  }
+}
 
 // 집계자 배치 최적화 함수
 export const optimizeAggregatorPlacement = async (
@@ -240,7 +249,7 @@ export const optimizeAggregatorPlacement = async (
 	try {
 		const requestBody = {
 			federatedLearning: federatedLearningData,
-			aggregatorConfig: constraints
+			aggregatorConfig: constraints,
 		};
 
 		const response = await fetch(`${API_URL}/api/aggregators/optimization`, {
