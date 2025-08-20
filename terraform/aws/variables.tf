@@ -7,7 +7,7 @@ variable "aws_region" {
 variable "availability_zone" {
   description = "가용 영역"
   type        = string
-  default     = "ap-northeast-2a"
+  default     = ""
 }
 
 variable "project_name" {
