@@ -155,7 +155,7 @@ func (s *AggregatorService) CreateAggregatorWithContext(ctx context.Context, inp
 			userMessage = fmt.Sprintf("집계자 배포 실패: %v", err)
 		}
 		
-		return nil, fmt.Errorf(userMessage)
+		return nil, fmt.Errorf("%s", userMessage)
 	}
 	
 	// 배포 성공 시 상태 업데이트
