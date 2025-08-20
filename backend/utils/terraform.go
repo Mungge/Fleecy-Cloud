@@ -7,6 +7,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strings"
 
 	tfexec "github.com/hashicorp/terraform-exec/tfexec"
 )
@@ -52,15 +53,23 @@ func CreateTerraformWorkspace(aggregatorID string, config TerraformConfig) (stri
 		return "", fmt.Errorf("failed to create workspace directory: %v", err)
 	}
 
-	// Terraform 설정 파일들을 현재 디렉토리 기준으로 복사
+	// Terraform 설정 파일들 경로 설정 (프로젝트 루트의 terraform 폴더)
 	var sourceDir string
+	workingDir, _ := os.Getwd()
+	// backend 디렉토리에서 한 단계 위로 올라가서 terraform 폴더 찾기
+	projectRoot := filepath.Dir(workingDir)
 	switch config.CloudProvider {
 	case "aws":
-		sourceDir = "../terraform/aws"
+		sourceDir = filepath.Join(projectRoot, "terraform", "aws")
 	case "gcp":
-		sourceDir = "../terraform/gcp"
+		sourceDir = filepath.Join(projectRoot, "terraform", "gcp")
 	default:
-		sourceDir = "../terraform/aws"
+		sourceDir = filepath.Join(projectRoot, "terraform", "aws")
+	}
+	
+	// 소스 디렉토리 존재 확인
+	if _, err := os.Stat(sourceDir); os.IsNotExist(err) {
+		return "", fmt.Errorf("terraform source directory not found: %s", sourceDir)
 	}
 	if err := copyTerraformFiles(sourceDir, workspaceDir); err != nil {
 		return "", fmt.Errorf("failed to copy terraform files: %v", err)
@@ -105,19 +114,30 @@ func createTerraformVars(workspaceDir, aggregatorID string, config TerraformConf
 	var varsContent string
 
 	// 클라우드별 변수 생성
-	if config.CloudProvider == "aws" {
+	switch strings.ToLower(config.CloudProvider) {
+	case "aws":
+		if config.AWSAccessKey == "" || config.AWSSecretKey == "" {
+			return fmt.Errorf("AWS credentials are required for AWS deployment")
+		}
 		varsContent = fmt.Sprintf(`aws_region = "%s"
+availability_zone = "%s"
 project_name = "%s"
 environment = "%s"
 instance_type = "%s"
 aggregator_id = "%s"
 aws_access_key = "%s"
 aws_secret_key = "%s"
-`, config.Region, config.ProjectName, config.Environment, config.InstanceType, aggregatorID, config.AWSAccessKey, config.AWSSecretKey)
-	} else if config.CloudProvider == "gcp" {
+storage_specs = "%s"
+algorithm = "%s"
+`, config.Region, config.Zone, config.ProjectName, config.Environment, config.InstanceType, 
+   aggregatorID, config.AWSAccessKey, config.AWSSecretKey, config.StorageSpecs, config.Algorithm)
+	case "gcp":
 		projectID := ""
 		if config.ProjectID != nil {
 			projectID = *config.ProjectID
+		}
+		if projectID == "" {
+			return fmt.Errorf("project ID is required for GCP deployment")
 		}
 		varsContent = fmt.Sprintf(`project_id = "%s"
 project_name = "%s"
@@ -126,21 +146,35 @@ zone = "%s"
 environment = "%s"
 instance_type = "%s"
 aggregator_id = "%s"
-`, projectID, config.ProjectName, config.Region, config.Zone, config.Environment, config.InstanceType, aggregatorID)
+storage_specs = "%s"
+algorithm = "%s"
+`, projectID, config.ProjectName, config.Region, config.Zone, config.Environment, 
+   config.InstanceType, aggregatorID, config.StorageSpecs, config.Algorithm)
+	default:
+		return fmt.Errorf("unsupported cloud provider: %s", config.CloudProvider)
 	}
 
 	varsPath := filepath.Join(workspaceDir, "terraform.tfvars")
-	return os.WriteFile(varsPath, []byte(varsContent), 0644)
+	if err := os.WriteFile(varsPath, []byte(varsContent), 0644); err != nil {
+		return fmt.Errorf("failed to write terraform vars file: %v", err)
+	}
+	
+	fmt.Printf("Created terraform vars file: %s\n", varsPath)
+	return nil
 }
 
 // DeployWithTerraform executes terraform deployment (uses terraform-exec)
 func DeployWithTerraform(workspaceDir string) (*TerraformResult, error) {
-	return DeployWithTerraformExec(workspaceDir)
+	return DeployWithTerraformExec(context.Background(), workspaceDir)
+}
+
+// DeployWithTerraformContext executes terraform deployment with context support
+func DeployWithTerraformContext(ctx context.Context, workspaceDir string) (*TerraformResult, error) {
+	return DeployWithTerraformExec(ctx, workspaceDir)
 }
 
 // DeployWithTerraformExec uses HashiCorp terraform-exec to run Terraform
-func DeployWithTerraformExec(workspaceDir string) (*TerraformResult, error) {
-	ctx := context.Background()
+func DeployWithTerraformExec(ctx context.Context, workspaceDir string) (*TerraformResult, error) {
 	terraformBinary, err := exec.LookPath("terraform")
 	if err != nil {
 		return nil, fmt.Errorf("terraform binary not found in PATH: %v", err)
