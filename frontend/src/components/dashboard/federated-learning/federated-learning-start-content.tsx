@@ -248,7 +248,7 @@ const FederatedLearningStartContent = () => {
 									<div>
 										<p className="text-sm font-medium">{participant.name || `참여자 ${index + 1}`}</p>
 										<p className="text-xs text-muted-foreground">
-											{participant.email || participant.id}
+											{participant.id}
 										</p>
 									</div>
 								</div>
