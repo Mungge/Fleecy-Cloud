@@ -36,6 +36,11 @@ const AggregatorDeploy = () => {
 	const selectedOption = payload?.selectedOption;
 	const federatedLearningData = payload?.federatedLearningData;
 
+	const handleStartFederatedLearning = () => {
+		// 연합학습 시작 페이지로 이동
+		router.push("/dashboard/federated-learning/start");
+	};
+
 	// (선택) 없을 때의 안전장치: 사용자가 URL로 직접 들어온 경우 등
 	// 간단한 가드 + 안내(필요 시 대시보드로 리다이렉트)
 	useEffect(() => {
@@ -319,8 +324,8 @@ const AggregatorDeploy = () => {
 
 				{(creationStatus?.step === "completed" ||
 					creationStatus?.step === "error") && (
-					<Button variant="outline" onClick={resetCreation} size="lg">
-						새로 시작
+					<Button variant="outline" onClick={handleStartFederatedLearning} size="lg">
+						연합학습 시작
 					</Button>
 				)}
 			</div>
