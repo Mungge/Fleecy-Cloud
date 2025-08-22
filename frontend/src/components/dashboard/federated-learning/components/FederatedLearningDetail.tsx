@@ -43,7 +43,9 @@ import {
               <div className="grid grid-cols-3 gap-2">
                 <div className="text-sm font-medium">참여 클러스터:</div>
                 <div className="text-sm col-span-2">
-                  {selectedJob.participant_count || selectedJob.participants?.length || 0}개
+                  {selectedJob.participant_count !== undefined && selectedJob.participant_count !== null
+                    ? selectedJob.participant_count
+                    : (selectedJob.participants?.length ?? 0)}개
                 </div>
               </div>
               {selectedJob.participants && Array.isArray(selectedJob.participants) && selectedJob.participants.length > 0 && (
