@@ -57,7 +57,7 @@ import {
                 <TableRow>
                   <TableHead>이름</TableHead>
                   <TableHead>상태</TableHead>
-                  <TableHead>참여자</TableHead>
+                  <TableHead>참여 클러스터</TableHead>
                   <TableHead>생성일</TableHead>
                   <TableHead>액션</TableHead>
                 </TableRow>
@@ -73,7 +73,7 @@ import {
                     <TableCell>
                       <StatusBadge status={job.status} />
                     </TableCell>
-                    <TableCell>{job.participants}</TableCell>
+                    <TableCell>{job.participant_count}개</TableCell>
                     <TableCell>{job.created_at}</TableCell>
                     <TableCell>
                       <DeleteConfirmDialog

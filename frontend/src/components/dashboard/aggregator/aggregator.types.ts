@@ -49,6 +49,8 @@ export type AggregatorCreationPayload = {
 	  memory: number; // MB
 	  recommendationScore: number;
 	};
+	// aggregator 생성 완료 후 저장되는 ID
+	aggregatorId?: string;
   };
 
 type State = {

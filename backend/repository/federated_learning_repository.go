@@ -22,21 +22,50 @@ func (r *FederatedLearningRepository) Create(fl *models.FederatedLearning) error
 	if fl.ID == "" {
 		fl.ID = uuid.New().String()
 	}
-	
+
 	return r.db.Create(fl).Error
+}
+
+// CreateWithParticipants는 참여자와 함께 연합학습을 생성합니다
+func (r *FederatedLearningRepository) CreateWithParticipants(fl *models.FederatedLearning, participantIDs []string) error {
+	return r.db.Transaction(func(tx *gorm.DB) error {
+		// 고유한 ID 생성
+		if fl.ID == "" {
+			fl.ID = uuid.New().String()
+		}
+
+		// 연합학습 생성
+		if err := tx.Create(fl).Error; err != nil {
+			return err
+		}
+
+		// 참여자 관계 생성
+		for _, participantID := range participantIDs {
+			pfl := &models.ParticipantFederatedLearning{
+				ParticipantID:       participantID,
+				FederatedLearningID: fl.ID,
+				Status:              "active",
+			}
+			if err := tx.Create(pfl).Error; err != nil {
+				return err
+			}
+		}
+
+		return nil
+	})
 }
 
 // GetByUserID는 사용자 ID로 연합학습 목록을 조회합니다
 func (r *FederatedLearningRepository) GetByUserID(userID int64) ([]*models.FederatedLearning, error) {
 	var learnings []*models.FederatedLearning
-	err := r.db.Where("user_id = ?", userID).Find(&learnings).Error
+	err := r.db.Preload("Participants").Where("user_id = ?", userID).Find(&learnings).Error
 	return learnings, err
 }
 
 // GetByID는 ID로 연합학습을 조회합니다
 func (r *FederatedLearningRepository) GetByID(id string) (*models.FederatedLearning, error) {
 	var learning models.FederatedLearning
-	err := r.db.Where("id = ?", id).First(&learning).Error
+	err := r.db.Preload("Participants").Where("id = ?", id).First(&learning).Error
 	if err != nil {
 		if err == gorm.ErrRecordNotFound {
 			return nil, nil

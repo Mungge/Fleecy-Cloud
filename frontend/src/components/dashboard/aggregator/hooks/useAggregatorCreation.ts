@@ -14,10 +14,10 @@ import {
 export const useAggregatorCreation = () => {
 	// const router = useRouter();
 	const [isCreating, setIsCreating] = useState(false);
-	const [creationStatus, setCreationStatus] = useState<CreationStatus | null>(
+			const [creationStatus, setCreationStatus] = useState<CreationStatus | null>(
 		null
 	);
-	const { setPayload } = useAggregatorCreationStore.getState();
+	const {setPayload } = useAggregatorCreationStore.getState();
 
 	const handleCreateAggregator = async (
 		selectedOption: AggregatorOption,
@@ -53,6 +53,14 @@ export const useAggregatorCreation = () => {
 				federatedLearningData,
 				aggregatorConfig
 			);
+
+			// aggregatorId를 payload에 저장
+			setPayload({
+				federatedLearningData,
+				aggregatorConfig,
+				selectedOption,
+				aggregatorId: result.aggregatorId,
+			});
 
 			setCreationStatus({
 				step: "completed",

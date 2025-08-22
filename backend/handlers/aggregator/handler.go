@@ -132,7 +132,6 @@ func (h *AggregatorHandler) CreateAggregator(c *gin.Context) {
 		return
 	}
 
-	// 서비스 입력 구성 (누락된 필드들을 기본값으로 채움)
 	input := aggregator.CreateAggregatorInput{
 		Name:          request.Name,
 		Algorithm:     request.Algorithm,
@@ -140,9 +139,9 @@ func (h *AggregatorHandler) CreateAggregator(c *gin.Context) {
 		Storage:       request.Storage,
 		InstanceType:  request.InstanceType,
 		UserID:        userID,
-		CloudProvider: request.CloudProvider,     // 요청에서 받은 클라우드 제공업체 사용
-		ProjectName:   request.Name + "-project", // 이름 기반으로 프로젝트명 생성
-		Zone:          request.Region + "a",      // 리전에 'a' 추가하여 존 생성
+		CloudProvider: request.CloudProvider,
+		ProjectName:   request.Name + "-project",
+		Zone:          request.Region + "a",
 		ProjectID:     getStringValue(request.ProjectID), // GCP용 프로젝트 ID
 	}
 

@@ -5,6 +5,7 @@ import { useState, useEffect } from "react";
 import { useAggregatorCreation } from "./hooks/useAggregatorCreation";
 import { useAggregatorCreationStore } from "./aggregator.types";
 import { useRouter } from "next/navigation";
+
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import {
@@ -38,7 +39,25 @@ const AggregatorDeploy = () => {
 	const federatedLearningData = payload?.federatedLearningData;
 
 	const handleStartFederatedLearning = () => {
-		// 연합학습 시작 페이지로 이동
+		// payload 데이터 검증
+		if (!payload || !selectedOption || !federatedLearningData) {
+			toast.error("필요한 데이터가 없습니다", {
+				description: "다시 시도해주세요.",
+				duration: 5000,
+			});
+			return;
+		}
+
+		// aggregatorId 확인
+		if (!payload.aggregatorId) {
+			toast.error("Aggregator ID가 없습니다", {
+				description: "먼저 집계자를 배포해주세요.",
+				duration: 5000,
+			});
+			return;
+		}
+
+		// 연합학습 시작 페이지로 이동 (실제 저장은 다음 페이지에서)
 		router.push("/dashboard/federated-learning/start");
 	};
 
@@ -81,15 +100,11 @@ const AggregatorDeploy = () => {
 			payload.selectedOption,
 			payload.federatedLearningData,
 			() => {
-				// 배포 성공 처리
 				console.log("집계자 배포가 성공적으로 완료되었습니다.");
-				// 성공 시 추가적인 상태 업데이트나 사이드 이펙트가 필요할 경우 여기에 추가
 			},
 			(error: Error) => {
-				// 배포 실패 처리 - 재시도하지 않도록 hasStartedDeployment를 true로 유지
 				console.error("집계자 배포 실패:", error);
-				
-				// 추가적인 에러 토스트 표시 (더 자세한 정보)
+			
 				toast.error(
 					`배포 실패: ${error.message}`, 
 					{
@@ -97,16 +112,12 @@ const AggregatorDeploy = () => {
 						duration: 5000,
 					}
 				);
-				
-				// 실패 시 추가적인 에러 처리나 분석 로직이 필요할 경우 여기에 추가
-				// 예: 에러 분석을 위한 로그 전송, 사용자 피드백 수집 등
 			}
 		);
 	}, [payload, handleCreateAggregator, hasStartedDeployment]);
 
 	useEffect(() => {
 		if (!payload) {
-			// 이전 단계 없이 직접 진입 시 되돌리기
 			router.replace("/dashboard/federated-learning");
 		}
 	}, [payload, router]);
