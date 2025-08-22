@@ -73,7 +73,7 @@ import {
                     <TableCell>
                       <StatusBadge status={job.status} />
                     </TableCell>
-                    <TableCell>{job.participant_count || job.participants?.length || 0}개</TableCell>
+                    <TableCell>{job.participant_count}개</TableCell>
                     <TableCell>{job.created_at}</TableCell>
                     <TableCell>
                       <DeleteConfirmDialog
