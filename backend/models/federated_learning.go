@@ -23,7 +23,7 @@ type FederatedLearning struct {
 	User            *User            `json:"user,omitempty" gorm:"foreignKey:UserID;constraint:OnUpdate:CASCADE,OnDelete:CASCADE"`
 	CloudConnection *CloudConnection `json:"cloud_connection,omitempty" gorm:"foreignKey:CloudConnectionID;constraint:OnUpdate:CASCADE,OnDelete:CASCADE"`
 	Aggregator      *Aggregator      `json:"aggregator,omitempty" gorm:"foreignKey:AggregatorID;constraint:OnUpdate:CASCADE,OnDelete:SET NULL"`
-	Participants    []Participant    `json:"participants" gorm:"many2many:participant_federated_learnings;"`
+	Participants    []Participant    `json:"participants,omitempty" gorm:"many2many:participant_federated_learnings;"`
 }
 
 func (FederatedLearning) TableName() string {
