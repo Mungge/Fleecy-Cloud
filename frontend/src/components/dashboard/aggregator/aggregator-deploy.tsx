@@ -5,6 +5,7 @@ import { useState, useEffect } from "react";
 import { useAggregatorCreation } from "./hooks/useAggregatorCreation";
 import { useAggregatorCreationStore } from "./aggregator.types";
 import { useRouter } from "next/navigation";
+import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import {
 	Card,
@@ -27,7 +28,7 @@ import {
 
 const AggregatorDeploy = () => {
 	const router = useRouter();
-	const { creationStatus, handleCreateAggregator, resetCreation } =
+	const { creationStatus, handleCreateAggregator} =
 		useAggregatorCreation();
 	const payload = useAggregatorCreationStore((s) => s.payload);
 	const [hasStartedDeployment, setHasStartedDeployment] = useState(false);
@@ -39,6 +40,22 @@ const AggregatorDeploy = () => {
 	const handleStartFederatedLearning = () => {
 		// 연합학습 시작 페이지로 이동
 		router.push("/dashboard/federated-learning/start");
+	};
+
+	const handleGoToDashboard = () => {
+		// 대시보드 메인 페이지로 이동
+		router.push("/dashboard");
+	};
+
+	const handleRetryDeployment = () => {
+		// 재시도 시 상태 초기화 및 배포 다시 시작
+		setHasStartedDeployment(false);
+		toast.info("배포를 다시 시도합니다...");
+		
+		// 약간의 지연 후 자동으로 재배포 시작 (useEffect에 의해)
+		setTimeout(() => {
+			// useEffect에서 hasStartedDeployment가 false이므로 자동으로 재시작됨
+		}, 500);
 	};
 
 	// (선택) 없을 때의 안전장치: 사용자가 URL로 직접 들어온 경우 등
@@ -65,9 +82,24 @@ const AggregatorDeploy = () => {
 			payload.federatedLearningData,
 			() => {
 				// 배포 성공 처리
+				console.log("집계자 배포가 성공적으로 완료되었습니다.");
+				// 성공 시 추가적인 상태 업데이트나 사이드 이펙트가 필요할 경우 여기에 추가
 			},
-			() => {
+			(error: Error) => {
 				// 배포 실패 처리 - 재시도하지 않도록 hasStartedDeployment를 true로 유지
+				console.error("집계자 배포 실패:", error);
+				
+				// 추가적인 에러 토스트 표시 (더 자세한 정보)
+				toast.error(
+					`배포 실패: ${error.message}`, 
+					{
+						description: "다시 시도하세요.",
+						duration: 5000,
+					}
+				);
+				
+				// 실패 시 추가적인 에러 처리나 분석 로직이 필요할 경우 여기에 추가
+				// 예: 에러 분석을 위한 로그 전송, 사용자 피드백 수집 등
 			}
 		);
 	}, [payload, handleCreateAggregator, hasStartedDeployment]);
@@ -304,7 +336,11 @@ const AggregatorDeploy = () => {
 			{/* 액션 버튼 */}
 			<div className="flex justify-center gap-4">
 				{creationStatus?.step === "completed" && (
-					<Button size="lg" className="min-w-[150px]">
+					<Button 
+						size="lg" 
+						className="min-w-[150px]"
+						onClick={handleGoToDashboard}
+					>
 						대시보드로 이동
 					</Button>
 				)}
@@ -312,10 +348,7 @@ const AggregatorDeploy = () => {
 				{creationStatus?.step === "error" && (
 					<Button
 						variant="outline"
-						onClick={() => {
-							setHasStartedDeployment(false);
-							window.location.reload();
-						}}
+						onClick={handleRetryDeployment}
 						size="lg"
 					>
 						다시 시도
