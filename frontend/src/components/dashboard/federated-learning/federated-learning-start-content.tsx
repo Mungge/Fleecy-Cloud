@@ -4,6 +4,8 @@
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { useAggregatorCreationStore } from "../aggregator/aggregator.types";
+import { startFederatedLearning, getFirstActiveCloudConnection } from "@/api/federatedLearning";
+import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import {
 	Card,
@@ -41,20 +43,57 @@ const FederatedLearningStartContent = () => {
 	const selectedOption = payload?.selectedOption;
 	const federatedLearningData = payload?.federatedLearningData;
 
-	const handleStartFederatedLearning = async () => {
+	const handleStartFederatedLearning = async (): Promise<void> => {
 		setIsStarting(true);
-		
+
 		try {
-			// 여기에 실제 연합학습 시작 API 호출 로직을 구현
-			// 예: await startFederatedLearning(payload);
+			// payload 데이터를 사용하여 연합학습 시작 API 호출
+			if (!payload || !selectedOption || !federatedLearningData) {
+				throw new Error("필요한 데이터가 없습니다. 다시 시도해주세요.");
+			}
+
+			// 사용자의 첫 번째 활성 클라우드 연결 가져오기
+			const cloudConnectionId = await getFirstActiveCloudConnection();
+
+			// aggregatorId 확인
+			if (!payload.aggregatorId) {
+				throw new Error("Aggregator ID가 없습니다. 먼저 집계자를 배포해주세요.");
+			}
+
+			const result = await startFederatedLearning({
+				aggregatorId: payload.aggregatorId,
+				cloudConnectionId,
+				federatedLearningData: {
+					name: federatedLearningData.name,
+					description: federatedLearningData.description || "",
+					modelType: federatedLearningData.modelType || "CNN",
+					algorithm: federatedLearningData.algorithm,
+					rounds: federatedLearningData.rounds,
+					participants: federatedLearningData.participants,
+					modelFileName: federatedLearningData.modelFileName || undefined,
+				},
+			});
+
+			console.log("연합학습 시작 성공:", result);
 			
-			// 임시로 2초 후 성공으로 처리
-			await new Promise(resolve => setTimeout(resolve, 2000));
+			toast.success("연합학습이 성공적으로 시작되었습니다!", {
+				description: `연합학습 ID: ${result.federatedLearningId}`,
+				duration: 5000,
+			});
 			
 			// 성공 후 대시보드 또는 모니터링 페이지로 이동
 			router.push("/dashboard/federated-learning");
 		} catch (error) {
 			console.error("연합학습 시작 실패:", error);
+			
+			const errorMessage = error instanceof Error 
+				? error.message 
+				: "연합학습 시작에 실패했습니다.";
+			
+			toast.error("연합학습 시작 실패", {
+				description: errorMessage,
+				duration: 5000,
+			});
 		} finally {
 			setIsStarting(false);
 		}
@@ -261,21 +300,6 @@ const FederatedLearningStartContent = () => {
 				</CardContent>
 			</Card>
 
-			{/* 시작 전 안내 */}
-			<Alert>
-				<AlertDescription className="flex items-start gap-2">
-					<div className="w-4 h-4 rounded-full bg-blue-500 flex-shrink-0 mt-0.5" />
-					<div>
-						<p className="font-medium">연합학습 시작 안내</p>
-						<ul className="text-sm text-muted-foreground mt-1 space-y-1">
-							<li>• 연합학습이 시작되면 모든 참여자에게 알림이 전송됩니다</li>
-							<li>• 각 라운드별 진행 상황을 실시간으로 모니터링할 수 있습니다</li>
-							<li>• 진행 중인 연합학습은 언제든지 중단할 수 있습니다</li>
-						</ul>
-					</div>
-				</AlertDescription>
-			</Alert>
-
 			{/* 시작 버튼 */}
 			<div className="flex justify-center gap-4">
 				<Button
@@ -287,12 +311,12 @@ const FederatedLearningStartContent = () => {
 					{isStarting ? (
 						<>
 							<div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin mr-2" />
-							연합학습 시작 중...
+							연합학습 저장 중...
 						</>
 					) : (
 						<>
 							<Play className="h-4 w-4 mr-2" />
-							연합학습 시작
+							연합학습 시작 및 저장
 						</>
 					)}
 				</Button>

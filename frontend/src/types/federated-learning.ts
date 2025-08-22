@@ -1,12 +1,15 @@
 // 연합학습 작업 관련 타입들
 
+import { Participant } from "./participant";
+
 export interface FederatedLearningJob {
 	id: string;
 	user_id: number;
 	name: string;
 	description?: string;
 	status: string;
-	participants: number;
+	participant_count: number;
+	participants: Participant[];
 	completed_at: string | null;
 	accuracy: number;
 	recall: number;

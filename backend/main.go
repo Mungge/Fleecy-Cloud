@@ -35,7 +35,7 @@ func main() {
 		os.Getenv("GITHUB_CLIENT_SECRET"),
 	)
 	cloudHandler := handlers.NewCloudHandler(repos.CloudRepo)
-	flHandler := handlers.NewFederatedLearningHandler(repos.FLRepo)
+	flHandler := handlers.NewFederatedLearningHandler(repos.FLRepo, repos.ParticipantRepo)
 	participantHandler := handlers.NewParticipantHandler(repos.ParticipantRepo)
 	aggregatorHandler := aggregatorDeps.AggregatorHandler
 

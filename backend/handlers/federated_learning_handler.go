@@ -14,14 +14,17 @@ import (
 
 // FederatedLearningHandler는 연합학습 관련 API 핸들러입니다
 type FederatedLearningHandler struct {
-	repo *repository.FederatedLearningRepository
+	repo            *repository.FederatedLearningRepository
+	participantRepo *repository.ParticipantRepository
 }
 
 // NewFederatedLearningHandler는 새 FederatedLearningHandler 인스턴스를 생성합니다
-func NewFederatedLearningHandler(repo *repository.FederatedLearningRepository) *FederatedLearningHandler {
-	return &FederatedLearningHandler{repo: repo}
+func NewFederatedLearningHandler(repo *repository.FederatedLearningRepository, participantRepo *repository.ParticipantRepository) *FederatedLearningHandler {
+	return &FederatedLearningHandler{
+		repo:            repo,
+		participantRepo: participantRepo,
+	}
 }
-
 
 // GetFederatedLearnings는 사용자의 모든 연합학습 작업을 반환하는 핸들러입니다
 func (h *FederatedLearningHandler) GetFederatedLearnings(c *gin.Context) {
@@ -94,14 +97,14 @@ func (h *FederatedLearningHandler) UpdateFederatedLearning(c *gin.Context) {
 
 	// 요청 본문 파싱
 	var request struct {
-		Name        string   `json:"name"`
-		Description string   `json:"description"`
-		Status      string   `json:"status"`
-		ModelType   string   `json:"modelType"`
-		Algorithm   string   `json:"algorithm"`
-		Rounds      int      `json:"rounds"`
+		Name         string   `json:"name"`
+		Description  string   `json:"description"`
+		Status       string   `json:"status"`
+		ModelType    string   `json:"modelType"`
+		Algorithm    string   `json:"algorithm"`
+		Rounds       int      `json:"rounds"`
 		Participants []string `json:"participants"`
-		Accuracy    string   `json:"accuracy"`
+		Accuracy     string   `json:"accuracy"`
 	}
 
 	if err := c.ShouldBindJSON(&request); err != nil {
@@ -118,7 +121,7 @@ func (h *FederatedLearningHandler) UpdateFederatedLearning(c *gin.Context) {
 	}
 	if request.Status != "" {
 		fl.Status = request.Status
-		
+
 		// 작업이 완료된 경우 완료 시간 설정
 		if request.Status == "완료" {
 			now := time.Now()
@@ -185,20 +188,19 @@ func (h *FederatedLearningHandler) DeleteFederatedLearning(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"message": "연합학습 작업이 삭제되었습니다"})
 }
 
-// CreateFederatedLearningForAggregator godoc
-// @Summary 기존 Aggregator에 연합학습 생성
-// @Description 기존 Aggregator ID를 받아서 연합학습을 생성합니다.
+// CreateFederatedLearning godoc
+// @Summary 연합학습 생성
+// @Description Aggregator ID를 포함한 연합학습을 생성합니다.
 // @Tags federated-learning
 // @Accept json
 // @Produce json
-// @Param id path string true "Aggregator ID"
-// @Param federatedLearning body CreateFederatedLearningForAggregatorRequest true "연합학습 생성 정보"
+// @Param federatedLearning body CreateFederatedLearningRequest true "연합학습 생성 정보"
 // @Success 201 {object} CreateFederatedLearningResponse
 // @Failure 400 {object} map[string]string
 // @Failure 401 {object} map[string]string
 // @Failure 404 {object} map[string]string
 // @Failure 500 {object} map[string]string
-// @Router /api/aggregators/{id}/federated-learning [post]
+// @Router /api/federated-learning [post]
 func (h *FederatedLearningHandler) CreateFederatedLearning(c *gin.Context) {
 	userID, err := utils.GetUserIDFromContext(c)
 	if err != nil {
@@ -206,15 +208,14 @@ func (h *FederatedLearningHandler) CreateFederatedLearning(c *gin.Context) {
 		return
 	}
 
-	aggregatorID := c.Param("id")
-	if aggregatorID == "" {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Aggregator ID가 필요합니다"})
-		return
-	}
-
 	var request CreateFederatedLearningRequest
 	if err := c.ShouldBindJSON(&request); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "잘못된 요청 형식입니다: " + err.Error()})
+		return
+	}
+
+	if request.AggregatorID == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Aggregator ID가 필요합니다"})
 		return
 	}
 
@@ -226,20 +227,26 @@ func (h *FederatedLearningHandler) CreateFederatedLearning(c *gin.Context) {
 	// FederatedLearning 생성
 	federatedLearning := &models.FederatedLearning{
 		ID:                uuid.New().String(),
-		UserID:           userID,
+		UserID:            userID,
 		CloudConnectionID: request.CloudConnectionID,
-		AggregatorID:     &aggregatorID,
-		Name:             request.Name,
-		Description:      request.Description,
-		Status:           "ready",
-		ParticipantCount: len(request.Participants),
-		Rounds:           request.Rounds,
-		Algorithm:        request.Algorithm,
-		ModelType:        request.ModelType,
+		AggregatorID:      &request.AggregatorID,
+		Name:              request.Name,
+		Description:       request.Description,
+		Status:            "ready",
+		ParticipantCount:  len(request.Participants),
+		Rounds:            request.Rounds,
+		Algorithm:         request.Algorithm,
+		ModelType:         request.ModelType,
 	}
 
-	// DB에 저장
-	if err := h.repo.Create(federatedLearning); err != nil {
+	// 참여자 ID 추출
+	var participantIDs []string
+	for _, p := range request.Participants {
+		participantIDs = append(participantIDs, p.ID)
+	}
+
+	// DB에 참여자와 함께 저장
+	if err := h.repo.CreateWithParticipants(federatedLearning, participantIDs); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "연합학습 생성 실패: " + err.Error()})
 		return
 	}
@@ -247,7 +254,7 @@ func (h *FederatedLearningHandler) CreateFederatedLearning(c *gin.Context) {
 	// 응답 반환
 	response := CreateFederatedLearningResponse{
 		FederatedLearningID: federatedLearning.ID,
-		AggregatorID:        aggregatorID,
+		AggregatorID:        request.AggregatorID,
 		Status:              "ready",
 	}
 
@@ -256,6 +263,7 @@ func (h *FederatedLearningHandler) CreateFederatedLearning(c *gin.Context) {
 
 // FederatedLearning 생성 요청 구조 (AggregatorID 기반)
 type CreateFederatedLearningRequest struct {
+	AggregatorID      string `json:"aggregatorId" binding:"required"`
 	CloudConnectionID string `json:"cloudConnectionId" binding:"required"`
 	Name              string `json:"name" binding:"required"`
 	Description       string `json:"description"`
