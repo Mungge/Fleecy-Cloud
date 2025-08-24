@@ -1,7 +1,6 @@
 // components/AggregatorSettings.tsx (업데이트된 부분)
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "../../../../components/ui/card";
 import { Button } from "../../../../components/ui/button";
-import { Input } from "../../../../components/ui/input";
 import { Label } from "../../../../components/ui/label";
 import { Slider } from "@/components/ui/slider";
 import { AggregatorOptimizeConfig, CreationStatus } from "../aggregator.types";
