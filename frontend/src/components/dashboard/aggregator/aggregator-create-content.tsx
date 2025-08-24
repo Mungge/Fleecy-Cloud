@@ -170,7 +170,7 @@ const AggregatorCreateContent = () => {
 					onOptimize={onOptimize}
 					isLoading={isLoading}
 					creationStatus={displayStatus}
-					modelFileSize={modelFileSize}
+					//modelFileSize={modelFileSize}
 					participantCount={federatedLearningData.participants.length}
 				/>
 			</div>
