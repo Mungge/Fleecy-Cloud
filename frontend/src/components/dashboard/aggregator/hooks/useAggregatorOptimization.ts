@@ -9,6 +9,7 @@ import {
   ExtendedAggregatorOptimizeConfig 
 } from "../aggregator.types";
 import { calculateMinimumMemoryRequirement } from "../utils/modelMemoryCalculator";
+import { ModelAnalysis, formatModelSize } from "../utils/modelDefinitionParser";
 
 export const useAggregatorOptimization = () => {
   const [isLoading, setIsLoading] = useState(false);
@@ -18,8 +19,7 @@ export const useAggregatorOptimization = () => {
 
   const handleAggregatorOptimization = async (
     federatedLearningData: FederatedLearningData,
-    aggregatorOptimizeConfig: AggregatorOptimizeConfig,
-    modelFileSize?: number
+    aggregatorOptimizeConfig: AggregatorOptimizeConfig
   ) => {
     if (!federatedLearningData) {
       toast.error("연합학습 정보가 없습니다.");
@@ -34,24 +34,54 @@ export const useAggregatorOptimization = () => {
     });
 
     try {
-      // 모델 파일 크기 기반 최소 메모리 요구사항 계산
-      const extendedConfig: ExtendedAggregatorOptimizeConfig = {
-        ...aggregatorOptimizeConfig
-      };
+      // sessionStorage에서 모델 분석 결과 가져오기
+      const modelAnalysisData = sessionStorage.getItem("modelAnalysis");
+      let modelAnalysis: ModelAnalysis | null = null;
+      let minMemoryRequired = 0;
 
-      if (modelFileSize) {
-        const minMemoryRequired = calculateMinimumMemoryRequirement(
-          modelFileSize,
+      if (modelAnalysisData) {
+        try {
+          modelAnalysis = JSON.parse(modelAnalysisData);
+          if (modelAnalysis) {
+            // 모델 분석 결과로부터 최소 메모리 요구사항 계산
+            minMemoryRequired = calculateMinimumMemoryRequirement(
+              modelAnalysis.modelSizeBytes,
+              federatedLearningData.participants.length,
+              1.5 // 안전 계수
+            );
+
+            toast.info(
+              `모델 분석 기반 최소 메모리 요구사항: ${minMemoryRequired}GB\n` +
+              `(${formatModelSize(modelAnalysis.totalParams)} × 참여자 ${federatedLearningData.participants.length}명 × 1.5)`,
+              { duration: 6000 }
+            );
+          }
+        } catch (error) {
+          console.error("모델 분석 데이터 파싱 실패:", error);
+        }
+      }
+
+      // 분석 결과가 없을 경우 기본값 사용
+      if (!modelAnalysis) {
+        // 기본 모델 크기 (1M 파라미터 = 4MB)
+        const defaultModelSizeBytes = 1000000 * 4;
+        minMemoryRequired = calculateMinimumMemoryRequirement(
+          defaultModelSizeBytes,
           federatedLearningData.participants.length,
-          1.5 // 안전 계수
+          1.5
         );
 
-        extendedConfig.minMemoryRequirement = minMemoryRequired;
-        toast.info(
-          `최소 메모리 요구사항: ${minMemoryRequired}GB (모델 크기 × 참여자 ${federatedLearningData.participants.length}명 × 1.5)`,
-          { duration: 5000 }
+        toast.warning(
+          `모델 분석 데이터를 찾을 수 없어 기본값을 사용합니다.\n최소 메모리 요구사항: ${minMemoryRequired}GB`,
+          { duration: 4000 }
         );
       }
+
+      // 확장된 설정에 메모리 요구사항 추가
+      const extendedConfig: ExtendedAggregatorOptimizeConfig = {
+        ...aggregatorOptimizeConfig,
+        minMemoryRequirement: minMemoryRequired
+      };
 
       // Aggregator 배치 최적화 실행
       toast.info("집계자 배치 최적화를 실행합니다...");
@@ -65,7 +95,7 @@ export const useAggregatorOptimization = () => {
       }
 
       // 메모리 요구사항을 충족하지 못하는 옵션 필터링 (클라이언트 사이드 검증)
-      if (extendedConfig.minMemoryRequirement) {
+      if (extendedConfig.minMemoryRequirement && extendedConfig.minMemoryRequirement > 0) {
         const filteredOptions = optimizationResult.optimizedOptions.filter(
           option => option.memory >= extendedConfig.minMemoryRequirement!
         );
@@ -79,6 +109,11 @@ export const useAggregatorOptimization = () => {
         // 필터링된 결과로 업데이트
         optimizationResult.optimizedOptions = filteredOptions;
         optimizationResult.summary.feasibleOptions = filteredOptions.length;
+
+        toast.success(
+          `${filteredOptions.length}개의 적합한 집계자 옵션을 찾았습니다.`,
+          { duration: 3000 }
+        );
       }
 
       setOptimizationStatus({

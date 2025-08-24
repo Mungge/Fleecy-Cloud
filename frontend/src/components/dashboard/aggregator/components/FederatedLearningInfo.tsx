@@ -61,14 +61,6 @@ export const FederatedLearningInfo = ({ data }: FederatedLearningInfoProps) => {
             </div>
           </div>
         )}
-        <div className="grid grid-cols-3 gap-2">
-          <div className="text-sm font-medium">모델 파일 크기:</div>
-          <div className="text-sm col-span-2">
-            {data.modelFileSize
-              ? `${(data.modelFileSize / (1024 * 1024)).toFixed(2)} MB`
-              : "정보 없음"}
-          </div>
-        </div>
 
         {/* 참여자 목록 */}
         <div className="space-y-2">

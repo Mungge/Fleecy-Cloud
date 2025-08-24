@@ -18,7 +18,7 @@ import { useAggregatorCreationStore } from "./aggregator.types";
 const AggregatorCreateContent = () => {
 	const router = useRouter();
 	const [federatedLearningData, setFederatedLearningData] = useState<FederatedLearningData | null>(null);
-	const [modelFileSize, setModelFileSize] = useState<number>(0);
+	const [, setModelFileSize] = useState<number>(0);
 	const [aggregatorOptimizeConfig, setAggregatorOptimizeConfig] = useState<AggregatorOptimizeConfig>({
 		maxBudget: 100000,
 		maxLatency: 150,
@@ -84,7 +84,7 @@ const AggregatorCreateContent = () => {
 			handleAggregatorOptimization(
 				federatedLearningData, 
 				aggregatorOptimizeConfig,
-				modelFileSize > 0 ? modelFileSize : 500);
+				);
 		}
 	};
 
@@ -170,7 +170,7 @@ const AggregatorCreateContent = () => {
 					onOptimize={onOptimize}
 					isLoading={isLoading}
 					creationStatus={displayStatus}
-					modelFileSize={modelFileSize}
+					//modelFileSize={modelFileSize}
 					participantCount={federatedLearningData.participants.length}
 				/>
 			</div>
