@@ -84,7 +84,7 @@ const AggregatorCreateContent = () => {
 			handleAggregatorOptimization(
 				federatedLearningData, 
 				aggregatorOptimizeConfig,
-				modelFileSize > 0 ? modelFileSize : 500);
+				);
 		}
 	};
 
