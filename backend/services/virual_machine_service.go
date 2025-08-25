@@ -352,12 +352,6 @@ func (s *OpenStackService) ListVMInstances(participant *models.Participant, toke
 	return response.Servers, nil
 }
 
-// MonitorSpecificVM은 특정 VM의 모니터링 정보를 조회합니다 (더 이상 DB에 저장하지 않음)
-func (s *OpenStackService) MonitorSpecificVM(participant *models.Participant, vm *models.VirtualMachine) (*models.VMMonitoringInfo, error) {
-	// participant의 OpenStack endpoint를 사용하여 Prometheus에서 실제 모니터링 데이터를 수집합니다.
-	return s.GetVMMonitoringInfoWithParticipant(participant, vm.InstanceID)
-}
-
 // VM 헬스체크 수행
 func (s *OpenStackService) HealthCheckSpecificVM(participant *models.Participant, vm *models.VirtualMachine) (*VMHealthCheckResult, error) {
 	startTime := time.Now()
