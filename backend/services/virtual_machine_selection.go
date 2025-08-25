@@ -12,33 +12,33 @@ import (
 
 // VM 선택 기준
 type VMSelectionCriteria struct {
-	MinVCPUs         int     `json:"min_vcpus"`
-	MinRAM          int     `json:"min_ram"`           // MB 단위
-	MinDisk         int     `json:"min_disk"`          // GB 단위
-	MaxCPUUsage     float64 `json:"max_cpu_usage"`     // 최대 CPU 사용률 (%)
-	MaxMemoryUsage  float64 `json:"max_memory_usage"`  // 최대 메모리 사용률 (%)
-	RequiredStatus  string  `json:"required_status"`   // 필요한 VM 상태 (기본: "ACTIVE")
+	MinVCPUs       int     `json:"min_vcpus"`
+	MinRAM         int     `json:"min_ram"`          // MB 단위
+	MinDisk        int     `json:"min_disk"`         // GB 단위
+	MaxCPUUsage    float64 `json:"max_cpu_usage"`    // 최대 CPU 사용률 (%)
+	MaxMemoryUsage float64 `json:"max_memory_usage"` // 최대 메모리 사용률 (%)
+	RequiredStatus string  `json:"required_status"`  // 필요한 VM 상태 (기본: "ACTIVE")
 }
 
 // VM 선택 결과
 type VMSelectionResult struct {
 	SelectedVM      *models.VirtualMachine `json:"selected_vm"`
 	SelectionReason string                 `json:"selection_reason"`
-	CandidateCount  int                   `json:"candidate_count"`
+	CandidateCount  int                    `json:"candidate_count"`
 }
 
 // VM 사용률 정보 (선택 알고리즘용) - 기존 모델을 활용
 type VMUtilization struct {
-	VM              *models.VirtualMachine     `json:"vm"`
-	MonitoringInfo  *models.VMMonitoringInfo   `json:"monitoring_info"`
-	RuntimeInfo     *models.VMRuntimeInfo      `json:"runtime_info"`
-	UtilizationScore float64                   `json:"utilization_score"` // 종합 사용률 점수
-	IsHealthy       bool                       `json:"is_healthy"`
+	VM               *models.VirtualMachine   `json:"vm"`
+	MonitoringInfo   *models.VMMonitoringInfo `json:"monitoring_info"`
+	RuntimeInfo      *models.VMRuntimeInfo    `json:"runtime_info"`
+	UtilizationScore float64                  `json:"utilization_score"` // 종합 사용률 점수
+	IsHealthy        bool                     `json:"is_healthy"`
 }
 
 type VMSelectionService struct {
-	openStackService *OpenStackService
-	roundRobinMutex  sync.Mutex
+	openStackService  *OpenStackService
+	roundRobinMutex   sync.Mutex
 	lastSelectedIndex map[string]int // ParticipantID별 마지막 선택된 인덱스
 }
 
@@ -63,7 +63,13 @@ func (s *VMSelectionService) SelectOptimalVM(participant *models.Participant, cr
 	}
 
 	// 1. OpenStack에서 모든 VM 정보 조회
-	openStackVMs, err := s.openStackService.GetAllVMInstances(participant)
+	// 먼저 인증 토큰 획득
+	token, err := s.openStackService.GetAuthToken(participant)
+	if err != nil {
+		return nil, fmt.Errorf("OpenStack 인증 실패: %v", err)
+	}
+
+	openStackVMs, err := s.openStackService.ListVMInstances(participant, token)
 	if err != nil {
 		return nil, fmt.Errorf("VM 목록 조회 실패: %v", err)
 	}
@@ -87,20 +93,20 @@ func (s *VMSelectionService) SelectOptimalVM(participant *models.Participant, cr
 
 		// IP 주소 직렬화
 		ipAddressesJSON, _ := json.Marshal(osVM.Addresses)
-		
+
 		vm := models.VirtualMachine{
-			InstanceID:       osVM.ID,
-			Name:            osVM.Name,
-			ParticipantID:   participant.ID,
-			Status:          osVM.Status,
-			FlavorID:        osVM.Flavor.ID,
-			FlavorName:      osVM.Flavor.Name,
-			VCPUs:          osVM.Flavor.VCPUs,
-			RAM:            osVM.Flavor.RAM,
-			Disk:           osVM.Flavor.Disk,
-			IPAddresses:    string(ipAddressesJSON),
+			InstanceID:    osVM.ID,
+			Name:          osVM.Name,
+			ParticipantID: participant.ID,
+			Status:        osVM.Status,
+			FlavorID:      osVM.Flavor.ID,
+			FlavorName:    osVM.Flavor.Name,
+			VCPUs:         osVM.Flavor.VCPUs,
+			RAM:           osVM.Flavor.RAM,
+			Disk:          osVM.Flavor.Disk,
+			IPAddresses:   string(ipAddressesJSON),
 		}
-		
+
 		candidateVMs = append(candidateVMs, vm)
 	}
 
@@ -122,8 +128,8 @@ func (s *VMSelectionService) SelectOptimalVM(participant *models.Participant, cr
 		}
 
 		// 사용률 조건 확인
-		if utilization.MonitoringInfo.CPUUsage > criteria.MaxCPUUsage || 
-		   utilization.MonitoringInfo.MemoryUsage > criteria.MaxMemoryUsage {
+		if utilization.MonitoringInfo.CPUUsage > criteria.MaxCPUUsage ||
+			utilization.MonitoringInfo.MemoryUsage > criteria.MaxMemoryUsage {
 			continue
 		}
 
@@ -150,8 +156,8 @@ func (s *VMSelectionService) SelectOptimalVM(participant *models.Participant, cr
 
 // getVMUtilization은 VM의 현재 사용률 정보를 조회합니다
 func (s *VMSelectionService) getVMUtilization(participant *models.Participant, vm *models.VirtualMachine) (*VMUtilization, error) {
-	// 모니터링 정보 조회
-	monitoringInfo, err := s.openStackService.GetVMMonitoringInfo(vm.InstanceID)
+	// 모니터링 정보 조회 - participant의 OpenStack endpoint 사용
+	monitoringInfo, err := s.openStackService.GetVMMonitoringInfoWithParticipant(participant, vm.InstanceID)
 	if err != nil {
 		return nil, fmt.Errorf("VM 모니터링 정보 조회 실패: %v", err)
 	}
@@ -169,16 +175,16 @@ func (s *VMSelectionService) getVMUtilization(participant *models.Participant, v
 	}
 
 	// 종합 사용률 점수 계산 (CPU 60%, Memory 30%, Disk 10%)
-	utilizationScore := (monitoringInfo.CPUUsage * 0.6) + 
-					   (monitoringInfo.MemoryUsage * 0.3) + 
-					   (monitoringInfo.DiskUsage * 0.1)
+	utilizationScore := (monitoringInfo.CPUUsage * 0.6) +
+		(monitoringInfo.MemoryUsage * 0.3) +
+		(monitoringInfo.DiskUsage * 0.1)
 
 	return &VMUtilization{
-		VM:              vm,
-		MonitoringInfo:  monitoringInfo,
-		RuntimeInfo:     runtimeInfo,
+		VM:               vm,
+		MonitoringInfo:   monitoringInfo,
+		RuntimeInfo:      runtimeInfo,
 		UtilizationScore: utilizationScore,
-		IsHealthy:       healthCheck.Healthy,
+		IsHealthy:        healthCheck.Healthy,
 	}, nil
 }
 
@@ -209,7 +215,7 @@ func (s *VMSelectionService) selectVMWithUtilizationAndRoundRobin(participantID 
 	// 사용률 차이가 10% 이내인 VM들을 동일 그룹으로 간주
 	const utilizationThreshold = 10.0
 	lowestUtilization := healthyVMs[0].UtilizationScore
-	
+
 	var similarUtilizationVMs []VMUtilization
 	for _, vm := range healthyVMs {
 		if vm.UtilizationScore-lowestUtilization <= utilizationThreshold {
@@ -232,16 +238,18 @@ func (s *VMSelectionService) selectVMWithUtilizationAndRoundRobin(participantID 
 	s.lastSelectedIndex[participantID] = nextIndex
 
 	selectedVM := &similarUtilizationVMs[nextIndex]
-	
-	reason := fmt.Sprintf("사용률 %.1f%% (CPU: %.1f%%, Memory: %.1f%%) - 라운드로빈으로 선택", 
-		selectedVM.UtilizationScore, 
-		selectedVM.MonitoringInfo.CPUUsage, 
+
+	reason := fmt.Sprintf("사용률 %.1f%% (CPU: %.1f%%, Memory: %.1f%%) - 라운드로빈으로 선택",
+		selectedVM.UtilizationScore,
+		selectedVM.MonitoringInfo.CPUUsage,
 		selectedVM.MonitoringInfo.MemoryUsage)
 
 	return selectedVM, reason
 }
+
 // GetVMUtilizations은 참가자의 모든 VM 사용률 정보를 반환합니다 (모니터링용)
 func (s *VMSelectionService) GetVMUtilizations(participant *models.Participant) ([]VMUtilization, error) {
+	// OpenStack에서 직접 VM 목록 조회 (GetAllVMInstances 사용)
 	openStackVMs, err := s.openStackService.GetAllVMInstances(participant)
 	if err != nil {
 		return nil, fmt.Errorf("VM 목록 조회 실패: %v", err)
@@ -251,26 +259,26 @@ func (s *VMSelectionService) GetVMUtilizations(participant *models.Participant) 
 	for _, osVM := range openStackVMs {
 		// IP 주소 직렬화
 		ipAddressesJSON, _ := json.Marshal(osVM.Addresses)
-		
+
 		vm := models.VirtualMachine{
-			InstanceID:       osVM.ID,
-			Name:            osVM.Name,
-			ParticipantID:   participant.ID,
-			Status:          osVM.Status,
-			FlavorID:        osVM.Flavor.ID,
-			FlavorName:      osVM.Flavor.Name,
-			VCPUs:          osVM.Flavor.VCPUs,
-			RAM:            osVM.Flavor.RAM,
-			Disk:           osVM.Flavor.Disk,
-			IPAddresses:    string(ipAddressesJSON),
+			InstanceID:    osVM.ID,
+			Name:          osVM.Name,
+			ParticipantID: participant.ID,
+			Status:        osVM.Status,
+			FlavorID:      osVM.Flavor.ID,
+			FlavorName:    osVM.Flavor.Name,
+			VCPUs:         osVM.Flavor.VCPUs,
+			RAM:           osVM.Flavor.RAM,
+			Disk:          osVM.Flavor.Disk,
+			IPAddresses:   string(ipAddressesJSON),
 		}
 
 		utilization, err := s.getVMUtilization(participant, &vm)
 		if err != nil {
 			// 에러가 발생한 경우 기본값으로 설정
 			utilization = &VMUtilization{
-				VM:              &vm,
-				MonitoringInfo:  &models.VMMonitoringInfo{
+				VM: &vm,
+				MonitoringInfo: &models.VMMonitoringInfo{
 					InstanceID:      vm.InstanceID,
 					CPUUsage:        0,
 					MemoryUsage:     0,
@@ -279,14 +287,14 @@ func (s *VMSelectionService) GetVMUtilizations(participant *models.Participant) 
 					NetworkOutBytes: 0,
 					LastUpdated:     time.Now(),
 				},
-				RuntimeInfo:     &models.VMRuntimeInfo{
+				RuntimeInfo: &models.VMRuntimeInfo{
 					InstanceID:  vm.InstanceID,
 					Status:      vm.Status,
 					PowerState:  0,
 					LastChecked: time.Now(),
 				},
 				UtilizationScore: 0,
-				IsHealthy:       false,
+				IsHealthy:        false,
 			}
 		}
 
@@ -300,6 +308,6 @@ func (s *VMSelectionService) GetVMUtilizations(participant *models.Participant) 
 func (s *VMSelectionService) ResetRoundRobinIndex(participantID string) {
 	s.roundRobinMutex.Lock()
 	defer s.roundRobinMutex.Unlock()
-	
+
 	delete(s.lastSelectedIndex, participantID)
 }
