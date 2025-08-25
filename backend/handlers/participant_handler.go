@@ -32,14 +32,14 @@ type OpenStackConfig struct {
 
 // ParticipantHandler는 참여자(OpenStack 클라우드) 관련 API 핸들러입니다
 type ParticipantHandler struct {
-	repo            *repository.ParticipantRepository
+	repo             *repository.ParticipantRepository
 	openStackService *services.OpenStackService
 }
 
 func NewParticipantHandler(repo *repository.ParticipantRepository) *ParticipantHandler {
 	return &ParticipantHandler{
-		repo:            repo,
-		openStackService: services.NewOpenStackService(),
+		repo:             repo,
+		openStackService: services.NewOpenStackService("http://localhost:9090"),
 	}
 }
 
@@ -54,10 +54,10 @@ func (h *ParticipantHandler) parseOpenStackConfig(yamlContent []byte) (*OpenStac
 	if config.Clouds.OpenStack.Auth.AuthURL == "" {
 		return nil, fmt.Errorf("OpenStack auth_url이 누락되었습니다")
 	}
-	
+
 	// Application Credential 정보가 있어야 함
-	if config.Clouds.OpenStack.Auth.ApplicationCredentialID == "" || 
-	   config.Clouds.OpenStack.Auth.ApplicationCredentialSecret == "" {
+	if config.Clouds.OpenStack.Auth.ApplicationCredentialID == "" ||
+		config.Clouds.OpenStack.Auth.ApplicationCredentialSecret == "" {
 		return nil, fmt.Errorf("application credential ID와 Secret이 필요합니다")
 	}
 
@@ -121,13 +121,13 @@ func (h *ParticipantHandler) CreateParticipant(c *gin.Context) {
 		Status:   "inactive", // 기본적으로 비활성 상태로 생성
 		Metadata: metadata,
 		Region:   region,
-		
+
 		// OpenStack 관련 필드
-		OpenStackEndpoint:    authURL,
-		OpenStackRegion:      config.Clouds.OpenStack.RegionName,
+		OpenStackEndpoint:                    authURL,
+		OpenStackRegion:                      config.Clouds.OpenStack.RegionName,
 		OpenStackApplicationCredentialID:     config.Clouds.OpenStack.Auth.ApplicationCredentialID,
 		OpenStackApplicationCredentialSecret: config.Clouds.OpenStack.Auth.ApplicationCredentialSecret,
-		
+
 		CreatedAt: time.Now(),
 		UpdatedAt: time.Now(),
 	}
@@ -270,17 +270,17 @@ func (h *ParticipantHandler) UpdateParticipant(c *gin.Context) {
 		// OpenStack 설정 업데이트
 		participant.OpenStackEndpoint = config.Clouds.OpenStack.Auth.AuthURL
 		participant.OpenStackRegion = config.Clouds.OpenStack.RegionName
-		
+
 		// Application Credential 정보 업데이트
 		participant.OpenStackApplicationCredentialID = config.Clouds.OpenStack.Auth.ApplicationCredentialID
 		participant.OpenStackApplicationCredentialSecret = config.Clouds.OpenStack.Auth.ApplicationCredentialSecret
-		
+
 		// OpenStack 설정이 변경된 경우 연결 테스트 실행
 		if err := h.testOpenStackConnection(participant); err != nil {
 			c.JSON(http.StatusBadRequest, gin.H{"error": "OpenStack 연결 테스트 실패: " + err.Error()})
 			return
 		}
-		
+
 		// 연결 테스트 성공 시 상태를 active로 변경
 		participant.SetActive()
 	}
@@ -328,7 +328,6 @@ func (h *ParticipantHandler) DeleteParticipant(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"message": "참여자가 삭제되었습니다"})
 }
 
-
 // testOpenStackConnection은 OpenStack 클라우드 연결을 테스트합니다
 func (h *ParticipantHandler) testOpenStackConnection(participant *models.Participant) error {
 	// OpenStack 인증 토큰 획득 테스트
@@ -336,7 +335,7 @@ func (h *ParticipantHandler) testOpenStackConnection(participant *models.Partici
 	if err != nil {
 		return fmt.Errorf("OpenStack 인증 실패: %v", err)
 	}
-	
+
 	return nil
 }
 
@@ -360,14 +359,14 @@ func (h *ParticipantHandler) HealthCheckParticipant(c *gin.Context) {
 	startTime := time.Now()
 	err = h.testOpenStackConnection(participant)
 	responseTime := time.Since(startTime).Milliseconds()
-	
+
 	healthy := err == nil
 	status := "ACTIVE"
 	message := fmt.Sprintf("%s 클러스터가 정상적으로 연결되었습니다", participant.Name)
-	
+
 	// 참여자 상태 업데이트
 	var participantStatusChanged = false
-	
+
 	if healthy {
 		// 헬스체크 성공 시 active 상태로 변경
 		if participant.Status != "active" {
@@ -378,7 +377,7 @@ func (h *ParticipantHandler) HealthCheckParticipant(c *gin.Context) {
 		// 헬스체크 실패 시 inactive 상태로 변경
 		status = "INACTIVE"
 		message = fmt.Sprintf("%s OpenStack 연결 실패: %v", participant.Name, err)
-		
+
 		if participant.Status != "inactive" {
 			participant.Status = "inactive"
 			participantStatusChanged = true
@@ -395,7 +394,7 @@ func (h *ParticipantHandler) HealthCheckParticipant(c *gin.Context) {
 	}
 
 	result := map[string]interface{}{
-		"healthy":           healthy,
+		"healthy":          healthy,
 		"status":           status,
 		"message":          message,
 		"checked_at":       time.Now().Format(time.RFC3339),
