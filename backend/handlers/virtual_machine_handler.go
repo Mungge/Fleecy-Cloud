@@ -221,7 +221,7 @@ func (h *VirtualMachineHandler) MonitorVirtualMachine(c *gin.Context) {
 	}
 
 	// OpenStack VM 모니터링
-	monitoringInfo, err := h.openStackService.MonitorSpecificVM(participant, vm)
+	monitoringInfo, err := h.openStackService.GetVMMonitoringInfoWithParticipant(participant, vm.InstanceID)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": fmt.Sprintf("VM 모니터링에 실패했습니다: %v", err)})
 		return
@@ -232,7 +232,6 @@ func (h *VirtualMachineHandler) MonitorVirtualMachine(c *gin.Context) {
 	h.vmRepo.Update(vm)
 
 	c.JSON(http.StatusOK, gin.H{"data": monitoringInfo})
-	return
 }
 
 // AssignTaskToVM은 특정 VM에 작업을 할당합니다
