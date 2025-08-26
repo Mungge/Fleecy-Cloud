@@ -67,18 +67,6 @@ type VMListResponse struct {
 	Servers []VMInstance `json:"servers"`
 }
 
-// VM 모니터링 정보
-type VMMonitoringInfo struct {
-	InstanceID      string    `json:"instance_id"`
-	Status          string    `json:"status"`
-	CPUUsage        float64   `json:"cpu_usage"`
-	MemoryUsage     float64   `json:"memory_usage"`
-	DiskUsage       float64   `json:"disk_usage"`
-	NetworkInBytes  int64     `json:"network_in_bytes"`
-	NetworkOutBytes int64     `json:"network_out_bytes"`
-	LastUpdated     time.Time `json:"last_updated"`
-}
-
 // VM 헬스체크 결과
 type VMHealthCheckResult struct {
 	Healthy      bool      `json:"healthy"`
@@ -240,7 +228,7 @@ func (s *OpenStackService) GetAllVMInstances(participant *models.Participant) ([
 }
 
 // VM 인스턴스 정보 조회
-func (s *OpenStackService) GetVMInstance(vm *models.VirtualMachine, participant *models.Participant, token string) (*VMInstance, error) {
+func (s *OpenStackService) GetVMInstance(vm *VirtualMachine, participant *models.Participant, token string) (*VMInstance, error) {
 	if vm.InstanceID == "" {
 		return nil, fmt.Errorf("VM 인스턴스 ID가 설정되지 않았습니다")
 	}
@@ -353,7 +341,7 @@ func (s *OpenStackService) ListVMInstances(participant *models.Participant, toke
 }
 
 // VM 헬스체크 수행
-func (s *OpenStackService) HealthCheckSpecificVM(participant *models.Participant, vm *models.VirtualMachine) (*VMHealthCheckResult, error) {
+func (s *OpenStackService) HealthCheckSpecificVM(participant *models.Participant, vm *VirtualMachine) (*VMHealthCheckResult, error) {
 	startTime := time.Now()
 
 	token, err := s.GetAuthToken(participant)
@@ -396,7 +384,7 @@ func (s *OpenStackService) HealthCheckSpecificVM(participant *models.Participant
 }
 
 // 연합학습 작업 할당 (특정 VirtualMachine 인스턴스 기반)
-func (s *OpenStackService) AssignFederatedLearningTaskSpecific(participant *models.Participant, vm *models.VirtualMachine, taskID string) error {
+func (s *OpenStackService) AssignFederatedLearningTaskSpecific(participant *models.Participant, vm *VirtualMachine, taskID string) error {
 	// 현재 VM 상태 확인
 	token, err := s.GetAuthToken(participant)
 	if err != nil {
@@ -457,7 +445,7 @@ func (s *OpenStackService) GetFlavorDetails(participant *models.Participant, tok
 }
 
 // GetVMRuntimeStatus는 실시간 VM 상태를 조회합니다 (DB에 저장하지 않음)
-func (s *OpenStackService) GetVMRuntimeStatus(participant *models.Participant, instanceID string) (*models.VMRuntimeInfo, error) {
+func (s *OpenStackService) GetVMRuntimeStatus(participant *models.Participant, instanceID string) (*VMRuntimeInfo, error) {
 	token, err := s.GetAuthToken(participant)
 	if err != nil {
 		return nil, fmt.Errorf("인증 실패: %v", err)
@@ -488,7 +476,7 @@ func (s *OpenStackService) GetVMRuntimeStatus(participant *models.Participant, i
 		return nil, fmt.Errorf("응답 파싱 실패: %v", err)
 	}
 
-	return &models.VMRuntimeInfo{
+	return &VMRuntimeInfo{
 		InstanceID:  instanceID,
 		Status:      response.Server.Status,
 		PowerState:  response.Server.PowerState,
@@ -497,7 +485,7 @@ func (s *OpenStackService) GetVMRuntimeStatus(participant *models.Participant, i
 }
 
 // GetVMMonitoringInfoWithParticipant는 participant의 OpenStack endpoint를 사용하여 모니터링 정보를 조회합니다
-func (s *OpenStackService) GetVMMonitoringInfoWithParticipant(participant *models.Participant, instanceID string) (*models.VMMonitoringInfo, error) {
+func (s *OpenStackService) GetVMMonitoringInfoWithParticipant(participant *models.Participant, instanceID string) (*VMMonitoringInfo, error) {
 	if participant == nil {
 		return nil, fmt.Errorf("participant 정보가 필요합니다")
 	}

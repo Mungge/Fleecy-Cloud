@@ -35,7 +35,7 @@ func main() {
 		os.Getenv("GITHUB_CLIENT_SECRET"),
 	)
 	cloudHandler := handlers.NewCloudHandler(repos.CloudRepo)
-	flHandler := handlers.NewFederatedLearningHandler(repos.FLRepo, repos.ParticipantRepo)
+	flHandler := handlers.NewFederatedLearningHandler(repos.FLRepo, repos.ParticipantRepo, repos.AggregatorRepo)
 	participantHandler := handlers.NewParticipantHandler(repos.ParticipantRepo)
 	aggregatorHandler := aggregatorDeps.AggregatorHandler
 
@@ -76,7 +76,7 @@ func main() {
 	routes.SetupSSHKeypairRoutes(authorized, sshKeypairHandler)
 
 	// VM 라우트 설정 (전체 엔진에 설정, 인증은 내부에서 처리)
-	routes.SetupVirtualMachineRoutes(r, repos.VMRepo, repos.ParticipantRepo)
+	routes.SetupVirtualMachineRoutes(r, repos.ParticipantRepo)
 
 	// 서버 시작
 	if err := r.Run(":8080"); err != nil {

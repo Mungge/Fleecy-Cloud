@@ -13,6 +13,7 @@ import (
 	aggregatorservice "github.com/Mungge/Fleecy-Cloud/services/aggregator"
 	"github.com/joho/godotenv"
 	sdktrace "go.opentelemetry.io/otel/sdk/trace"
+	"gorm.io/gorm"
 )
 
 // Repositories는 애플리케이션에서 사용되는 모든 리포지토리를 포함합니다
@@ -23,7 +24,6 @@ type Repositories struct {
 	FLRepo           *repository.FederatedLearningRepository
 	ParticipantRepo  *repository.ParticipantRepository
 	AggregatorRepo   *repository.AggregatorRepository
-	VMRepo           *repository.VirtualMachineRepository
 	ProviderRepo     *repository.ProviderRepository
 	RegionRepo       *repository.RegionRepository
 	CloudPriceRepo   *repository.CloudPriceRepository
@@ -77,6 +77,12 @@ func RunDatabaseMigration() error {
 	log.Println("데이터베이스 마이그레이션 시작...")
 
 	db := config.GetDB()
+
+	// 마이그레이션 전 데이터 정리
+	if err := cleanupInvalidForeignKeys(db); err != nil {
+		log.Printf("데이터 정리 중 오류 발생: %v", err)
+		// 오류가 발생해도 마이그레이션을 계속 진행
+	}
 	err := db.AutoMigrate(
 		&models.Provider{},
 		&models.Region{},
@@ -85,11 +91,10 @@ func RunDatabaseMigration() error {
 		&models.CloudConnection{},
 		&models.CloudPrice{},
 		&models.CloudLatency{},
-		&models.FederatedLearning{},
+		&models.Aggregator{}, // FederatedLearning보다 먼저 (외래키 참조 대상)
 		&models.Participant{},
-		&models.VirtualMachine{},
+		&models.FederatedLearning{}, // Aggregator 다음에 (외래키 참조)
 		&models.ParticipantFederatedLearning{},
-		&models.Aggregator{},
 		&models.TrainingRound{},
 		&models.SSHKeypair{},
 	)
@@ -98,6 +103,33 @@ func RunDatabaseMigration() error {
 	}
 
 	log.Println("데이터베이스 마이그레이션 완료")
+	return nil
+}
+
+// cleanupInvalidForeignKeys는 외래키 제약조건 위반 데이터를 정리합니다
+func cleanupInvalidForeignKeys(db *gorm.DB) error {
+	log.Println("외래키 제약조건 위반 데이터 정리 시작...")
+
+	// 1. aggregator_id가 NULL이거나 존재하지 않는 FederatedLearning 레코드를 찾아서 aggregator_id를 NULL로 설정
+	result := db.Exec(`
+		UPDATE federated_learnings 
+		SET aggregator_id = NULL 
+		WHERE aggregator_id IS NOT NULL 
+		AND aggregator_id NOT IN (SELECT id FROM aggregators)
+	`)
+
+	if result.Error != nil {
+		log.Printf("FederatedLearning 데이터 정리 실패: %v", result.Error)
+		return result.Error
+	}
+
+	if result.RowsAffected > 0 {
+		log.Printf("무효한 aggregator_id를 가진 FederatedLearning 레코드 %d개를 정리했습니다", result.RowsAffected)
+	}
+
+	// 2. 다른 외래키 제약조건 위반 데이터 정리 (필요시 추가)
+
+	log.Println("외래키 제약조건 위반 데이터 정리 완료")
 	return nil
 }
 
@@ -147,7 +179,6 @@ func InitializeRepositories() *Repositories {
 		FLRepo:           repository.NewFederatedLearningRepository(db),
 		ParticipantRepo:  repository.NewParticipantRepository(db),
 		AggregatorRepo:   repository.NewAggregatorRepository(db),
-		VMRepo:           repository.NewVirtualMachineRepository(db),
 		SSHKeypairRepo:   repository.NewSSHKeypairRepository(db),
 	}
 

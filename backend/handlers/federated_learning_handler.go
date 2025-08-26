@@ -1,7 +1,11 @@
 package handlers
 
 import (
+	"bytes"
+	"encoding/json"
+	"fmt"
 	"net/http"
+	"strings"
 	"time"
 
 	"github.com/gin-gonic/gin"
@@ -16,13 +20,15 @@ import (
 type FederatedLearningHandler struct {
 	repo            *repository.FederatedLearningRepository
 	participantRepo *repository.ParticipantRepository
+	aggregatorRepo  *repository.AggregatorRepository
 }
 
 // NewFederatedLearningHandler는 새 FederatedLearningHandler 인스턴스를 생성합니다
-func NewFederatedLearningHandler(repo *repository.FederatedLearningRepository, participantRepo *repository.ParticipantRepository) *FederatedLearningHandler {
+func NewFederatedLearningHandler(repo *repository.FederatedLearningRepository, participantRepo *repository.ParticipantRepository, aggregatorRepo *repository.AggregatorRepository) *FederatedLearningHandler {
 	return &FederatedLearningHandler{
 		repo:            repo,
 		participantRepo: participantRepo,
+		aggregatorRepo:  aggregatorRepo,
 	}
 }
 
@@ -258,7 +264,202 @@ func (h *FederatedLearningHandler) CreateFederatedLearning(c *gin.Context) {
 		Status:              "ready",
 	}
 
+	// 참여자들과 집계자에게 연합학습 실행 요청 전송
+	go h.sendFederatedLearningExecuteRequests(federatedLearning, request.Participants)
+
 	c.JSON(http.StatusCreated, gin.H{"data": response})
+}
+
+// sendFederatedLearningExecuteRequests는 집계자와 모든 참여자에게 연합학습 실행 요청을 보냅니다
+func (h *FederatedLearningHandler) sendFederatedLearningExecuteRequests(federatedLearning *models.FederatedLearning, participants []struct {
+	ID                string `json:"id"`
+	Name              string `json:"name"`
+	Status            string `json:"status"`
+	OpenstackEndpoint string `json:"openstack_endpoint,omitempty"`
+}) {
+	// 1. 먼저 집계자에게 실행 요청 전송
+	if err := h.sendExecuteRequestToAggregatorFirst(federatedLearning); err != nil {
+		fmt.Printf("집계자 실행 요청 실패: %v\n", err)
+		return // 집계자 실행 요청이 실패하면 전체 프로세스 중단
+	}
+
+	// 2. 집계자 실행 요청이 성공한 후 참여자들에게 실행 요청 전송
+	h.sendExecuteRequestToParticipants(federatedLearning, participants)
+}
+
+// sendExecuteRequestToParticipant는 개별 참여자에게 연합학습 실행 요청을 보냅니다
+func (h *FederatedLearningHandler) sendExecuteRequestToParticipant(participant *models.Participant, federatedLearning *models.FederatedLearning) error {
+	// OpenStack 엔드포인트에서 포트 5000으로 요청 URL 구성
+	endpoint := strings.TrimSuffix(participant.OpenStackEndpoint, "/")
+	if strings.HasSuffix(endpoint, ":5000") {
+		// 이미 5000 포트가 있는 경우
+	} else if strings.Contains(endpoint, ":") {
+		// 다른 포트가 있는 경우 5000으로 변경
+		parts := strings.Split(endpoint, ":")
+		endpoint = parts[0] + ":" + parts[1] + ":5000"
+	} else {
+		// 포트가 없는 경우 5000 추가
+		endpoint = endpoint + ":5000"
+	}
+
+	requestURL := endpoint + "/api/fl/execute"
+
+	// 요청 페이로드 구성
+	payload := map[string]interface{}{
+		"federated_learning_id": federatedLearning.ID,
+		"participant_id":        participant.ID,
+		"rounds":                federatedLearning.Rounds,
+		"algorithm":             federatedLearning.Algorithm,
+		"model_type":            federatedLearning.ModelType,
+		"name":                  federatedLearning.Name,
+		"description":           federatedLearning.Description,
+	}
+
+	// JSON 인코딩
+	jsonData, err := json.Marshal(payload)
+	if err != nil {
+		return fmt.Errorf("JSON 인코딩 실패: %v", err)
+	}
+
+	// HTTP 요청 생성
+	req, err := http.NewRequest("POST", requestURL, bytes.NewBuffer(jsonData))
+	if err != nil {
+		return fmt.Errorf("HTTP 요청 생성 실패: %v", err)
+	}
+
+	// 헤더 설정
+	req.Header.Set("Content-Type", "application/json")
+
+	// HTTP 클라이언트 생성 및 요청 전송
+	client := &http.Client{
+		Timeout: 30 * time.Second,
+	}
+
+	resp, err := client.Do(req)
+	if err != nil {
+		return fmt.Errorf("HTTP 요청 전송 실패: %v", err)
+	}
+	defer resp.Body.Close()
+
+	// 응답 상태 코드 확인
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		return fmt.Errorf("HTTP 요청 실패: 상태 코드 %d", resp.StatusCode)
+	}
+
+	return nil
+}
+
+// sendExecuteRequestToAggregatorFirst는 집계자에게 먼저 연합학습 실행 요청을 보냅니다
+func (h *FederatedLearningHandler) sendExecuteRequestToAggregatorFirst(federatedLearning *models.FederatedLearning) error {
+	if federatedLearning.AggregatorID == nil {
+		return fmt.Errorf("집계자 ID가 설정되지 않았습니다")
+	}
+
+	aggregatorData, err := h.aggregatorRepo.GetAggregatorByID(*federatedLearning.AggregatorID)
+	if err != nil {
+		return fmt.Errorf("집계자 조회 실패 (ID: %s): %v", *federatedLearning.AggregatorID, err)
+	}
+
+	if aggregatorData == nil {
+		return fmt.Errorf("집계자를 찾을 수 없습니다 (ID: %s)", *federatedLearning.AggregatorID)
+	}
+
+	// 집계자 Public IP가 없으면 실패
+	if aggregatorData.PublicIP == "" {
+		return fmt.Errorf("집계자 %s의 Public IP가 설정되지 않았습니다", aggregatorData.Name)
+	}
+
+	// 집계자에게 연합학습 실행 요청 전송
+	if err := h.sendExecuteRequestToAggregator(aggregatorData, federatedLearning); err != nil {
+		return fmt.Errorf("집계자 %s에게 연합학습 실행 요청 전송 실패: %v", aggregatorData.Name, err)
+	}
+
+	fmt.Printf("집계자 %s에게 연합학습 실행 요청 전송 성공\n", aggregatorData.Name)
+	return nil
+}
+
+// sendExecuteRequestToParticipants는 모든 참여자에게 연합학습 실행 요청을 보냅니다
+func (h *FederatedLearningHandler) sendExecuteRequestToParticipants(federatedLearning *models.FederatedLearning, participants []struct {
+	ID                string `json:"id"`
+	Name              string `json:"name"`
+	Status            string `json:"status"`
+	OpenstackEndpoint string `json:"openstack_endpoint,omitempty"`
+}) {
+	fmt.Printf("참여자 %d명에게 연합학습 실행 요청을 전송합니다\n", len(participants))
+
+	for _, participant := range participants {
+		// 참여자 정보 조회
+		participantData, err := h.participantRepo.GetByID(participant.ID)
+		if err != nil {
+			fmt.Printf("참여자 조회 실패 (ID: %s): %v\n", participant.ID, err)
+			continue
+		}
+
+		// OpenStack 엔드포인트가 없으면 스킵
+		if participantData.OpenStackEndpoint == "" {
+			fmt.Printf("참여자 %s의 OpenStack 엔드포인트가 설정되지 않았습니다\n", participantData.Name)
+			continue
+		}
+
+		// 연합학습 실행 요청 전송
+		if err := h.sendExecuteRequestToParticipant(participantData, federatedLearning); err != nil {
+			fmt.Printf("참여자 %s에게 연합학습 실행 요청 전송 실패: %v\n", participantData.Name, err)
+		} else {
+			fmt.Printf("참여자 %s에게 연합학습 실행 요청 전송 성공\n", participantData.Name)
+		}
+	}
+}
+
+// sendExecuteRequestToAggregator는 집계자에게 연합학습 실행 요청을 보냅니다
+func (h *FederatedLearningHandler) sendExecuteRequestToAggregator(aggregator *models.Aggregator, federatedLearning *models.FederatedLearning) error {
+	// 집계자 Public IP에서 포트 5000으로 요청 URL 구성
+	endpoint := "http://" + aggregator.PublicIP + ":5000"
+	requestURL := endpoint + "/api/fl/execute"
+
+	// 요청 페이로드 구성
+	payload := map[string]interface{}{
+		"federated_learning_id": federatedLearning.ID,
+		"aggregator_id":         aggregator.ID,
+		"rounds":                federatedLearning.Rounds,
+		"algorithm":             federatedLearning.Algorithm,
+		"model_type":            federatedLearning.ModelType,
+		"name":                  federatedLearning.Name,
+		"description":           federatedLearning.Description,
+		"role":                  "aggregator", // 집계자 역할 명시
+	}
+
+	// JSON 인코딩
+	jsonData, err := json.Marshal(payload)
+	if err != nil {
+		return fmt.Errorf("JSON 인코딩 실패: %v", err)
+	}
+
+	// HTTP 요청 생성
+	req, err := http.NewRequest("POST", requestURL, bytes.NewBuffer(jsonData))
+	if err != nil {
+		return fmt.Errorf("HTTP 요청 생성 실패: %v", err)
+	}
+
+	// 헤더 설정
+	req.Header.Set("Content-Type", "application/json")
+
+	// HTTP 클라이언트 생성 및 요청 전송
+	client := &http.Client{
+		Timeout: 30 * time.Second,
+	}
+
+	resp, err := client.Do(req)
+	if err != nil {
+		return fmt.Errorf("HTTP 요청 전송 실패: %v", err)
+	}
+	defer resp.Body.Close()
+
+	// 응답 상태 코드 확인
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		return fmt.Errorf("HTTP 요청 실패: 상태 코드 %d", resp.StatusCode)
+	}
+
+	return nil
 }
 
 // FederatedLearning 생성 요청 구조 (AggregatorID 기반)
