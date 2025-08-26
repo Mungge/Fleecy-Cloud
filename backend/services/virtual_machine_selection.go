@@ -22,9 +22,9 @@ type VMSelectionCriteria struct {
 
 // VM 선택 결과
 type VMSelectionResult struct {
-	SelectedVM      VirtualMachine `json:"selected_vm"`
-	SelectionReason string         `json:"selection_reason"`
-	CandidateCount  int            `json:"candidate_count"`
+	SelectedVM      *VirtualMachine `json:"selected_vm"`
+	SelectionReason string          `json:"selection_reason"`
+	CandidateCount  int             `json:"candidate_count"`
 }
 
 // VM 사용률 정보 (선택 알고리즘용) - 기존 모델을 활용
@@ -112,7 +112,7 @@ func (s *VMSelectionService) SelectOptimalVM(participant *models.Participant, cr
 
 	if len(candidateVMs) == 0 {
 		return &VMSelectionResult{
-			SelectedVM:      VirtualMachine{},
+			SelectedVM:      nil,
 			SelectionReason: "조건을 만족하는 VM을 찾을 수 없습니다",
 			CandidateCount:  0,
 		}, nil
@@ -138,7 +138,7 @@ func (s *VMSelectionService) SelectOptimalVM(participant *models.Participant, cr
 
 	if len(vmUtilizations) == 0 {
 		return &VMSelectionResult{
-			SelectedVM:      VirtualMachine{},
+			SelectedVM:      nil,
 			SelectionReason: "사용률 조건을 만족하는 VM을 찾을 수 없습니다",
 			CandidateCount:  len(candidateVMs),
 		}, nil
@@ -148,7 +148,7 @@ func (s *VMSelectionService) SelectOptimalVM(participant *models.Participant, cr
 	selectedVM, reason := s.selectVMWithUtilizationAndRoundRobin(participant.ID, vmUtilizations)
 
 	return &VMSelectionResult{
-		SelectedVM:      selectedVM.VM,
+		SelectedVM:      &selectedVM.VM,
 		SelectionReason: reason,
 		CandidateCount:  len(vmUtilizations),
 	}, nil
