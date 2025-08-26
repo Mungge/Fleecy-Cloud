@@ -22,18 +22,18 @@ type VMSelectionCriteria struct {
 
 // VM 선택 결과
 type VMSelectionResult struct {
-	SelectedVM      *models.VirtualMachine `json:"selected_vm"`
-	SelectionReason string                 `json:"selection_reason"`
-	CandidateCount  int                    `json:"candidate_count"`
+	SelectedVM      VirtualMachine `json:"selected_vm"`
+	SelectionReason string         `json:"selection_reason"`
+	CandidateCount  int            `json:"candidate_count"`
 }
 
 // VM 사용률 정보 (선택 알고리즘용) - 기존 모델을 활용
 type VMUtilization struct {
-	VM               *models.VirtualMachine   `json:"vm"`
-	MonitoringInfo   *models.VMMonitoringInfo `json:"monitoring_info"`
-	RuntimeInfo      *models.VMRuntimeInfo    `json:"runtime_info"`
-	UtilizationScore float64                  `json:"utilization_score"` // 종합 사용률 점수
-	IsHealthy        bool                     `json:"is_healthy"`
+	VM               VirtualMachine   `json:"vm"`
+	MonitoringInfo   VMMonitoringInfo `json:"monitoring_info"`
+	RuntimeInfo      VMRuntimeInfo    `json:"runtime_info"`
+	UtilizationScore float64          `json:"utilization_score"` // 종합 사용률 점수
+	IsHealthy        bool             `json:"is_healthy"`
 }
 
 type VMSelectionService struct {
@@ -75,7 +75,7 @@ func (s *VMSelectionService) SelectOptimalVM(participant *models.Participant, cr
 	}
 
 	// 2. DB 형태로 변환 및 기본 필터링
-	var candidateVMs []models.VirtualMachine
+	var candidateVMs []VirtualMachine
 	for _, osVM := range openStackVMs {
 		// 기본 조건 확인
 		if osVM.Status != criteria.RequiredStatus {
@@ -94,7 +94,7 @@ func (s *VMSelectionService) SelectOptimalVM(participant *models.Participant, cr
 		// IP 주소 직렬화
 		ipAddressesJSON, _ := json.Marshal(osVM.Addresses)
 
-		vm := models.VirtualMachine{
+		vm := VirtualMachine{
 			InstanceID:    osVM.ID,
 			Name:          osVM.Name,
 			ParticipantID: participant.ID,
@@ -112,7 +112,7 @@ func (s *VMSelectionService) SelectOptimalVM(participant *models.Participant, cr
 
 	if len(candidateVMs) == 0 {
 		return &VMSelectionResult{
-			SelectedVM:      nil,
+			SelectedVM:      VirtualMachine{},
 			SelectionReason: "조건을 만족하는 VM을 찾을 수 없습니다",
 			CandidateCount:  0,
 		}, nil
@@ -138,7 +138,7 @@ func (s *VMSelectionService) SelectOptimalVM(participant *models.Participant, cr
 
 	if len(vmUtilizations) == 0 {
 		return &VMSelectionResult{
-			SelectedVM:      nil,
+			SelectedVM:      VirtualMachine{},
 			SelectionReason: "사용률 조건을 만족하는 VM을 찾을 수 없습니다",
 			CandidateCount:  len(candidateVMs),
 		}, nil
@@ -155,7 +155,7 @@ func (s *VMSelectionService) SelectOptimalVM(participant *models.Participant, cr
 }
 
 // getVMUtilization은 VM의 현재 사용률 정보를 조회합니다
-func (s *VMSelectionService) getVMUtilization(participant *models.Participant, vm *models.VirtualMachine) (*VMUtilization, error) {
+func (s *VMSelectionService) getVMUtilization(participant *models.Participant, vm *VirtualMachine) (*VMUtilization, error) {
 	// 모니터링 정보 조회 - participant의 OpenStack endpoint 사용
 	monitoringInfo, err := s.openStackService.GetVMMonitoringInfoWithParticipant(participant, vm.InstanceID)
 	if err != nil {
@@ -180,9 +180,9 @@ func (s *VMSelectionService) getVMUtilization(participant *models.Participant, v
 		(monitoringInfo.DiskUsage * 0.1)
 
 	return &VMUtilization{
-		VM:               vm,
-		MonitoringInfo:   monitoringInfo,
-		RuntimeInfo:      runtimeInfo,
+		VM:               *vm,
+		MonitoringInfo:   *monitoringInfo,
+		RuntimeInfo:      *runtimeInfo,
 		UtilizationScore: utilizationScore,
 		IsHealthy:        healthCheck.Healthy,
 	}, nil
@@ -260,7 +260,7 @@ func (s *VMSelectionService) GetVMUtilizations(participant *models.Participant) 
 		// IP 주소 직렬화
 		ipAddressesJSON, _ := json.Marshal(osVM.Addresses)
 
-		vm := models.VirtualMachine{
+		vm := VirtualMachine{
 			InstanceID:    osVM.ID,
 			Name:          osVM.Name,
 			ParticipantID: participant.ID,
@@ -277,8 +277,8 @@ func (s *VMSelectionService) GetVMUtilizations(participant *models.Participant) 
 		if err != nil {
 			// 에러가 발생한 경우 기본값으로 설정
 			utilization = &VMUtilization{
-				VM: &vm,
-				MonitoringInfo: &models.VMMonitoringInfo{
+				VM: vm,
+				MonitoringInfo: VMMonitoringInfo{
 					InstanceID:      vm.InstanceID,
 					CPUUsage:        0,
 					MemoryUsage:     0,
@@ -287,7 +287,7 @@ func (s *VMSelectionService) GetVMUtilizations(participant *models.Participant) 
 					NetworkOutBytes: 0,
 					LastUpdated:     time.Now(),
 				},
-				RuntimeInfo: &models.VMRuntimeInfo{
+				RuntimeInfo: VMRuntimeInfo{
 					InstanceID:  vm.InstanceID,
 					Status:      vm.Status,
 					PowerState:  0,

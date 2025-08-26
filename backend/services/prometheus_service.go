@@ -9,8 +9,6 @@ import (
 	"strconv"
 	"strings"
 	"time"
-
-	"github.com/Mungge/Fleecy-Cloud/models"
 )
 
 // PrometheusService는 Prometheus API를 통해 메트릭 데이터를 수집하는 서비스입니다
@@ -101,7 +99,7 @@ func (p *PrometheusService) parseFloatValue(result *PrometheusQueryResult) (floa
 }
 
 // GetVMMonitoringInfoWithIP는 VM의 IP 주소를 사용하여 모니터링 정보를 조회합니다
-func (p *PrometheusService) GetVMMonitoringInfoWithIP(vmIP string) (*models.VMMonitoringInfo, error) {
+func (p *PrometheusService) GetVMMonitoringInfoWithIP(vmIP string) (*VMMonitoringInfo, error) {
 	// 먼저 사용 가능한 모든 인스턴스를 확인하고 매칭되는 것을 찾기
 	availableInstance := p.findMatchingInstance(vmIP)
 
@@ -138,7 +136,7 @@ func (p *PrometheusService) GetVMMonitoringInfoWithIP(vmIP string) (*models.VMMo
 		networkOutBytes = 0
 	}
 
-	return &models.VMMonitoringInfo{
+	return &VMMonitoringInfo{
 		InstanceID:      vmIP, // IP 주소를 인스턴스 ID로 사용
 		CPUUsage:        cpuUsage,
 		MemoryUsage:     memoryUsage,
