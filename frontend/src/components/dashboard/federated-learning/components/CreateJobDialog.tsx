@@ -39,6 +39,8 @@ import {
 } from "../constants";
 import { CreateJobFormHookReturn } from "../types";
 import { toast } from "sonner";
+import { useState } from "react";
+import { analyzeModelDefinition, formatModelSize, getDefaultModelSize, ModelAnalysis } from "../../aggregator/utils/modelDefinitionParser";
 
 interface CreateJobDialogProps {
 	participants: Participant[];
@@ -59,7 +61,10 @@ export const CreateJobDialog = ({
 		handleSubmit,
 	} = formHook;
 
-	const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+	const [modelAnalysis, setModelAnalysis] = useState<ModelAnalysis | null>(null);
+	const [isAnalyzing, setIsAnalyzing] = useState(false);
+
+	const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
 		const file = e.target.files && e.target.files[0];
 		if (!file) return;
 
@@ -68,10 +73,49 @@ export const CreateJobDialog = ({
 			toast.error(".py 형식의 모델 구조 정의 파일만 업로드할 수 있습니다.");
 			e.currentTarget.value = "";
 			setModelFile(null);
+			setModelAnalysis(null);
 			return;
 		}
 
 		setModelFile(file);
+		setIsAnalyzing(true);
+
+		try {
+			// 모델 정의 파일 분석
+			const analysis = await analyzeModelDefinition(file);
+			setModelAnalysis(analysis);
+			
+			// sessionStorage에 모델 크기 정보 저장 (나중에 집계자 최적화에서 사용)
+			sessionStorage.setItem("modelAnalysis", JSON.stringify(analysis));
+			
+			// 기존 modelFileSize도 업데이트하여 호환성 유지
+			sessionStorage.setItem("modelFileSize", analysis.modelSizeBytes.toString());
+			
+			toast.success(
+				`모델 분석 완료: ${formatModelSize(analysis.totalParams)} (${analysis.framework})`
+			);
+		} catch (error) {
+			console.error("모델 분석 실패:", error);
+			
+			// 분석 실패 시 모델 타입 기반 기본값 사용
+			const modelType = form.getValues("modelType");
+			const defaultParams = getDefaultModelSize(modelType);
+			const fallbackAnalysis: ModelAnalysis = {
+				totalParams: defaultParams,
+				modelSizeBytes: defaultParams * 4,
+				layerInfo: [],
+				framework: 'unknown'
+			};
+			
+			setModelAnalysis(fallbackAnalysis);
+			sessionStorage.setItem("modelAnalysis", JSON.stringify(fallbackAnalysis));
+			
+			toast.warning(
+				`모델 분석에 실패했습니다. 기본값을 사용합니다: ${formatModelSize(defaultParams)}`
+			);
+		} finally {
+			setIsAnalyzing(false);
+		}
 	};
 
 	return (
@@ -266,21 +310,54 @@ export const CreateJobDialog = ({
 								/>
 
 								<div className="space-y-2">
-									<Label>모델 구조 파일 업로드 (.py)</Label>
+									<Label>모델 정의 파일 업로드 (.py)</Label>
 									<div className="grid w-full max-w-sm items-center gap-1.5">
 										<Input
 											type="file"
 											accept={SUPPORTED_FILE_FORMATS}
 											onChange={handleFileChange}
+											disabled={isAnalyzing}
 										/>
 										<p className="text-sm text-muted-foreground">
-											지원 형식: .py
+											지원 형식: .py (PyTorch 또는 TensorFlow 모델 정의)
 										</p>
 									</div>
+									
+									{isAnalyzing && (
+										<div className="text-sm text-blue-600 flex items-center gap-2">
+											<div className="animate-spin rounded-full h-4 w-4 border-t-2 border-b-2 border-blue-600"></div>
+											모델 분석 중...
+										</div>
+									)}
+									
 									{modelFile && (
-										<div className="text-sm">
-											선택된 파일: {modelFile.name} (
-											{Math.round(modelFile.size / 1024)} KB)
+										<div className="text-sm space-y-1">
+											<div>선택된 파일: {modelFile.name} ({Math.round(modelFile.size / 1024)} KB)</div>
+											{modelAnalysis && (
+												<div className="bg-gray-50 p-3 rounded-md space-y-1">
+													<div className="font-medium text-green-600">
+														✓ 모델 분석 완료
+													</div>
+													<div>프레임워크: {modelAnalysis.framework}</div>
+													<div>예상 파라미터 수: {formatModelSize(modelAnalysis.totalParams)}</div>
+													<div>예상 모델 크기: {Math.round(modelAnalysis.modelSizeBytes / (1024 * 1024))} MB</div>
+													{modelAnalysis.layerInfo.length > 0 && (
+														<details className="text-xs">
+															<summary className="cursor-pointer">레이어 정보 보기</summary>
+															<div className="mt-1 space-y-1">
+																{modelAnalysis.layerInfo.slice(0, 5).map((layer, idx) => (
+																	<div key={idx}>
+																		• {layer.name}: {layer.params.toLocaleString()} params
+																	</div>
+																))}
+																{modelAnalysis.layerInfo.length > 5 && (
+																	<div>... 및 {modelAnalysis.layerInfo.length - 5}개 더</div>
+																)}
+															</div>
+														</details>
+													)}
+												</div>
+											)}
 										</div>
 									)}
 								</div>
@@ -381,7 +458,9 @@ export const CreateJobDialog = ({
 						</Tabs>
 
 						<DialogFooter>
-							<Button type="submit">다음: 집계자 생성</Button>
+							<Button type="submit" disabled={isAnalyzing}>
+								다음: 집계자 생성
+							</Button>
 						</DialogFooter>
 					</form>
 				</Form>
