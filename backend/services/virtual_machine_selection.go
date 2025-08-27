@@ -62,14 +62,7 @@ func (s *VMSelectionService) SelectOptimalVM(participant *models.Participant, cr
 		criteria.MaxMemoryUsage = 80.0 // 기본 80%
 	}
 
-	// 1. OpenStack에서 모든 VM 정보 조회
-	// 먼저 인증 토큰 획득
-	token, err := s.openStackService.GetAuthToken(participant)
-	if err != nil {
-		return nil, fmt.Errorf("OpenStack 인증 실패: %v", err)
-	}
-
-	openStackVMs, err := s.openStackService.ListVMInstances(participant, token)
+	openStackVMs, err := s.openStackService.GetAllVMInstances(participant)
 	if err != nil {
 		return nil, fmt.Errorf("VM 목록 조회 실패: %v", err)
 	}
