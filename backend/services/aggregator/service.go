@@ -52,9 +52,6 @@ type CreateAggregatorInput struct {
 	Region       string `json:"region" validate:"required"`
 	Zone         string `json:"zone" validate:"required"`
 	InstanceType string `json:"instance_type" validate:"required"`
-
-	// GCP 전용 (선택적)
-	ProjectID string `json:"project_id,omitempty"`
 }
 
 // CreateAggregatorResult Aggregator 생성 결과
@@ -101,10 +98,6 @@ func (s *AggregatorService) CreateAggregator(input CreateAggregatorInput) (*Crea
 
 // CreateAggregatorWithContext는 컨텍스트를 지원하는 새로운 Aggregator 생성 메서드입니다
 func (s *AggregatorService) CreateAggregatorWithContext(ctx context.Context, input CreateAggregatorInput) (*CreateAggregatorResult, error) {
-	// 입력 검증
-	if err := s.validateInput(input); err != nil {
-		return nil, err
-	}
 
 	// Aggregator 생성
 	aggregator := &models.Aggregator{
@@ -119,11 +112,6 @@ func (s *AggregatorService) CreateAggregatorWithContext(ctx context.Context, inp
 		Zone:          input.Zone,
 		InstanceType:  input.InstanceType,
 		StorageSpecs:  input.Storage + "GB",
-	}
-
-	// GCP인 경우 ProjectID 설정
-	if input.CloudProvider == "gcp" && input.ProjectID != "" {
-		aggregator.ProjectID = &input.ProjectID
 	}
 
 	// DB에 저장 (creating 상태로)
@@ -174,14 +162,6 @@ func (s *AggregatorService) CreateAggregatorWithContext(ctx context.Context, inp
 	}
 
 	return result, nil
-}
-
-// validateInput 입력값 검증
-func (s *AggregatorService) validateInput(input CreateAggregatorInput) error {
-	if input.CloudProvider == "gcp" && input.ProjectID == "" {
-		return ErrGCPNeedsProjectID
-	}
-	return nil
 }
 
 // GetAggregatorByID는 ID로 Aggregator를 조회하고 권한을 확인합니다
@@ -335,16 +315,7 @@ func (s *AggregatorService) deployWithTerraformContext(ctx context.Context, aggr
 			return fmt.Errorf("failed to generate SSH keypair for GCP: %v", err)
 		}
 
-		projectID := ""
-		if aggregator.ProjectID != nil {
-			projectID = *aggregator.ProjectID
-		}
-
-		if projectID == "" {
-			return fmt.Errorf("project ID is required for GCP deployment")
-		}
-
-		_, err = keypairService.GetOrCreateGCPKeypair(aggregator.UserID, projectID, keyName, keyPair.PublicKey, keyPair.PrivateKey)
+		_, err = keypairService.GetOrCreateGCPKeypair(aggregator.UserID, keyName, keyPair.PublicKey, keyPair.PrivateKey)
 		if err != nil {
 			return fmt.Errorf("failed to get or create GCP keypair: %v", err)
 		}
@@ -372,6 +343,20 @@ func (s *AggregatorService) deployWithTerraformContext(ctx context.Context, aggr
 		}
 	}
 
+	var projectID string
+    if aggregator.CloudProvider == "gcp" {
+        // GCP 자격증명에서 project_id 추출
+        var credentials map[string]interface{}
+        if err := json.Unmarshal(cloudConn.CredentialFile, &credentials); err != nil {
+            return fmt.Errorf("failed to parse GCP credentials: %v", err)
+        }
+        if id, ok := credentials["project_id"].(string); ok {
+            projectID = id
+        } else {
+            return fmt.Errorf("project_id not found in GCP credentials")
+        }
+    }
+
 	log.Printf("[%s] 4/5 Terraform 워크스페이스 생성 중...", aggregator.ID)
 	s.progressTracker.SendProgress(aggregator.ID, 4, "Terraform 워크스페이스 생성 중...")
 	
@@ -392,9 +377,10 @@ func (s *AggregatorService) deployWithTerraformContext(ctx context.Context, aggr
 		StorageSpecs:  aggregator.StorageSpecs,
 		AggregatorID:  aggregator.ID,
 		Algorithm:     aggregator.Algorithm,
-		ProjectID:     aggregator.ProjectID, // GCP인 경우만 값이 있음
 		AWSAccessKey:  awsAccessKey,
 		AWSSecretKey:  awsSecretKey,
+		ProjectID:     projectID,
+		GCPServiceAccountKey: string(cloudConn.CredentialFile), // JSON을 문자열로 변환
 	}
 
 	// Terraform 작업공간 생성

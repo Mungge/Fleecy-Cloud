@@ -22,7 +22,6 @@ type CreateAggregatorRequest struct {
 	Storage       string  `json:"storage" binding:"required"`
 	InstanceType  string  `json:"instanceType" binding:"required"`
 	CloudProvider string  `json:"cloudProvider" binding:"required,oneof=aws gcp"`
-	ProjectID     *string `json:"projectId,omitempty"` // GCP용 프로젝트 ID (선택적)
 }
 
 // CreateAggregatorResponse Aggregator 생성 응답

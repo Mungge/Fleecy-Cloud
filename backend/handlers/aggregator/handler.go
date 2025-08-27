@@ -142,7 +142,6 @@ func (h *AggregatorHandler) CreateAggregator(c *gin.Context) {
 		CloudProvider: request.CloudProvider,
 		ProjectName:   request.Name + "-project",
 		Zone:          request.Region + "a",
-		ProjectID:     getStringValue(request.ProjectID), // GCP용 프로젝트 ID
 	}
 
 	// 타임아웃 설정 (최대 10분)
