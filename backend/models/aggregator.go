@@ -32,6 +32,7 @@ type Aggregator struct {
 	NetworkUsage     float64  `json:"network_usage" gorm:"default:0"`
 	InstanceID       string   `json:"instance_id,omitempty"`
 	PublicIP         string   `json:"public_ip,omitempty"`
+	PrivateIP        string   `json:"private_ip,omitempty"`
 
 	CreatedAt time.Time `json:"created_at" gorm:"autoCreateTime"`
 	UpdatedAt time.Time `json:"updated_at" gorm:"autoUpdateTime"`
