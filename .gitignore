@@ -61,3 +61,4 @@ terraform.tfstate
 terraform.tfstate.*
 
 credentials/
+workspaces/
