@@ -64,7 +64,7 @@ func (h *VirtualMachineHandler) SelectOptimalVM(c *gin.Context) {
 	}
 
 	// 선택된 VM이 없는 경우 (빈 구조체인지 확인)
-	if result.SelectedVM.InstanceID == "" {
+	if result.SelectedVM == nil || result.SelectedVM.InstanceID == "" {
 		c.JSON(http.StatusNotFound, gin.H{
 			"error":           "조건을 만족하는 VM을 찾을 수 없습니다",
 			"reason":          result.SelectionReason,
