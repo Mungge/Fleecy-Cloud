@@ -66,9 +66,12 @@ variable "aws_secret_key" {
   sensitive   = true
 }
 
-
-
 variable "aggregator_id" {
   description = "집계자 고유 ID"
+  type        = string
+}
+
+variable "startup_script" {
+  description = "Startup script content"
   type        = string
 }

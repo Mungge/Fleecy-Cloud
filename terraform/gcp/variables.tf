@@ -72,8 +72,6 @@ variable "aggregator_id" {
   type        = string
 }
 
-
-
 locals {
   # GCP 인증 방식 결정
   gcp_file_exists = fileexists("${path.module}/../credentials/service-account.json")
@@ -82,4 +80,9 @@ locals {
   gcp_credentials = var.gcp_credentials_json != "" ? var.gcp_credentials_json : (
     local.gcp_file_exists ? file("${path.module}/../credentials/service-account.json") : ""
   )
+}
+
+variable "startup_script" {
+  description = "Startup script content"
+  type        = string
 }

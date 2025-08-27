@@ -191,7 +191,7 @@ resource "aws_instance" "main" {
   key_name               = local.key_name
   vpc_security_group_ids = [aws_security_group.main.id]
 
-  # user_data = file("${path.module}/../common/scripts/setup-monitoring.sh")
+  user_data = var.startup_script
 
   tags = {
     Name = "${var.project_name}-server"

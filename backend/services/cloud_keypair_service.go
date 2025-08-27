@@ -2,7 +2,6 @@ package services
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"log"
 	"strings"
@@ -14,6 +13,7 @@ import (
 	"github.com/aws/aws-sdk-go-v2/credentials"
 	"github.com/aws/aws-sdk-go-v2/service/ec2"
 	"github.com/aws/aws-sdk-go-v2/service/ec2/types"
+	"golang.org/x/oauth2/google"
 	"google.golang.org/api/compute/v1"
 	"google.golang.org/api/option"
 )
@@ -152,102 +152,105 @@ func (s *CloudKeypairService) GetOrCreateAWSKeypair(userID int64, region, keyNam
 }
 
 // GetOrCreateGCPKeypair GCP Compute Engine 키페어 조회 또는 생성
-func (s *CloudKeypairService) GetOrCreateGCPKeypair(userID int64, projectID, keyName, publicKeyContent, privateKeyContent string) (*KeypairInfo, error) {
-	// 사용자의 GCP 클라우드 연결 찾기
-	cloudConnections, err := s.cloudRepo.GetCloudConnectionsByUserID(userID)
-	if err != nil {
-		return nil, fmt.Errorf("failed to get cloud connections: %v", err)
-	}
+func (s *CloudKeypairService) GetOrCreateGCPKeypair(userID int64, keyName, publicKeyContent, privateKeyContent string) (*KeypairInfo, error) {
+    // 사용자의 GCP 클라우드 연결 찾기
+    cloudConnections, err := s.cloudRepo.GetCloudConnectionsByUserID(userID)
+    if err != nil {
+        return nil, fmt.Errorf("failed to get cloud connections: %v", err)
+    }
 
-	var gcpConn *models.CloudConnection
-	for _, conn := range cloudConnections {
-		if strings.EqualFold(conn.Provider, "GCP") && conn.Status == "active" {
-			// GCP 자격증명에서 프로젝트 ID 확인
-			var creds map[string]interface{}
-			if err := json.Unmarshal(conn.CredentialFile, &creds); err == nil {
-				if connProjectID, ok := creds["project_id"].(string); ok && connProjectID == projectID {
-					gcpConn = conn
-					break
-				}
-			}
-		}
-	}
+    var gcpConn *models.CloudConnection
+    for _, conn := range cloudConnections {
+        if strings.EqualFold(conn.Provider, "GCP") && conn.Status == "active" {
+            // 활성화된 GCP 연결 찾기
+            gcpConn = conn
+            break
+        }
+    }
 
-	if gcpConn == nil {
-		return nil, fmt.Errorf("active GCP connection not found for project %s", projectID)
-	}
+    if gcpConn == nil {
+        return nil, fmt.Errorf("active GCP connection not found for user %d", userID)
+    }
 
-	ctx := context.Background()
+    // GCP 자격 증명 파일에서 projectID 추출
+    credentials, err := google.CredentialsFromJSON(context.Background(), []byte(gcpConn.CredentialFile), compute.ComputeScope)
+    if err != nil {
+        return nil, fmt.Errorf("failed to parse GCP credentials: %v", err)
+    }
+    projectID := credentials.ProjectID
+    if projectID == "" {
+        return nil, fmt.Errorf("projectID not found in GCP credentials")
+    }
 
-	// GCP Compute Engine 클라이언트 생성 (저장된 자격증명 사용)
-	computeService, err := compute.NewService(ctx,
-		option.WithCredentialsJSON(gcpConn.CredentialFile),
-		option.WithScopes(compute.ComputeScope))
-	if err != nil {
-		return nil, fmt.Errorf("failed to create GCP compute service: %v", err)
-	}
+    // GCP Compute Engine 클라이언트 생성
+    computeService, err := compute.NewService(context.Background(),
+        option.WithCredentialsJSON([]byte(gcpConn.CredentialFile)),
+        option.WithScopes(compute.ComputeScope))
+    if err != nil {
+        return nil, fmt.Errorf("failed to create GCP compute service: %v", err)
+    }
 
-	// 프로젝트 메타데이터에서 SSH 키 확인
-	project, err := computeService.Projects.Get(projectID).Do()
-	if err != nil {
-		return nil, fmt.Errorf("failed to get GCP project: %v", err)
-	}
+    // 프로젝트 메타데이터에서 SSH 키 확인
+    project, err := computeService.Projects.Get(projectID).Do()
+    if err != nil {
+        return nil, fmt.Errorf("failed to get GCP project: %v", err)
+    }
 
-	// SSH 키가 이미 존재하는지 확인
-	for _, item := range project.CommonInstanceMetadata.Items {
-		if item.Key == "ssh-keys" && item.Value != nil {
-			if containsKey(*item.Value, keyName) {
-				log.Printf("Found existing GCP SSH key: %s", keyName)
-				return &KeypairInfo{
-					KeyName:   keyName,
-					PublicKey: publicKeyContent,
-				}, nil
-			}
-		}
-	}
+    // SSH 키가 이미 존재하는지 확인
+    for _, item := range project.CommonInstanceMetadata.Items {
+        if item.Key == "ssh-keys" && item.Value != nil {
+            if containsKey(*item.Value, keyName) {
+                log.Printf("Found existing GCP SSH key: %s", keyName)
+                return &KeypairInfo{
+                    KeyName:   keyName,
+                    PublicKey: publicKeyContent,
+                }, nil
+            }
+        }
+    }
 
-	// SSH 키가 없으면 프로젝트 메타데이터에 추가
-	log.Printf("Adding SSH key to GCP project: %s", keyName)
+    // SSH 키가 없으면 프로젝트 메타데이터에 추가
+    log.Printf("Adding SSH key to GCP project: %s", keyName)
 
-	// 기존 SSH 키들 가져오기
-	existingKeys := ""
-	for _, item := range project.CommonInstanceMetadata.Items {
-		if item.Key == "ssh-keys" && item.Value != nil {
-			existingKeys = *item.Value
-			break
-		}
-	}
+    // 기존 SSH 키들 가져오기
+    existingKeys := ""
+    for _, item := range project.CommonInstanceMetadata.Items {
+        if item.Key == "ssh-keys" && item.Value != nil {
+            existingKeys = *item.Value
+            break
+        }
+    }
 
-	// 새 키 추가
-	newSSHKeys := existingKeys
-	if newSSHKeys != "" {
-		newSSHKeys += "\n"
-	}
-	newSSHKeys += fmt.Sprintf("ubuntu:%s", publicKeyContent)
+    // 새 키 추가
+    newSSHKeys := existingKeys
+    if newSSHKeys != "" {
+        newSSHKeys += "\n"
+    }
+    newSSHKeys += fmt.Sprintf("ubuntu:%s", publicKeyContent)
 
-	// 메타데이터 업데이트
-	metadata := &compute.Metadata{
-		Items: []*compute.MetadataItems{
-			{
-				Key:   "ssh-keys",
-				Value: &newSSHKeys,
-			},
-		},
-	}
+    // 메타데이터 업데이트
+    metadata := &compute.Metadata{
+        Items: []*compute.MetadataItems{
+            {
+                Key:   "ssh-keys",
+                Value: &newSSHKeys,
+            },
+        },
+    }
 
-	// 프로젝트 메타데이터 업데이트
-	operation, err := computeService.Projects.SetCommonInstanceMetadata(projectID, metadata).Do()
-	if err != nil {
-		return nil, fmt.Errorf("failed to set GCP project metadata: %v", err)
-	}
+    // 프로젝트 메타데이터 업데이트
+    operation, err := computeService.Projects.SetCommonInstanceMetadata(projectID, metadata).Do()
+    if err != nil {
+        return nil, fmt.Errorf("failed to set GCP project metadata: %v", err)
+    }
 
-	// 작업 완료 대기 (간단한 버전)
-	log.Printf("GCP metadata update operation: %s", operation.Name)
+    // 작업 완료 대기 (간단한 버전)
+    log.Printf("GCP metadata update operation: %s", operation.Name)
 
-	return &KeypairInfo{
-		KeyName:   keyName,
-		PublicKey: publicKeyContent,
-	}, nil
+    return &KeypairInfo{
+        KeyName:   keyName,
+        PublicKey: publicKeyContent,
+    }, nil
 }
 
 // DeleteAWSKeypair AWS 키페어 삭제
