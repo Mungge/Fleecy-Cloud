@@ -87,8 +87,15 @@ export const createAggregator = async (
 			)
 		);
 
+		// 중복 방지를 위해 타임스탬프 추가
+		const timestamp = new Date()
+			.toISOString()
+			.replace(/[:.]/g, "-")
+			.slice(0, -5);
+		const uniqueName = `${federatedLearningData.name}-${timestamp}`;
+
 		const requestBody: CreateAggregatorRequest = {
-			name: federatedLearningData.name,
+			name: uniqueName,
 			algorithm: federatedLearningData.algorithm,
 			region: aggregatorConfig.region,
 			storage: String(derivedStorageGB),
@@ -109,6 +116,18 @@ export const createAggregator = async (
 		if (!response.ok) {
 			const errorData = await response.json().catch(() => ({}));
 			console.error("API 호출 실패:", errorData);
+
+			// 중복 생성 에러에 대한 특별한 처리
+			if (
+				response.status === 400 &&
+				errorData.error &&
+				errorData.error.includes("동일한 이름의 집계자가 이미 존재합니다")
+			) {
+				throw new Error(
+					"동일한 이름의 집계자가 이미 존재합니다. 다른 이름을 사용해주세요."
+				);
+			}
+
 			throw new Error(
 				errorData.error || `HTTP error! status: ${response.status}`
 			);

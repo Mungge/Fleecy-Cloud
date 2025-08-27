@@ -61,6 +61,16 @@ func (r *AggregatorRepository) UpdateAggregatorMetrics(id string, cpuUsage, memo
 		}).Error
 }
 
+func (r *AggregatorRepository) UpdateAggregatorIPInfo(id, instanceID, publicIP, privateIP string) error {
+	return r.db.Model(&models.Aggregator{}).
+		Where("id = ?", id).
+		Updates(map[string]interface{}{
+			"instance_id": instanceID,
+			"public_ip":   publicIP,
+			"private_ip":  privateIP,
+		}).Error
+}
+
 func (r *AggregatorRepository) UpdateAggregatorProgress(id string, currentRound int, accuracy *float64) error {
 	updates := map[string]interface{}{
 		"current_round": currentRound,
@@ -96,15 +106,15 @@ func (r *AggregatorRepository) UpdateTrainingRound(round *models.TrainingRound) 
 // Aggregator 통계 메서드들
 func (r *AggregatorRepository) GetAggregatorStats(userID int64) (map[string]interface{}, error) {
 	var total, running, completed, pending int64
-	
+
 	r.db.Model(&models.Aggregator{}).Where("user_id = ?", userID).Count(&total)
 	r.db.Model(&models.Aggregator{}).Where("user_id = ? AND status = ?", userID, "running").Count(&running)
 	r.db.Model(&models.Aggregator{}).Where("user_id = ? AND status = ?", userID, "completed").Count(&completed)
 	r.db.Model(&models.Aggregator{}).Where("user_id = ? AND status = ?", userID, "pending").Count(&pending)
-	
+
 	var totalCost float64
 	r.db.Model(&models.Aggregator{}).Where("user_id = ?", userID).Select("COALESCE(SUM(current_cost), 0)").Scan(&totalCost)
-	
+
 	return map[string]interface{}{
 		"total":      total,
 		"running":    running,
