@@ -76,7 +76,7 @@ const FederatedLearningStartContent = () => {
 			console.log("연합학습 시작 성공:", result);
 			
 			toast.success("연합학습이 성공적으로 시작되었습니다!", {
-				description: `연합학습 ID: ${result.federatedLearningId}`,
+				description: `연합학습 ID: ${result.federatedLearningId}\n참여자들에게 실행 요청을 전송했습니다.`,
 				duration: 5000,
 			});
 			
@@ -310,7 +310,7 @@ const FederatedLearningStartContent = () => {
 					{isStarting ? (
 						<>
 							<div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin mr-2" />
-							연합학습 저장 중...
+							연합학습 시작 중...
 						</>
 					) : (
 						<>
