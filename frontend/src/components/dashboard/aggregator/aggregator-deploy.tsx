@@ -1,7 +1,7 @@
 // @/components/dashboard/aggregator/aggregator-deploy.tsx
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useAggregatorCreation } from "./hooks/useAggregatorCreation";
 import { useAggregatorCreationStore } from "./aggregator.types";
 import { useRouter } from "next/navigation";
@@ -29,10 +29,11 @@ import {
 
 const AggregatorDeploy = () => {
 	const router = useRouter();
-	const { creationStatus, handleCreateAggregator} =
+	const { creationStatus, handleCreateAggregator, setCreationStatus } =
 		useAggregatorCreation();
 	const payload = useAggregatorCreationStore((s) => s.payload);
 	const [hasStartedDeployment, setHasStartedDeployment] = useState(false);
+	const deploymentInitiated = useRef(false);
 
 	// payload에서 실제 선택된 옵션과 연합학습 데이터 사용
 	const selectedOption = payload?.selectedOption;
@@ -67,10 +68,20 @@ const AggregatorDeploy = () => {
 	};
 
 	const handleRetryDeployment = () => {
+		// payload에서 aggregatorId 제거 (재배포를 위해)
+		if (payload) {
+			const { setPayload } = useAggregatorCreationStore.getState();
+			setPayload({
+				...payload,
+				aggregatorId: undefined, // aggregatorId 제거하여 재배포 허용
+			});
+		}
+
 		// 재시도 시 상태 초기화 및 배포 다시 시작
 		setHasStartedDeployment(false);
+		deploymentInitiated.current = false;
 		toast.info("배포를 다시 시도합니다...");
-		
+
 		// 약간의 지연 후 자동으로 재배포 시작 (useEffect에 의해)
 		setTimeout(() => {
 			// useEffect에서 hasStartedDeployment가 false이므로 자동으로 재시작됨
@@ -88,12 +99,32 @@ const AggregatorDeploy = () => {
 		}
 	}, [payload]);
 
-	// 컴포넌트 마운트 시 자동으로 배포 시작 (한 번만 실행)
+	// 컴포넌트 마운트 시 자동으로 배포 시작 (한 번만 실행, 엄격한 조건)
 	useEffect(() => {
-		if (!payload || hasStartedDeployment) {
+		// 필수 데이터가 없거나 이미 배포가 시작되었다면 종료
+		if (
+			!payload ||
+			!selectedOption ||
+			!federatedLearningData ||
+			hasStartedDeployment ||
+			deploymentInitiated.current
+		) {
 			return;
 		}
 
+		// 이미 aggregatorId가 있다면 이미 배포된 것으로 간주
+		if (payload.aggregatorId) {
+			console.log("이미 배포된 aggregator가 있습니다:", payload.aggregatorId);
+			setCreationStatus({
+				step: "completed",
+				message: "집계자가 이미 배포되었습니다!",
+				progress: 100,
+			});
+			return;
+		}
+
+		console.log("새로운 aggregator 배포를 시작합니다...");
+		deploymentInitiated.current = true;
 		setHasStartedDeployment(true);
 
 		handleCreateAggregator(
@@ -104,17 +135,21 @@ const AggregatorDeploy = () => {
 			},
 			(error: Error) => {
 				console.error("집계자 배포 실패:", error);
-			
-				toast.error(
-					`배포 실패: ${error.message}`, 
-					{
-						description: "다시 시도하세요.",
-						duration: 5000,
-					}
-				);
+
+				toast.error(`배포 실패: ${error.message}`, {
+					description: "다시 시도하세요.",
+					duration: 5000,
+				});
 			}
 		);
-	}, [payload, handleCreateAggregator, hasStartedDeployment]);
+	}, [
+		payload,
+		selectedOption,
+		federatedLearningData,
+		hasStartedDeployment,
+		handleCreateAggregator,
+		setCreationStatus,
+	]);
 
 	useEffect(() => {
 		if (!payload) {
@@ -347,8 +382,8 @@ const AggregatorDeploy = () => {
 			{/* 액션 버튼 */}
 			<div className="flex justify-center gap-4">
 				{creationStatus?.step === "completed" && (
-					<Button 
-						size="lg" 
+					<Button
+						size="lg"
 						className="min-w-[150px]"
 						onClick={handleGoToDashboard}
 					>
@@ -357,18 +392,18 @@ const AggregatorDeploy = () => {
 				)}
 
 				{creationStatus?.step === "error" && (
-					<Button
-						variant="outline"
-						onClick={handleRetryDeployment}
-						size="lg"
-					>
+					<Button variant="outline" onClick={handleRetryDeployment} size="lg">
 						다시 시도
 					</Button>
 				)}
 
 				{(creationStatus?.step === "completed" ||
 					creationStatus?.step === "error") && (
-					<Button variant="outline" onClick={handleStartFederatedLearning} size="lg">
+					<Button
+						variant="outline"
+						onClick={handleStartFederatedLearning}
+						size="lg"
+					>
 						연합학습 시작
 					</Button>
 				)}
