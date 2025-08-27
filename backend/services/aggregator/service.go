@@ -21,10 +21,10 @@ import (
 
 // AggregatorService는 Aggregator 관련 비즈니스 로직을 처리합니다
 type AggregatorService struct {
-	repo           *repository.AggregatorRepository
-	flRepo         *repository.FederatedLearningRepository
-	sshKeypairRepo *repository.SSHKeypairRepository
-	cloudRepo      *repository.CloudRepository
+	repo            *repository.AggregatorRepository
+	flRepo          *repository.FederatedLearningRepository
+	sshKeypairRepo  *repository.SSHKeypairRepository
+	cloudRepo       *repository.CloudRepository
 	progressTracker *SSEProgressTracker
 }
 
@@ -99,6 +99,18 @@ func (s *AggregatorService) CreateAggregator(input CreateAggregatorInput) (*Crea
 // CreateAggregatorWithContext는 컨텍스트를 지원하는 새로운 Aggregator 생성 메서드입니다
 func (s *AggregatorService) CreateAggregatorWithContext(ctx context.Context, input CreateAggregatorInput) (*CreateAggregatorResult, error) {
 
+	// 동일한 사용자의 동일한 이름 집계자가 이미 존재하는지 확인
+	existingAggregators, err := s.repo.GetAggregatorsByUserID(input.UserID)
+	if err != nil {
+		return nil, fmt.Errorf("기존 집계자 조회 실패: %w", err)
+	}
+
+	for _, existing := range existingAggregators {
+		if existing.Name == input.Name && (existing.Status == "creating" || existing.Status == "running") {
+			return nil, fmt.Errorf("동일한 이름의 집계자가 이미 존재합니다: %s", input.Name)
+		}
+	}
+
 	// Aggregator 생성
 	aggregator := &models.Aggregator{
 		ID:            uuid.New().String(),
@@ -121,16 +133,16 @@ func (s *AggregatorService) CreateAggregatorWithContext(ctx context.Context, inp
 
 	// Terraform 배포 시작 (동기) - 사용자가 결과를 즉시 확인 가능
 	log.Printf("Starting synchronous Terraform deployment for aggregator %s", aggregator.ID)
-	
+
 	if err := s.deployWithTerraformContext(ctx, aggregator); err != nil {
 		log.Printf("Terraform deployment failed for aggregator %s: %v", aggregator.ID, err)
-		
+
 		// 배포 실패 시 상태 업데이트
 		aggregator.Status = "failed"
-		if updateErr := s.repo.UpdateAggregator(aggregator); updateErr != nil {
+		if updateErr := s.repo.UpdateAggregatorStatus(aggregator.ID, "failed"); updateErr != nil {
 			log.Printf("Failed to update aggregator status to failed: %v", updateErr)
 		}
-		
+
 		// 사용자 친화적인 에러 메시지 생성
 		var userMessage string
 		if strings.Contains(err.Error(), "active AWS connection not found") {
@@ -142,14 +154,14 @@ func (s *AggregatorService) CreateAggregatorWithContext(ctx context.Context, inp
 		} else {
 			userMessage = fmt.Sprintf("집계자 배포 실패: %v", err)
 		}
-		
+
 		return nil, fmt.Errorf("%s", userMessage)
 	}
-	
+
 	// 배포 성공 시 상태 업데이트
 	log.Printf("Terraform deployment successful for aggregator %s", aggregator.ID)
 	aggregator.Status = "running"
-	if updateErr := s.repo.UpdateAggregator(aggregator); updateErr != nil {
+	if updateErr := s.repo.UpdateAggregatorStatus(aggregator.ID, "running"); updateErr != nil {
 		log.Printf("Failed to update aggregator status to running: %v", updateErr)
 		// 상태 업데이트 실패해도 배포는 성공했으므로 계속 진행
 	}
@@ -197,22 +209,17 @@ func (s *AggregatorService) GetAggregatorsByUser(userID int64) ([]*models.Aggreg
 	return s.repo.GetAggregatorsByUserID(userID)
 }
 
-// deployWithTerraform은 Terraform을 사용하여 Aggregator를 배포합니다 (기본 컨텍스트 사용)
-func (s *AggregatorService) deployWithTerraform(aggregator *models.Aggregator) error {
-	return s.deployWithTerraformContext(context.Background(), aggregator)
-}
-
 // deployWithTerraformContext는 컨텍스트를 지원하는 Terraform 배포 메서드입니다
 func (s *AggregatorService) deployWithTerraformContext(ctx context.Context, aggregator *models.Aggregator) error {
 	log.Printf("[%s] 1/5 클라우드 연결 정보 조회 중...", aggregator.ID)
 	s.progressTracker.SendProgress(aggregator.ID, 1, "클라우드 연결 정보 조회 중...")
-	
+
 	// 컨텍스트 취소 확인
 	if ctx.Err() != nil {
 		s.progressTracker.SendError(aggregator.ID, 1, "배포 취소됨", ctx.Err())
 		return fmt.Errorf("deployment cancelled: %v", ctx.Err())
 	}
-	
+
 	// 사용자의 클라우드 연결 정보 가져오기
 	cloudConnections, err := s.cloudRepo.GetCloudConnectionsByUserID(aggregator.UserID)
 	if err != nil {
@@ -234,7 +241,7 @@ func (s *AggregatorService) deployWithTerraformContext(ctx context.Context, aggr
 
 	log.Printf("[%s] 2/5 클라우드 자격증명 파싱 중...", aggregator.ID)
 	s.progressTracker.SendProgress(aggregator.ID, 2, "클라우드 자격증명 파싱 중...")
-	
+
 	// 자격증명 파싱
 	var awsAccessKey, awsSecretKey string
 	if aggregator.CloudProvider == "aws" {
@@ -283,13 +290,13 @@ func (s *AggregatorService) deployWithTerraformContext(ctx context.Context, aggr
 
 	log.Printf("[%s] 3/5 SSH 키페어 생성/조회 중...", aggregator.ID)
 	s.progressTracker.SendProgress(aggregator.ID, 3, "SSH 키페어 생성/조회 중...")
-	
+
 	// 컨텍스트 취소 확인
 	if ctx.Err() != nil {
 		s.progressTracker.SendError(aggregator.ID, 3, "배포 취소됨", ctx.Err())
 		return fmt.Errorf("deployment cancelled: %v", ctx.Err())
 	}
-	
+
 	// 클라우드 키페어 서비스 초기화
 	keypairService := services.NewCloudKeypairService(s.cloudRepo)
 
@@ -359,13 +366,13 @@ func (s *AggregatorService) deployWithTerraformContext(ctx context.Context, aggr
 
 	log.Printf("[%s] 4/5 Terraform 워크스페이스 생성 중...", aggregator.ID)
 	s.progressTracker.SendProgress(aggregator.ID, 4, "Terraform 워크스페이스 생성 중...")
-	
+
 	// 컨텍스트 취소 확인
 	if ctx.Err() != nil {
 		s.progressTracker.SendError(aggregator.ID, 4, "배포 취소됨", ctx.Err())
 		return fmt.Errorf("deployment cancelled: %v", ctx.Err())
 	}
-	
+
 	// Terraform 설정 생성
 	config := utils.TerraformConfig{
 		CloudProvider: aggregator.CloudProvider,
@@ -390,13 +397,13 @@ func (s *AggregatorService) deployWithTerraformContext(ctx context.Context, aggr
 	}
 
 	s.progressTracker.SendProgress(aggregator.ID, 5, "Terraform 배포 실행 중... (시간이 소요될 수 있습니다)")
-	
+
 	// 컨텍스트 취소 확인
 	if ctx.Err() != nil {
 		s.progressTracker.SendError(aggregator.ID, 5, "배포 취소됨", ctx.Err())
 		return fmt.Errorf("deployment cancelled: %v", ctx.Err())
 	}
-	
+
 	// Terraform 배포 실행 (terraform-exec 사용, 컨텍스트 지원)
 	result, err := utils.DeployWithTerraformContext(ctx, workspaceDir)
 
@@ -417,9 +424,23 @@ func (s *AggregatorService) deployWithTerraformContext(ctx context.Context, aggr
 	// 배포 성공
 	s.progressTracker.SendSuccess(aggregator.ID, "집계자 배포가 성공적으로 완료되었습니다")
 
+	// Terraform 결과 로깅
+	log.Printf("[%s] Terraform deployment result: InstanceID=%s, PublicIP=%s, PrivateIP=%s", 
+		aggregator.ID, result.InstanceID, result.PublicIP, result.PrivateIP)
+
 	// 배포 결과를 aggregator에 저장
 	aggregator.InstanceID = result.InstanceID
+	aggregator.PublicIP = result.PublicIP
+	aggregator.PrivateIP = result.PrivateIP
 	aggregator.Status = "running"
+
+	// IP 정보를 데이터베이스에 업데이트
+	if err := s.repo.UpdateAggregatorIPInfo(aggregator.ID, result.InstanceID, result.PublicIP, result.PrivateIP); err != nil {
+		log.Printf("Failed to update aggregator IP info: %v", err)
+		// IP 정보 업데이트 실패해도 배포는 성공했으므로 계속 진행
+	} else {
+		log.Printf("Updated aggregator %s with IP info: Public=%s, Private=%s", aggregator.ID, result.PublicIP, result.PrivateIP)
+	}
 
 	return nil
 }

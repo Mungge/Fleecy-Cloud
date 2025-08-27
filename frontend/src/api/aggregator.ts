@@ -63,6 +63,7 @@ export interface CreateAggregatorRequest {
   storage: string; // GB as string
   instanceType: string;
   cloudProvider: string; // "aws" | "gcp"
+  projectId?: string; // GCP용 프로젝트 ID (선택적)
 }
 
 // Aggregator 생성 응답 타입
@@ -78,8 +79,6 @@ export const createAggregator = async (
   aggregatorConfig: AggregatorConfig
 ): Promise<CreateAggregatorResponse> => {
   try {
-    console.log("Creating aggregator with data");
-
     // Derive simple storage size in GB (fallback to 20GB)
     const derivedStorageGB = Math.max(
       20,
@@ -87,17 +86,23 @@ export const createAggregator = async (
         (federatedLearningData.modelFileSize || 0) / (1024 * 1024 * 1024) + 5
       )
     );
-    console.log("Derived storage size in GB:", derivedStorageGB);
+
+    // 중복 방지를 위해 타임스탬프 추가
+    const timestamp = new Date()
+      .toISOString()
+      .replace(/[:.]/g, "-")
+      .slice(0, -5);
+    const uniqueName = `${federatedLearningData.name}-${timestamp}`;
 
     const requestBody: CreateAggregatorRequest = {
-      name: federatedLearningData.name,
+      name: uniqueName,
       algorithm: federatedLearningData.algorithm,
       region: aggregatorConfig.region,
       storage: String(derivedStorageGB),
       instanceType: aggregatorConfig.instanceType,
       cloudProvider: aggregatorConfig.cloudProvider || "aws", // 기본값 AWS
+      projectId: aggregatorConfig.projectId, // GCP용
     };
-    console.log("Request body for aggregator creation:", requestBody);
 
     const response = await fetch(`${API_URL}/api/aggregators`, {
       method: "POST",
@@ -107,11 +112,22 @@ export const createAggregator = async (
       },
       body: JSON.stringify(requestBody),
     });
-    console.log("Response status:", response.status);
 
     if (!response.ok) {
       const errorData = await response.json().catch(() => ({}));
       console.error("API 호출 실패:", errorData);
+
+      // 중복 생성 에러에 대한 특별한 처리
+      if (
+        response.status === 400 &&
+        errorData.error &&
+        errorData.error.includes("동일한 이름의 집계자가 이미 존재합니다")
+      ) {
+        throw new Error(
+          "동일한 이름의 집계자가 이미 존재합니다. 다른 이름을 사용해주세요."
+        );
+      }
+
       throw new Error(
         errorData.error || `HTTP error! status: ${response.status}`
       );
