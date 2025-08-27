@@ -151,7 +151,7 @@ func (s *AggregatorService) CreateAggregatorWithContext(ctx context.Context, inp
 
 		// 배포 실패 시 상태 업데이트
 		aggregator.Status = "failed"
-		if updateErr := s.repo.UpdateAggregator(aggregator); updateErr != nil {
+		if updateErr := s.repo.UpdateAggregatorStatus(aggregator.ID, "failed"); updateErr != nil {
 			log.Printf("Failed to update aggregator status to failed: %v", updateErr)
 		}
 
@@ -173,7 +173,7 @@ func (s *AggregatorService) CreateAggregatorWithContext(ctx context.Context, inp
 	// 배포 성공 시 상태 업데이트
 	log.Printf("Terraform deployment successful for aggregator %s", aggregator.ID)
 	aggregator.Status = "running"
-	if updateErr := s.repo.UpdateAggregator(aggregator); updateErr != nil {
+	if updateErr := s.repo.UpdateAggregatorStatus(aggregator.ID, "running"); updateErr != nil {
 		log.Printf("Failed to update aggregator status to running: %v", updateErr)
 		// 상태 업데이트 실패해도 배포는 성공했으므로 계속 진행
 	}
@@ -444,6 +444,8 @@ func (s *AggregatorService) deployWithTerraformContext(ctx context.Context, aggr
 
 	// 배포 결과를 aggregator에 저장
 	aggregator.InstanceID = result.InstanceID
+	aggregator.PublicIP = result.PublicIP
+	aggregator.PrivateIP = result.PrivateIP
 	aggregator.Status = "running"
 
 	// IP 정보를 데이터베이스에 업데이트
