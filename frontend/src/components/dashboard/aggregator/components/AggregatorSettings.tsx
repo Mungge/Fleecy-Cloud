@@ -32,7 +32,7 @@ export const AggregatorSettings = ({
     return { costWeight, latencyWeight };
   };
 
-  const currentWeights = calculateWeights(config.weightBalance ?? 0);
+  const currentWeights = calculateWeights(config.weightBalance ?? 1);
 
   return (
     <Card>
@@ -108,7 +108,7 @@ export const AggregatorSettings = ({
           </div>
           <Slider
             id="weightBalance"
-            value={[config.weightBalance ?? 0]}
+            value={[config.weightBalance ?? 1]}
             onValueChange={([value]) => 
               onConfigChange({ ...config, weightBalance: value })
             }
