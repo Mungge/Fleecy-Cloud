@@ -86,6 +86,11 @@ class AggregatorOptimizer:
         self.participants = self.federated_learning['participants']
         self.constraints = self._extract_constraints()
         
+        # 가중치 계산
+        weight_balance = self.aggregator_config.get('weightBalance', 4)  # 기본값: 4 (균형)
+        self.cost_weight = (weight_balance) / 10.0  # 0.1 ~ 1.0
+        self.latency_weight = 1.0 - self.cost_weight  # 0.9 ~ 0.0
+        
         self.price_data = self.db.get_cloud_prices()
         self.latency_matrix = self.db.get_latency_matrix()
         self.options = self._generate_options()
@@ -98,6 +103,7 @@ class AggregatorOptimizer:
             'maxBudget': config.get('maxBudget', 100000000),  # 1억원으로 기본값 설정
             'maxLatency': config.get('maxLatency', 1000.0),   # 1000ms로 기본값 설정
             'minMemoryRequirement': config.get('minMemoryRequirement', 4),  # 4GB로 기본값 설정
+            'weightBalance': config.get('weightBalance', 5), # 똑같은 균형으로 기본값 설정
         }
     
     def _generate_options(self) -> List[Dict]:
@@ -331,7 +337,7 @@ class AggregatorOptimizer:
         for opt in options:
             norm_cost = opt['cost'] / max_cost
             norm_latency = opt['avgLatency'] / max_latency
-            opt['_score'] = 0.4 * norm_cost + 0.6 * norm_latency
+            opt['_score'] = self.cost_weight * norm_cost + self.latency_weight * norm_latency
         
         # 점수 기준으로 정렬 (낮을수록 좋음)
         options.sort(key=lambda x: x['_score'])
@@ -362,7 +368,13 @@ class AggregatorOptimizer:
             'participantRegions': list(set(p.get('region', 'unknown') for p in self.participants)),
             'totalCandidateOptions': len(self.price_data),
             'feasibleOptions': len(self.options),
-            'constraints': self.constraints,
+            'constraints': {
+                **self.constraints,
+                'appliedWeights': {
+                    'costWeight': self.cost_weight,
+                    'latencyWeight': self.latency_weight
+                }
+            },
             'modelInfo': {
                 'name': self.federated_learning.get('name', ''),
                 'modelType': self.federated_learning.get('modelType', ''),
