@@ -24,6 +24,15 @@ export const AggregatorSettings = ({
   participantCount,
 }: AggregatorSettingsProps) => {
   const canOptimize = !isLoading && (!creationStatus || creationStatus.step === "error");
+  
+  //가중치 계산 함수
+  const calculateWeights = (value: number) => {
+    const costWeight = (value) / 10;
+    const latencyWeight = 1 - costWeight;
+    return { costWeight, latencyWeight };
+  };
+
+  const currentWeights = calculateWeights(config.weightBalance ?? 1);
 
   return (
     <Card>
@@ -88,6 +97,32 @@ export const AggregatorSettings = ({
             <span>500ms (여유)</span>
           </div>
         </div>
+        
+        {/* 가중치 밸런스 제약조건 */}
+        <div className="space-y-2">
+          <div className="flex justify-between items-center">
+            <Label htmlFor="weightBalance">비용 vs 지연시간 우선순위</Label>
+            <span className="text-sm font-medium text-purple-600">
+              비용 {(currentWeights.costWeight * 100).toFixed(0)}% : 지연시간 {(currentWeights.latencyWeight * 100).toFixed(0)}%
+            </span>
+          </div>
+          <Slider
+            id="weightBalance"
+            value={[config.weightBalance ?? 1]}
+            onValueChange={([value]) => 
+              onConfigChange({ ...config, weightBalance: value })
+            }
+            max={9}
+            min={1}
+            step={1}
+            className="w-full"
+          />
+          <div className="flex justify-between text-xs text-muted-foreground">
+            <span>비용 우선 (10% : 90%)</span>
+            <span>균형 (50% : 50%)</span>
+            <span>지연시간 우선 (90% : 10%)</span>
+          </div>
+        </div>
 
         {/* 현재 설정 요약 */}
         <div className="mt-4 p-3 bg-gray-50 rounded-md">
@@ -95,6 +130,10 @@ export const AggregatorSettings = ({
           <div className="text-sm">
             월 최대 <span className="font-medium text-green-600">{config.maxBudget.toLocaleString()}원</span> 예산으로{" "}
             <span className="font-medium text-blue-600">{config.maxLatency}ms</span> 이하의 응답속도 보장
+          </div>
+          <div className="text-sm mt-1">
+            우선순위: 비용 <span className="font-medium text-purple-600">{(currentWeights.costWeight * 100).toFixed(0)}%</span>, 
+            지연시간 <span className="font-medium text-purple-600">{(currentWeights.latencyWeight * 100).toFixed(0)}%</span>
           </div>
         </div>
 

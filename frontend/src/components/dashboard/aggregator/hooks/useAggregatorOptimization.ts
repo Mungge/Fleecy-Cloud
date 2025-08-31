@@ -49,10 +49,13 @@ export const useAggregatorOptimization = () => {
               federatedLearningData.participants.length,
               1.5 // 안전 계수
             );
+            
+            const weights = calculateWeights(aggregatorOptimizeConfig.weightBalance || 4);
 
             toast.info(
               `모델 분석 기반 최소 메모리 요구사항: ${minMemoryRequired}GB\n` +
-              `(${formatModelSize(modelAnalysis.totalParams)} × 참여자 ${federatedLearningData.participants.length}명 × 1.5)`,
+              `(${formatModelSize(modelAnalysis.totalParams)} × 참여자 ${federatedLearningData.participants.length}명 × 1.5)`+
+              `가중치 설정: 비용 ${(weights.costWeight * 100).toFixed(0)}%, 지연시간 ${(weights.latencyWeight * 100).toFixed(0)}%`,
               { duration: 6000 }
             );
           }
@@ -150,6 +153,12 @@ export const useAggregatorOptimization = () => {
     setOptimizationStatus(null);
     setOptimizationResults(null);
     setShowAggregatorSelection(false);
+  };
+
+  const calculateWeights = (weightBalance: number) => {
+    const costWeight = (weightBalance) / 10;
+    const latencyWeight = 1 - costWeight;
+    return { costWeight, latencyWeight };
   };
 
   return {

@@ -28,6 +28,7 @@ export interface AggregatorInfo {
 export interface AggregatorOptimizeConfig {
   maxBudget: number;
   maxLatency: number;
+  weightBalance?: number;
 }
 
 export interface AggregatorConfig {
