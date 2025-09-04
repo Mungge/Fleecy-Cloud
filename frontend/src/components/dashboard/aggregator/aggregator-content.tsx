@@ -19,6 +19,7 @@ import {
   Server,
 } from "lucide-react";
 import AggregatorDetails from "@/components/dashboard/aggregator/aggregator-details";
+import { getAggregators, AggregatorInfo } from "@/api/aggregator"; // aggregator.ts에서 getAggregators 함수 import
 
 export interface AggregatorInstance {
   id: string;
@@ -58,110 +59,90 @@ const AggregatorManagementContent: React.FC = () => {
     useState<AggregatorInstance | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [showDetails, setShowDetails] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
-  // Mock data - 실제로는 API에서 가져올 데이터
+  // AggregatorInfo를 AggregatorInstance로 변환하는 함수
+  const mapAggregatorInfoToInstance = (
+    info: AggregatorInfo
+  ): AggregatorInstance => {
+    return {
+      id: info.id,
+      name: info.name, // ID 기반으로 이름 생성
+      status: mapStatus(info.status),
+      algorithm: info.algorithm,
+      federatedLearningId: info.federated_learning?.id ?? "",
+      federatedLearningName: info.project_name,
+      cloudProvider: info.cloud_provider,
+      region: info.region,
+      instanceType: info.instance_type,
+      createdAt: info.created_at,
+      lastUpdated: info.updated_at,
+      participants: info.participant_count,
+      rounds: info.federated_learning?.rounds ?? 0,
+      currentRound: info.status === "running" ? info.current_round : 0,
+      accuracy: Number(info.federated_learning?.accuracy) ?? 0,
+      cost: {
+        current: info.current_cost,
+        estimated: info.estimated_cost,
+      },
+      specs: {
+        cpu: info.cpu_specs,
+        memory: info.memory_specs,
+        storage: info.storage_specs,
+      },
+      metrics: {
+        cpuUsage: info.status === "running" ? info.cpu_usage : 0,
+        memoryUsage: info.status === "running" ? info.memory_usage : 0,
+        networkUsage: info.status === "running" ? info.network_usage : 0,
+      },
+    };
+  };
+
+  // 상태 매핑 함수
+  const mapStatus = (
+    status: string
+  ): "running" | "completed" | "error" | "pending" => {
+    const statusMap: {
+      [key: string]: "running" | "completed" | "error" | "pending";
+    } = {
+      running: "running",
+      completed: "completed",
+      failed: "error",
+      error: "error",
+      pending: "pending",
+      creating: "pending",
+    };
+    return statusMap[status] || "pending";
+  };
+
+  // aggregator.ts의 getAggregators 함수 사용
   useEffect(() => {
     const fetchAggregators = async () => {
       setIsLoading(true);
-      // 실제 API 호출을 시뮬레이션
-      setTimeout(() => {
-        const mockAggregators: AggregatorInstance[] = [
-          {
-            id: "agg-001",
-            name: "이미지 분류 Aggregator",
-            status: "running",
-            algorithm: "FedAvg",
-            federatedLearningId: "fl-001",
-            federatedLearningName: "이미지 분류 모델",
-            cloudProvider: "AWS",
-            region: "ap-northeast-2",
-            instanceType: "t3.large",
-            createdAt: "2024-01-15T10:30:00Z",
-            lastUpdated: "2024-01-15T14:30:00Z",
-            participants: 5,
-            rounds: 10,
-            currentRound: 7,
-            accuracy: 87.5,
-            cost: {
-              current: 12.5,
-              estimated: 18.0,
-            },
-            specs: {
-              cpu: "2 vCPUs",
-              memory: "8 GB",
-              storage: "20 GB SSD",
-            },
-            metrics: {
-              cpuUsage: 68,
-              memoryUsage: 72,
-              networkUsage: 45,
-            },
-          },
-          {
-            id: "agg-002",
-            name: "자연어 처리 Aggregator",
-            status: "completed",
-            algorithm: "FedProx",
-            federatedLearningId: "fl-002",
-            federatedLearningName: "자연어 처리 모델",
-            cloudProvider: "GCP",
-            region: "asia-northeast3",
-            instanceType: "n1-standard-4",
-            createdAt: "2024-01-10T09:00:00Z",
-            lastUpdated: "2024-01-12T16:45:00Z",
-            participants: 8,
-            rounds: 15,
-            currentRound: 15,
-            accuracy: 91.2,
-            cost: {
-              current: 45.3,
-              estimated: 45.3,
-            },
-            specs: {
-              cpu: "4 vCPUs",
-              memory: "15 GB",
-              storage: "100 GB SSD",
-            },
-            metrics: {
-              cpuUsage: 0,
-              memoryUsage: 0,
-              networkUsage: 0,
-            },
-          },
-          {
-            id: "agg-003",
-            name: "시계열 예측 Aggregator",
-            status: "pending",
-            algorithm: "FedAdam",
-            federatedLearningId: "fl-003",
-            federatedLearningName: "시계열 예측 모델",
-            cloudProvider: "AWS",
-            region: "us-west-2",
-            instanceType: "c5.xlarge",
-            createdAt: "2024-01-16T08:00:00Z",
-            lastUpdated: "2024-01-16T08:00:00Z",
-            participants: 3,
-            rounds: 20,
-            currentRound: 0,
-            cost: {
-              current: 0,
-              estimated: 25.6,
-            },
-            specs: {
-              cpu: "4 vCPUs",
-              memory: "8 GB",
-              storage: "25 GB SSD",
-            },
-            metrics: {
-              cpuUsage: 0,
-              memoryUsage: 0,
-              networkUsage: 0,
-            },
-          },
-        ];
-        setAggregators(mockAggregators);
+      setError(null);
+
+      try {
+        const data = await getAggregators();
+
+        // data가 배열이 아니거나 null/undefined인 경우 처리
+        if (!Array.isArray(data)) {
+          console.warn("API response is not an array:", data);
+          setAggregators([]);
+          return;
+        }
+
+        // 실제 API 응답을 AggregatorInstance로 변환
+        const mappedData = data.map((item: AggregatorInfo, index) => {
+          return mapAggregatorInfoToInstance(item);
+        });
+
+        setAggregators(mappedData);
+      } catch (err) {
+        console.error("Failed to fetch aggregators:", err);
+        setError("집계자 정보를 불러오는데 실패했습니다.");
+      } finally {
         setIsLoading(false);
-      }, 1000);
+      }
     };
 
     fetchAggregators();
@@ -294,6 +275,11 @@ const AggregatorManagementContent: React.FC = () => {
             <div className="flex justify-center items-center py-12">
               <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-primary"></div>
             </div>
+          ) : error ? (
+            <div className="text-center py-8 text-red-500">
+              <Server className="mx-auto h-12 w-12 mb-4 opacity-50" />
+              <p>{error}</p>
+            </div>
           ) : aggregators.length === 0 ? (
             <div className="text-center py-8 text-muted-foreground">
               <Server className="mx-auto h-12 w-12 mb-4 opacity-50" />
@@ -352,12 +338,10 @@ const AggregatorManagementContent: React.FC = () => {
                               <span className="font-medium">메모리:</span>{" "}
                               {aggregator.metrics.memoryUsage}%
                             </div>
-                            {aggregator.accuracy && (
-                              <div>
-                                <span className="font-medium">정확도:</span>{" "}
-                                {aggregator.accuracy}%
-                              </div>
-                            )}
+                            <div>
+                              <span className="font-medium">정확도:</span>{" "}
+                              {aggregator.accuracy}%
+                            </div>
                           </div>
                         </div>
                       )}

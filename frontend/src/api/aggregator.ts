@@ -11,17 +11,58 @@ export interface TerraformOutput {
   [key: string]: unknown;
 }
 
-// Aggregator 정보 타입 정의
+// 실제 API 응답 구조에 맞는 Aggregator 정보 타입 정의
 export interface AggregatorInfo {
   id: string;
-  federatedLearningId: string;
+  user_id: number;
+  name: string;
   status: string;
+  algorithm: string;
+  cloud_provider: string;
+  project_name: string;
   region: string;
-  instanceType: string;
-  storage: string;
-  createdAt: string;
-  updatedAt: string;
-  terraformOutput?: TerraformOutput;
+  zone: string;
+  instance_type: string;
+  participant_count: number;
+  current_round: number;
+  current_cost: number;
+  estimated_cost: number;
+  cpu_specs: string;
+  memory_specs: string;
+  storage_specs: string;
+  cpu_usage: number;
+  memory_usage: number;
+  network_usage: number;
+  instance_id: string;
+  public_ip: string;
+  private_ip: string;
+  created_at: string;
+  updated_at: string;
+  user: {
+    id: number;
+    email: string;
+    name: string;
+    created_at: string;
+    updated_at: string;
+  };
+  federated_learning?: {
+    id: string;
+    user_id: number;
+    cloud_connection_id: string;
+    aggregator_id: string;
+    name: string;
+    description: string;
+    status: string;
+    participant_count: number;
+    completed_at: string | null;
+    accuracy: string;
+    rounds: number;
+    algorithm: string;
+    model_type: string;
+    created_at: string;
+    updated_at: string;
+  };
+  terraformOutput?: TerraformOutput; // 기존 필드 유지
 }
 
 // Aggregator 배치 최적화설정 타입 정의
@@ -39,14 +80,24 @@ export interface AggregatorConfig {
   projectId?: string; // GCP용 프로젝트 ID (선택적)
 }
 
-// 연합학습 데이터 타입 정의
+// 연합학습 데이터 타입 정의 (실제 API 구조에 맞게 수정)
 export interface FederatedLearningData {
+  id: string;
+  user_id: number;
+  cloud_connection_id: string;
+  aggregator_id: string;
   name: string;
   description: string;
-  modelType: string;
-  algorithm: string;
+  status: string;
+  participant_count: number;
+  completed_at: string | null;
+  accuracy: string;
   rounds: number;
-  participants: Array<{
+  algorithm: string;
+  model_type: string;
+  created_at: string;
+  updated_at: string;
+  participants?: Array<{
     id: string;
     name: string;
     status: string;
@@ -73,6 +124,30 @@ export interface CreateAggregatorResponse {
   status: string;
   terraformStatus?: string;
 }
+
+// API 응답에서 사용되는 상태 값들
+export type AggregatorStatus =
+  | "running"
+  | "completed"
+  | "error"
+  | "pending"
+  | "creating"
+  | "failed"
+  | "ready"
+  | "stopped";
+
+export type FederatedLearningStatus =
+  | "ready"
+  | "running"
+  | "completed"
+  | "failed"
+  | "pending";
+
+// 클라우드 제공자 타입
+export type CloudProvider = "aws" | "gcp" | "azure";
+
+// 모델 타입
+export type ModelType = "nlp" | "cv" | "tabular" | "time_series";
 
 // Aggregator 생성 함수
 export const createAggregator = async (
