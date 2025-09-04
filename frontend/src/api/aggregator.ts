@@ -129,7 +129,7 @@ export interface CreateAggregatorResponse {
 export interface AggregatorControlResponse {
   status: string;
   message?: string;
-  data?: any;
+  data?: JSON;
 }
 
 // API 응답에서 사용되는 상태 값들
