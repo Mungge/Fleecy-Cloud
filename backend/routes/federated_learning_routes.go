@@ -17,6 +17,12 @@ func SetupFederatedLearningRoutes(authorized *gin.RouterGroup, federatedLearning
 		// 특정 연합학습 작업 조회
 		federated.GET("/:id", federatedLearningHandler.GetFederatedLearning)
 
+		// 특정 연합학습 작업의 로그 조회
+		federated.GET("/:id/logs", federatedLearningHandler.GetFederatedLearningLogs)
+
+		// 특정 연합학습 작업의 로그 스트리밍
+		federated.GET("/:id/logs/stream", federatedLearningHandler.StreamFederatedLearningLogs)
+
 		// 특정 연합학습 작업 업데이트
 		federated.PUT("/:id", federatedLearningHandler.UpdateFederatedLearning)
 

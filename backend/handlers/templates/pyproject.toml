@@ -1,0 +1,39 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "flower-demo"
+version = "1.0.0"
+description = ""
+license = "Apache-2.0"
+# Dependencies for your Flower App
+dependencies = [
+    "flwr[simulation]>=1.20.0",
+    "flwr-datasets[vision]>=0.5.0",
+    "torch==2.7.1",
+    "torchvision==0.22.1",
+]
+
+[tool.flwr.app]
+publisher = "jinhyeok"
+
+[tool.flwr.app.components]
+serverapp = "flower_demo.server_app:app"
+clientapp = "flower_demo.client_app:app"
+
+[tool.flwr.federations]
+default = "remote-federation"
+
+[tool.flwr.federations.remote-federation]
+address = "<HOST>:<PORT>"
+insecure = true
+
+[tool.flwr.app.config]
+num-server-rounds = 10
+algorithm = "FedAvg"
+model-type = "CNN"
+local-epochs = 3
+fraction-fit = 1
+min-fit-clients = 1
+min-available-clients = 1
