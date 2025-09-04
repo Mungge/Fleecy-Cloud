@@ -341,7 +341,14 @@ const AggregatorManagementContent: React.FC = () => {
             <Wallet className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">₩{/* 여기에 비용 값 */}</div>
+            <div className="text-2xl font-bold">
+              {formatCurrency(
+                aggregators.reduce(
+                  (total, agg) => total + (agg.cost?.current || 0),
+                  0
+                )
+              )}
+            </div>
           </CardContent>
         </Card>
       </div>
