@@ -34,6 +34,15 @@ export interface BackendTrainingRound {
   created_at: string;
 }
 
+export interface TrainingHistory {
+  round: number;
+  accuracy: number;
+  loss: number;
+  timestamp: string;
+  duration?: number;
+  participantsCount?: number;
+}
+
 // UI용 확장된 AggregatorInstance 타입
 export interface AggregatorInstance {
   id: string;
@@ -75,6 +84,19 @@ export interface AggregatorInstance {
   };
 }
 
+// 클라우드 가격 정보 타입 정의
+export interface CloudPriceInfo {
+  id: number;
+  provider_id: number;
+  provider: string;
+  region_id: number;
+  region: string;
+  instance_type: string;
+  vcpu_count: number;
+  memory_gb: number;
+  on_demand_price: number;
+}
+
 // 통계 타입 정의 (백엔드에서 map[string]interface{} 형태로 반환)
 export interface AggregatorStats {
   totalAggregators: number;
@@ -83,16 +105,7 @@ export interface AggregatorStats {
   totalCost: number;
 }
 
-// 학습 히스토리 타입 정의
-export interface TrainingHistory {
-  round: number;
-  accuracy: number;
-  loss: number;
-  timestamp: string;
-  duration?: number;
-  participantsCount?: number;
-}
-
+// 기존 타입들 유지 (다른 컴포넌트에서 사용)
 export interface TerraformOutput {
   instanceId?: string;
   publicIp?: string;
@@ -350,48 +363,44 @@ const fetchWithAuth = async (url: string, options: RequestInit = {}) => {
 };
 
 // 백엔드 데이터를 UI 형태로 변환하는 함수
-const transformBackendToUI = (
+const transformBackendToUI = async (
   backend: BackendAggregator
-): AggregatorInstance => {
-  // instanceType에서 스펙 추정
-  const getSpecsFromInstanceType = (instanceType: string) => {
-    // TODO: 인스턴스 타입별 스펙 정보는 백엔드 API를 통해 동적으로 받아오는 것이 이상적입니다.
-    const specs: { [key: string]: { cpu: string; memory: string } } = {
-      "t3.large": { cpu: "2 vCPUs", memory: "8 GB" },
-      "t3.xlarge": { cpu: "4 vCPUs", memory: "16 GB" },
-      "c5.xlarge": { cpu: "4 vCPUs", memory: "8 GB" },
-      "n1-standard-4": { cpu: "4 vCPUs", memory: "15 GB" },
-    };
-    return specs[instanceType] || { cpu: "2 vCPUs", memory: "8 GB" };
+): Promise<AggregatorInstance> => {
+  // DB에서 인스턴스 타입 스펙 정보 조회
+  const getSpecsFromDB = async (instanceType: string) => {
+    try {
+      const specs = await aggregatorAPI.getInstanceTypeSpecs(instanceType);
+      return {
+        cpu: `${specs.vcpu_count} vCPUs`,
+        memory: `${specs.memory_gb} GB`,
+      };
+    } catch (error) {
+      console.warn(`Failed to get specs for ${instanceType}:`, error);
+      // 기본값 반환
+      return { cpu: "2 vCPUs", memory: "8 GB" };
+    }
   };
 
-  const specs = getSpecsFromInstanceType(backend.instance_type);
+  const specs = await getSpecsFromDB(backend.instance_type);
 
   return {
     id: backend.id,
     name: backend.name,
     status: backend.status as AggregatorInstance["status"],
     algorithm: backend.algorithm,
-    // TODO: federatedLearningId는 백엔드에서 관련 프로젝트 ID를 받아와야 합니다. 현재는 aggregator id를 임시로 사용합니다.
-    federatedLearningId: backend.id,
-    // TODO: federatedLearningName은 백엔드에서 관련 프로젝트 이름을 받아와야 합니다. 현재는 aggregator 이름을 기반으로 임시 생성합니다.
+    federatedLearningId: backend.id, // 임시
     federatedLearningName: `FL-${backend.name}`,
     cloudProvider: backend.cloud_provider,
     region: backend.region,
     instanceType: backend.instance_type,
     createdAt: backend.created_at,
     lastUpdated: backend.updated_at,
-    // TODO: participants는 실제 학습에 참여하는 클라이언트 수를 백엔드에서 받아와야 합니다.
     participants: Math.floor(Math.random() * 5) + 3, // 임시값
-    // TODO: rounds는 프로젝트 설정에서 정의된 총 라운드 수를 백엔드에서 받아와야 합니다.
     rounds: 10,
-    // TODO: currentRound는 백엔드에서 실제 진행 중인 라운드 정보를 받아와야 합니다.
     currentRound:
       backend.status === "running" ? Math.floor(Math.random() * 10) : 0,
-    // TODO: accuracy는 백엔드에서 최근 학습 라운드의 실제 정확도를 받아와야 합니다.
     accuracy:
       backend.status === "running" ? Math.random() * 30 + 70 : undefined,
-    // TODO: cost 관련 데이터는 백엔드에서 실제 비용 정보를 받아와야 합니다.
     cost: {
       current: Math.random() * 50 + 10,
       estimated: Math.random() * 100 + 50,
@@ -401,7 +410,6 @@ const transformBackendToUI = (
       memory: specs.memory,
       storage: backend.storage_specs,
     },
-    // TODO: metrics 관련 데이터는 백엔드 모니터링 시스템에서 실제 사용량 데이터를 받아와야 합니다.
     metrics: {
       cpuUsage: backend.status === "running" ? Math.random() * 60 + 20 : 0,
       memoryUsage: backend.status === "running" ? Math.random() * 50 + 30 : 0,
@@ -452,7 +460,15 @@ export const getAggregatorsExtended = async (): Promise<
   AggregatorInstance[]
 > => {
   const backendAggregators = await getAggregators();
-  return backendAggregators.map(transformBackendToUI);
+
+  // 각 aggregator에 대해 스펙 정보를 DB에서 조회하여 변환
+  const transformedAggregators = await Promise.all(
+    backendAggregators.map(async (aggregator) => {
+      return await transformBackendToUI(aggregator);
+    })
+  );
+
+  return transformedAggregators;
 };
 
 // Aggregator 통계 조회
@@ -484,7 +500,7 @@ export const getAggregator = async (
   }
 
   const backendAggregator = await response.json();
-  return transformBackendToUI(backendAggregator);
+  return await transformBackendToUI(backendAggregator);
 };
 
 // Aggregator 상태 업데이트
@@ -552,6 +568,7 @@ export const deleteAggregator = async (aggregatorId: string): Promise<void> => {
 
 // API 클래스
 class AggregatorAPI {
+  // 기존 메서드들
   getAggregators = getAggregatorsExtended;
   getAggregatorStats = getAggregatorStats;
   getAggregator = getAggregator;
@@ -561,6 +578,60 @@ class AggregatorAPI {
   getTrainingHistory = getTrainingHistory;
   deleteAggregator = deleteAggregator;
   optimizeAggregatorPlacement = optimizeAggregatorPlacement;
+
+  // 클라우드 가격 정보 관련 메서드들
+  async getInstanceTypeSpecs(instanceType: string): Promise<CloudPriceInfo> {
+    const response = await fetch(
+      `${API_URL}/api/cloud-price/instance-types/${instanceType}`,
+      {
+        credentials: "include",
+        headers: {
+          "Content-Type": "application/json",
+        },
+      }
+    );
+
+    if (!response.ok) {
+      throw new Error(`HTTP error! status: ${response.status}`);
+    }
+
+    return response.json();
+  }
+
+  async getAllInstanceTypes(): Promise<CloudPriceInfo[]> {
+    const response = await fetch(`${API_URL}/api/cloud-price/instance-types`, {
+      credentials: "include",
+      headers: {
+        "Content-Type": "application/json",
+      },
+    });
+
+    if (!response.ok) {
+      throw new Error(`HTTP error! status: ${response.status}`);
+    }
+
+    return response.json();
+  }
+
+  async getInstanceTypesByProvider(
+    providerId: number
+  ): Promise<CloudPriceInfo[]> {
+    const response = await fetch(
+      `${API_URL}/api/cloud-price/providers/${providerId}/instance-types`,
+      {
+        credentials: "include",
+        headers: {
+          "Content-Type": "application/json",
+        },
+      }
+    );
+
+    if (!response.ok) {
+      throw new Error(`HTTP error! status: ${response.status}`);
+    }
+
+    return response.json();
+  }
 }
 
 export const aggregatorAPI = new AggregatorAPI();
