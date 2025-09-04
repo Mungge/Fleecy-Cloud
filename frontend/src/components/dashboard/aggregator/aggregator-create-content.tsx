@@ -5,7 +5,12 @@ import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { ArrowLeft } from "lucide-react";
 import { toast } from "sonner";
-import { FederatedLearningData, AggregatorOptimizeConfig, CreationStatus, AggregatorOption } from "./aggregator.types";
+import {
+	FederatedLearningData,
+	AggregatorOptimizeConfig,
+	CreationStatus,
+	AggregatorOption,
+} from "./aggregator.types";
 import { useAggregatorOptimization } from "./hooks/useAggregatorOptimization";
 import { useAggregatorCreation } from "./hooks/useAggregatorCreation";
 import { AggregatorSelectionModal } from "./components/AggregatorSelectionModal";
@@ -17,12 +22,13 @@ import { useAggregatorCreationStore } from "./aggregator.types";
 
 const AggregatorCreateContent = () => {
 	const router = useRouter();
-	const [federatedLearningData, setFederatedLearningData] = useState<FederatedLearningData | null>(null);
-	const [, setModelFileSize] = useState<number>(0);
-	const [aggregatorOptimizeConfig, setAggregatorOptimizeConfig] = useState<AggregatorOptimizeConfig>({
-		maxBudget: 100000,
-		maxLatency: 150,
-	});
+	const [federatedLearningData, setFederatedLearningData] =
+		useState<FederatedLearningData | null>(null);
+	const [aggregatorOptimizeConfig, setAggregatorOptimizeConfig] =
+		useState<AggregatorOptimizeConfig>({
+			maxBudget: 100000,
+			maxLatency: 150,
+		});
 
 	// 최적화 훅
 	const {
@@ -40,12 +46,13 @@ const AggregatorCreateContent = () => {
 	const {
 		isCreating,
 		creationStatus: actualCreationStatus,
-		resetCreation
+		resetCreation,
 	} = useAggregatorCreation();
 
 	// 통합 상태 관리 (UI 표시용)
 	const isLoading = isOptimizing || isCreating;
-	const displayStatus: CreationStatus | null = actualCreationStatus || optimizationStatus;
+	const displayStatus: CreationStatus | null =
+		actualCreationStatus || optimizationStatus;
 
 	// 페이지 로드 시 sessionStorage에서 데이터 가져오기
 	useEffect(() => {
@@ -57,8 +64,11 @@ const AggregatorCreateContent = () => {
 				setFederatedLearningData(parsedData);
 				if (savedFileSize) {
 					const fileSizeInBytes = parseInt(savedFileSize, 10);
-					setModelFileSize(fileSizeInBytes);
-					console.log("모델 파일 크기 (MB):", (fileSizeInBytes / (1024 * 1024)).toFixed(2), "MB");
+					console.log(
+						"모델 파일 크기 (MB):",
+						(fileSizeInBytes / (1024 * 1024)).toFixed(2),
+						"MB"
+					);
 				}
 			} catch (error) {
 				console.error("데이터 파싱 실패:", error);
@@ -82,9 +92,9 @@ const AggregatorCreateContent = () => {
 			// 이전 상태 초기화
 			resetCreation();
 			handleAggregatorOptimization(
-				federatedLearningData, 
-				aggregatorOptimizeConfig,
-				);
+				federatedLearningData,
+				aggregatorOptimizeConfig
+			);
 		}
 	};
 
