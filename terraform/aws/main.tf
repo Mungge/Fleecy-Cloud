@@ -191,6 +191,16 @@ resource "aws_instance" "main" {
   key_name               = local.key_name
   vpc_security_group_ids = [aws_security_group.main.id]
 
+  # 루트 볼륨 설정 (30GB)
+  root_block_device {
+    volume_type = "gp3"
+    volume_size = 30
+    encrypted   = true
+    tags = {
+      Name = "${var.project_name}-root-volume"
+    }
+  }
+
   # user_data = file("${path.module}/../common/scripts/setup-monitoring.sh")
 
   tags = {
