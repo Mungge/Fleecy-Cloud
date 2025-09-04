@@ -10,7 +10,6 @@ import {
 } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { toast } from "sonner";
 import {
   Eye,
   Monitor,
@@ -18,61 +17,154 @@ import {
   Settings,
   Activity,
   Server,
-  RefreshCw,
 } from "lucide-react";
 import AggregatorDetails from "@/components/dashboard/aggregator/aggregator-details";
-import {
-  AggregatorInstance,
-  AggregatorStats,
-  aggregatorAPI,
-} from "@/api/aggregator";
+
+export interface AggregatorInstance {
+  id: string;
+  name: string;
+  status: "running" | "completed" | "error" | "pending";
+  algorithm: string;
+  federatedLearningId: string;
+  federatedLearningName: string;
+  cloudProvider: string;
+  region: string;
+  instanceType: string;
+  createdAt: string;
+  lastUpdated: string;
+  participants: number;
+  rounds: number;
+  currentRound: number;
+  accuracy?: number;
+  cost?: {
+    current: number;
+    estimated: number;
+  };
+  specs: {
+    cpu: string;
+    memory: string;
+    storage: string;
+  };
+  metrics: {
+    cpuUsage: number;
+    memoryUsage: number;
+    networkUsage: number;
+  };
+}
 
 const AggregatorManagementContent: React.FC = () => {
   const [aggregators, setAggregators] = useState<AggregatorInstance[]>([]);
-  const [stats, setStats] = useState<AggregatorStats | null>(null);
   const [selectedAggregator, setSelectedAggregator] =
     useState<AggregatorInstance | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [showDetails, setShowDetails] = useState(false);
-  const [isRefreshing, setIsRefreshing] = useState(false);
 
-  const fetchData = async () => {
-    try {
-      setIsLoading(true);
-      const [aggregatorsData, statsData] = await Promise.all([
-        aggregatorAPI.getAggregators(),
-        aggregatorAPI.getAggregatorStats(),
-      ]);
-
-      setAggregators(aggregatorsData);
-      setStats(statsData);
-    } catch (error) {
-      console.error("Failed to fetch aggregator data:", error);
-      toast.error("집계자 데이터를 불러오는데 실패했습니다.");
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
-  const refreshData = async () => {
-    try {
-      setIsRefreshing(true);
-      await fetchData();
-      toast.success("최신 집계자 정보를 불러왔습니다.");
-    } catch (error) {
-      toast.error("데이터를 새로고침하는데 실패했습니다.");
-    } finally {
-      setIsRefreshing(false);
-    }
-  };
-
+  // Mock data - 실제로는 API에서 가져올 데이터
   useEffect(() => {
-    fetchData();
+    const fetchAggregators = async () => {
+      setIsLoading(true);
+      // 실제 API 호출을 시뮬레이션
+      setTimeout(() => {
+        const mockAggregators: AggregatorInstance[] = [
+          {
+            id: "agg-001",
+            name: "이미지 분류 Aggregator",
+            status: "running",
+            algorithm: "FedAvg",
+            federatedLearningId: "fl-001",
+            federatedLearningName: "이미지 분류 모델",
+            cloudProvider: "AWS",
+            region: "ap-northeast-2",
+            instanceType: "t3.large",
+            createdAt: "2024-01-15T10:30:00Z",
+            lastUpdated: "2024-01-15T14:30:00Z",
+            participants: 5,
+            rounds: 10,
+            currentRound: 7,
+            accuracy: 87.5,
+            cost: {
+              current: 12.5,
+              estimated: 18.0,
+            },
+            specs: {
+              cpu: "2 vCPUs",
+              memory: "8 GB",
+              storage: "20 GB SSD",
+            },
+            metrics: {
+              cpuUsage: 68,
+              memoryUsage: 72,
+              networkUsage: 45,
+            },
+          },
+          {
+            id: "agg-002",
+            name: "자연어 처리 Aggregator",
+            status: "completed",
+            algorithm: "FedProx",
+            federatedLearningId: "fl-002",
+            federatedLearningName: "자연어 처리 모델",
+            cloudProvider: "GCP",
+            region: "asia-northeast3",
+            instanceType: "n1-standard-4",
+            createdAt: "2024-01-10T09:00:00Z",
+            lastUpdated: "2024-01-12T16:45:00Z",
+            participants: 8,
+            rounds: 15,
+            currentRound: 15,
+            accuracy: 91.2,
+            cost: {
+              current: 45.3,
+              estimated: 45.3,
+            },
+            specs: {
+              cpu: "4 vCPUs",
+              memory: "15 GB",
+              storage: "100 GB SSD",
+            },
+            metrics: {
+              cpuUsage: 0,
+              memoryUsage: 0,
+              networkUsage: 0,
+            },
+          },
+          {
+            id: "agg-003",
+            name: "시계열 예측 Aggregator",
+            status: "pending",
+            algorithm: "FedAdam",
+            federatedLearningId: "fl-003",
+            federatedLearningName: "시계열 예측 모델",
+            cloudProvider: "AWS",
+            region: "us-west-2",
+            instanceType: "c5.xlarge",
+            createdAt: "2024-01-16T08:00:00Z",
+            lastUpdated: "2024-01-16T08:00:00Z",
+            participants: 3,
+            rounds: 20,
+            currentRound: 0,
+            cost: {
+              current: 0,
+              estimated: 25.6,
+            },
+            specs: {
+              cpu: "4 vCPUs",
+              memory: "8 GB",
+              storage: "25 GB SSD",
+            },
+            metrics: {
+              cpuUsage: 0,
+              memoryUsage: 0,
+              networkUsage: 0,
+            },
+          },
+        ];
+        setAggregators(mockAggregators);
+        setIsLoading(false);
+      }, 1000);
+    };
 
-    // 실시간 업데이트를 위한 폴링 (30초마다)
-    const interval = setInterval(fetchData, 30000);
-
-    return () => clearInterval(interval);
+    fetchAggregators();
   }, []);
 
   const getStatusColor = (status: string) => {
@@ -110,16 +202,6 @@ const AggregatorManagementContent: React.FC = () => {
     setShowDetails(true);
   };
 
-  const handleDeleteAggregator = async (id: string) => {
-    try {
-      await aggregatorAPI.deleteAggregator(id);
-      await fetchData(); // 데이터 다시 로드
-      toast.success("집계자가 성공적으로 삭제되었습니다.");
-    } catch (error) {
-      toast.error("집계자 삭제에 실패했습니다.");
-    }
-  };
-
   const formatDate = (dateString: string) => {
     return new Date(dateString).toLocaleString("ko-KR");
   };
@@ -136,7 +218,6 @@ const AggregatorManagementContent: React.FC = () => {
       <AggregatorDetails
         aggregator={selectedAggregator}
         onBack={() => setShowDetails(false)}
-        onUpdate={fetchData}
       />
     );
   }
@@ -150,17 +231,6 @@ const AggregatorManagementContent: React.FC = () => {
             연합학습 집계자 인스턴스를 관리하고 모니터링합니다
           </p>
         </div>
-        <Button
-          variant="outline"
-          onClick={refreshData}
-          disabled={isRefreshing}
-          className="flex items-center gap-2"
-        >
-          <RefreshCw
-            className={`h-4 w-4 ${isRefreshing ? "animate-spin" : ""}`}
-          />
-          새로고침
-        </Button>
       </div>
 
       {/* 통계 카드 */}
@@ -171,9 +241,7 @@ const AggregatorManagementContent: React.FC = () => {
             <Server className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">
-              {stats ? stats.totalAggregators : aggregators.length}
-            </div>
+            <div className="text-2xl font-bold">{aggregators.length}</div>
           </CardContent>
         </Card>
         <Card>
@@ -183,9 +251,7 @@ const AggregatorManagementContent: React.FC = () => {
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">
-              {stats
-                ? stats.runningAggregators
-                : aggregators.filter((a) => a.status === "running").length}
+              {aggregators.filter((a) => a.status === "running").length}
             </div>
           </CardContent>
         </Card>
@@ -196,9 +262,7 @@ const AggregatorManagementContent: React.FC = () => {
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">
-              {stats
-                ? stats.completedAggregators
-                : aggregators.filter((a) => a.status === "completed").length}
+              {aggregators.filter((a) => a.status === "completed").length}
             </div>
           </CardContent>
         </Card>
@@ -209,14 +273,9 @@ const AggregatorManagementContent: React.FC = () => {
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">
-              {stats
-                ? formatCurrency(stats.totalCost)
-                : formatCurrency(
-                    aggregators.reduce(
-                      (sum, a) => sum + (a.cost?.current || 0),
-                      0
-                    )
-                  )}
+              {formatCurrency(
+                aggregators.reduce((sum, a) => sum + (a.cost?.current || 0), 0)
+              )}
             </div>
           </CardContent>
         </Card>
@@ -287,19 +346,16 @@ const AggregatorManagementContent: React.FC = () => {
                           <div className="flex items-center space-x-4 text-sm">
                             <div>
                               <span className="font-medium">CPU:</span>{" "}
-                              {(aggregator.metrics?.cpuUsage ?? 0).toFixed(2)}%
+                              {aggregator.metrics.cpuUsage}%
                             </div>
                             <div>
                               <span className="font-medium">메모리:</span>{" "}
-                              {(aggregator.metrics?.memoryUsage ?? 0).toFixed(
-                                2
-                              )}
-                              %
+                              {aggregator.metrics.memoryUsage}%
                             </div>
                             {aggregator.accuracy && (
                               <div>
                                 <span className="font-medium">정확도:</span>{" "}
-                                {aggregator.accuracy.toFixed(2)}%
+                                {aggregator.accuracy}%
                               </div>
                             )}
                           </div>
