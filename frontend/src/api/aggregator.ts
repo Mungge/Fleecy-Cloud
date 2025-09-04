@@ -125,6 +125,13 @@ export interface CreateAggregatorResponse {
   terraformStatus?: string;
 }
 
+// Aggregator 제어 응답 타입
+export interface AggregatorControlResponse {
+  status: string;
+  message?: string;
+  data?: any;
+}
+
 // API 응답에서 사용되는 상태 값들
 export type AggregatorStatus =
   | "running"
@@ -293,6 +300,70 @@ export const deleteAggregator = async (aggregatorId: string): Promise<void> => {
     }
   } catch (error) {
     console.error("Aggregator 삭제에 실패했습니다:", error);
+    throw error;
+  }
+};
+
+// Aggregator 일시정지 함수
+export const pauseAggregator = async (
+  aggregatorId: string
+): Promise<AggregatorControlResponse> => {
+  try {
+    const response = await fetch(`${API_URL}/api/aggregators/${aggregatorId}`, {
+      method: "PUT",
+      credentials: "include",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        action: "pause",
+      }),
+    });
+
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({}));
+      throw new Error(
+        errorData.error || `HTTP error! status: ${response.status}`
+      );
+    }
+
+    const data = await response.json();
+    console.log(`Aggregator ${aggregatorId} 일시정지 성공:`, data);
+    return data;
+  } catch (error) {
+    console.error(`Aggregator ${aggregatorId} 일시정지에 실패했습니다:`, error);
+    throw error;
+  }
+};
+
+// Aggregator 재개 함수
+export const resumeAggregator = async (
+  aggregatorId: string
+): Promise<AggregatorControlResponse> => {
+  try {
+    const response = await fetch(`${API_URL}/api/aggregators/${aggregatorId}`, {
+      method: "PUT",
+      credentials: "include",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        action: "resume",
+      }),
+    });
+
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({}));
+      throw new Error(
+        errorData.error || `HTTP error! status: ${response.status}`
+      );
+    }
+
+    const data = await response.json();
+    console.log(`Aggregator ${aggregatorId} 재개 성공:`, data);
+    return data;
+  } catch (error) {
+    console.error(`Aggregator ${aggregatorId} 재개에 실패했습니다:`, error);
     throw error;
   }
 };
