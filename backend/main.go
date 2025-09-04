@@ -46,8 +46,8 @@ func main() {
 	aggregatorHandler := aggregatorDeps.AggregatorHandler
 
 	// SSH 키페어 핸들러 초기화
-	sshKeypairService := services.NewSSHKeypairService(repos.SSHKeypairRepo)
-	sshKeypairHandler := handlers.NewSSHKeypairHandler(sshKeypairService)
+	sshKeypairService = services.NewSSHKeypairService(repos.SSHKeypairRepo)
+	sshKeypairHandler = handlers.NewSSHKeypairHandler(sshKeypairService)
 
 	// MLflow 핸들러 초기화
 	mlflowURL := os.Getenv("MLFLOW_TRACKING_URI")
