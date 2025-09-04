@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect, useCallback } from "react";
+import React from "react";
 import {
   Card,
   CardContent,
@@ -11,18 +11,6 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
-
-// 타입 정의 추가
-interface RealTimeMetricsResponse {
-  cpu_usage: number;
-  memory_usage: number;
-  network_usage: number;
-  accuracy?: number;
-  loss?: number;
-  participants_connected: number;
-  current_round: number;
-  timestamp: string;
-}
 
 interface TrainingHistoryResponse {
   round: number;
@@ -73,7 +61,7 @@ const AggregatorDetails: React.FC<AggregatorDetailsProps> = ({
   aggregator,
   onBack,
 }) => {
-  const [realTimeMetrics, setRealTimeMetrics] = useState({
+  const realTimeMetrics = {
     cpuUsage: aggregator.metrics.cpuUsage,
     memoryUsage: aggregator.metrics.memoryUsage,
     networkUsage: aggregator.metrics.networkUsage,
@@ -81,21 +69,20 @@ const AggregatorDetails: React.FC<AggregatorDetailsProps> = ({
     loss: 0.1234,
     participantsConnected: aggregator.participants,
     lastUpdated: new Date().toISOString(),
-  });
+  };
 
-  const [trainingHistory, setTrainingHistory] = useState<
-    TrainingHistoryResponse[]
-  >(
-    Array.from({ length: 8 }, (_, i) => ({
+  const trainingHistory: TrainingHistoryResponse[] = Array.from(
+    { length: 8 },
+    (_, i) => ({
       round: i + 1,
       accuracy: Math.min(0.6 + i * 0.05 + Math.random() * 0.1, 0.95),
       loss: Math.max(2.0 - i * 0.15 - Math.random() * 0.2, 0.1),
       timestamp: new Date(Date.now() - (8 - i) * 600000).toISOString(),
       participants: aggregator.participants,
-    }))
+    })
   );
-  const [isLoading, setIsLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+
+  const isLoading = false;
 
   const getStatusColor = (status: string) => {
     switch (status) {
@@ -145,10 +132,7 @@ const AggregatorDetails: React.FC<AggregatorDetailsProps> = ({
   const progressPercentage =
     (aggregator.currentRound / aggregator.rounds) * 100;
 
-  const getMetricColor = (
-    value: number,
-    type: "cpu" | "memory" | "network"
-  ) => {
+  const getMetricColor = (value: number) => {
     if (value >= 80) return "bg-red-500";
     if (value >= 60) return "bg-yellow-500";
     return "bg-green-500";
@@ -267,7 +251,7 @@ const AggregatorDetails: React.FC<AggregatorDetailsProps> = ({
         </Card>
       </div>
 
-      {/* 학습 진행 상황 - 개선된 버전 */}
+      {/* 학습 진행 상황 */}
       <div className="grid grid-cols-1 xl:grid-cols-3 gap-6">
         <Card className="xl:col-span-2">
           <CardHeader>
@@ -355,7 +339,7 @@ const AggregatorDetails: React.FC<AggregatorDetailsProps> = ({
         </Card>
       </div>
 
-      {/* 시스템 메트릭 - 개선된 버전 */}
+      {/* 시스템 메트릭 */}
       <Card>
         <CardHeader>
           <CardTitle>시스템 메트릭</CardTitle>
@@ -366,10 +350,10 @@ const AggregatorDetails: React.FC<AggregatorDetailsProps> = ({
             <div className="space-y-3">
               <div className="flex items-center justify-between">
                 <span className="text-sm font-medium flex items-center">
+                  {/* FIX 5: getMetricColor 호출 시 불필요한 두 번째 인자 제거 */}
                   <div
                     className={`w-2 h-2 rounded-full mr-2 ${getMetricColor(
-                      realTimeMetrics.cpuUsage,
-                      "cpu"
+                      realTimeMetrics.cpuUsage
                     )}`}
                   ></div>
                   CPU 사용률
@@ -391,10 +375,10 @@ const AggregatorDetails: React.FC<AggregatorDetailsProps> = ({
             <div className="space-y-3">
               <div className="flex items-center justify-between">
                 <span className="text-sm font-medium flex items-center">
+                  {/* FIX 5: getMetricColor 호출 시 불필요한 두 번째 인자 제거 */}
                   <div
                     className={`w-2 h-2 rounded-full mr-2 ${getMetricColor(
-                      realTimeMetrics.memoryUsage,
-                      "memory"
+                      realTimeMetrics.memoryUsage
                     )}`}
                   ></div>
                   메모리 사용률
@@ -416,10 +400,10 @@ const AggregatorDetails: React.FC<AggregatorDetailsProps> = ({
             <div className="space-y-3">
               <div className="flex items-center justify-between">
                 <span className="text-sm font-medium flex items-center">
+                  {/* FIX 5: getMetricColor 호출 시 불필요한 두 번째 인자 제거 */}
                   <div
                     className={`w-2 h-2 rounded-full mr-2 ${getMetricColor(
-                      realTimeMetrics.networkUsage,
-                      "network"
+                      realTimeMetrics.networkUsage
                     )}`}
                   ></div>
                   네트워크 사용률
@@ -441,7 +425,7 @@ const AggregatorDetails: React.FC<AggregatorDetailsProps> = ({
         </CardContent>
       </Card>
 
-      {/* 비용 정보 - 개선된 버전 */}
+      {/* 비용 정보 */}
       {aggregator.cost && (
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
           <Card>
@@ -477,7 +461,7 @@ const AggregatorDetails: React.FC<AggregatorDetailsProps> = ({
         </div>
       )}
 
-      {/* 학습 히스토리 - 개선된 버전 */}
+      {/* 학습 히스토리 */}
       <Card>
         <CardHeader>
           <CardTitle className="flex items-center justify-between">
@@ -597,7 +581,7 @@ const AggregatorDetails: React.FC<AggregatorDetailsProps> = ({
         </CardContent>
       </Card>
 
-      {/* MLflow 정보 - 개선된 버전 */}
+      {/* MLflow 정보 */}
       {aggregator.mlflowExperimentName && (
         <Card className="bg-gradient-to-br from-purple-50 to-indigo-50 dark:from-purple-950 dark:to-indigo-950 border-purple-200 dark:border-purple-800">
           <CardHeader>
