@@ -11,6 +11,14 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import AggregatorDetails from "@/components/dashboard/aggregator/aggregator-details";
+import {
+  Eye,
+  Monitor,
+  Settings,
+  Zap,
+  CheckCircle2,
+  Wallet,
+} from "lucide-react";
 
 export interface AggregatorInstance {
   id: string;
@@ -297,7 +305,9 @@ const AggregatorManagementContent: React.FC = () => {
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium">총 Aggregator</CardTitle>
-            <span className="h-4 w-4 text-muted-foreground">🖥️</span>
+            <span className="h-4 w-4 text-muted-foreground">
+              <Monitor className="h-4 w-4 text-muted-foreground" />
+            </span>
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">{aggregators.length}</div>
@@ -306,7 +316,7 @@ const AggregatorManagementContent: React.FC = () => {
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium">실행 중</CardTitle>
-            <span className="h-4 w-4 text-muted-foreground">⚡</span>
+            <Zap className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">
@@ -317,7 +327,7 @@ const AggregatorManagementContent: React.FC = () => {
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium">완료됨</CardTitle>
-            <div className="h-4 w-4 rounded-full bg-blue-500" />
+            <CheckCircle2 className="h-4 w-4 text-blue-500" />
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">
@@ -328,14 +338,10 @@ const AggregatorManagementContent: React.FC = () => {
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium">총 비용</CardTitle>
-            <span className="h-4 w-4 text-muted-foreground">💰</span>
+            <Wallet className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">
-              {formatCurrency(
-                aggregators.reduce((sum, a) => sum + (a.cost?.current || 0), 0)
-              )}
-            </div>
+            <div className="text-2xl font-bold">₩{/* 여기에 비용 값 */}</div>
           </CardContent>
         </Card>
       </div>
@@ -449,12 +455,6 @@ const AggregatorManagementContent: React.FC = () => {
                         {aggregator.cost && (
                           <div className="font-medium text-foreground">
                             비용: {formatCurrency(aggregator.cost.current)}
-                            {aggregator.status === "running" && (
-                              <span className="text-muted-foreground">
-                                / 예상{" "}
-                                {formatCurrency(aggregator.cost.estimated)}
-                              </span>
-                            )}
                           </div>
                         )}
                       </div>
@@ -466,7 +466,7 @@ const AggregatorManagementContent: React.FC = () => {
                         size="sm"
                         onClick={() => handleViewDetails(aggregator)}
                       >
-                        <span className="mr-2">👁️</span>
+                        <Eye className="h-4 w-4 mr-2" />
                         상세 보기
                       </Button>
                       <Button
@@ -474,7 +474,7 @@ const AggregatorManagementContent: React.FC = () => {
                         size="sm"
                         disabled={aggregator.status !== "running"}
                       >
-                        <span className="mr-2">📊</span>
+                        <Monitor className="h-4 w-4 mr-2" />
                         모니터링
                       </Button>
                       <Button
@@ -482,7 +482,7 @@ const AggregatorManagementContent: React.FC = () => {
                         size="sm"
                         disabled={aggregator.status !== "running"}
                       >
-                        <span className="mr-2">⚙️</span>
+                        <Settings className="h-4 w-4 mr-2" />
                         설정
                       </Button>
                     </div>
