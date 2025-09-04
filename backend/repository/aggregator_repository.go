@@ -51,6 +51,15 @@ func (r *AggregatorRepository) UpdateAggregatorStatus(id string, status string) 
 	return r.db.Model(&models.Aggregator{}).Where("id = ?", id).Update("status", status).Error
 }
 
+func (r *AggregatorRepository) UpdateAggregatorMLflowInfo(id, experimentID, experimentName string) error {
+	return r.db.Model(&models.Aggregator{}).
+		Where("id = ?", id).
+		Updates(map[string]interface{}{
+			"mlflow_experiment_id":   experimentID,
+			"mlflow_experiment_name": experimentName,
+		}).Error
+}
+
 func (r *AggregatorRepository) UpdateAggregatorMetrics(id string, cpuUsage, memoryUsage, networkUsage float64) error {
 	return r.db.Model(&models.Aggregator{}).
 		Where("id = ?", id).

@@ -10,6 +10,7 @@ import (
 	"net/http"
 	"os"
 	"strings"
+	"time"
 
 	"github.com/google/uuid"
 
@@ -17,6 +18,7 @@ import (
 	"github.com/Mungge/Fleecy-Cloud/repository"
 	"github.com/Mungge/Fleecy-Cloud/services"
 	"github.com/Mungge/Fleecy-Cloud/utils"
+	
 )
 
 // AggregatorService는 Aggregator 관련 비즈니스 로직을 처리합니다
@@ -26,17 +28,30 @@ type AggregatorService struct {
 	sshKeypairRepo  *repository.SSHKeypairRepository
 	cloudRepo       *repository.CloudRepository
 	progressTracker *SSEProgressTracker
+	mlflowClient    *MLflowClient
 }
 
 // NewAggregatorService는 새 AggregatorService 인스턴스를 생성합니다
-func NewAggregatorService(repo *repository.AggregatorRepository, flRepo *repository.FederatedLearningRepository, sshKeypairRepo *repository.SSHKeypairRepository, cloudRepo *repository.CloudRepository) *AggregatorService {
-	return &AggregatorService{
-		repo:            repo,
-		flRepo:          flRepo,
-		sshKeypairRepo:  sshKeypairRepo,
-		cloudRepo:       cloudRepo,
-		progressTracker: NewWebSocketProgressTracker(),
-	}
+func NewAggregatorService(
+    repo *repository.AggregatorRepository, 
+    flRepo *repository.FederatedLearningRepository, 
+    sshKeypairRepo *repository.SSHKeypairRepository, 
+    cloudRepo *repository.CloudRepository,
+    mlflowURL string,  // MLflow URL 파라미터 추가
+) *AggregatorService {
+    var mlflowClient *MLflowClient
+    if mlflowURL != "" {
+        mlflowClient = NewMLflowClient(mlflowURL)
+    }
+
+    return &AggregatorService{
+        repo:            repo,
+        flRepo:          flRepo,
+        sshKeypairRepo:  sshKeypairRepo,
+        cloudRepo:       cloudRepo,
+        progressTracker: NewWebSocketProgressTracker(),
+        mlflowClient:    mlflowClient,
+    }
 }
 
 // CreateAggregatorInput Aggregator 생성 입력
@@ -92,6 +107,20 @@ type OptimizationService interface {
 	RunOptimization(request OptimizationRequest) (interface{}, error)
 }
 
+// MLflow 실험 생성 헬퍼 메서드
+func (s *AggregatorService) createMLflowExperiment(experimentName string) (string, error) {
+	if s.mlflowClient == nil {
+		return "", fmt.Errorf("MLflow client not configured")
+	}
+	
+	response, err := s.mlflowClient.CreateExperiment(experimentName, "", nil)
+	if err != nil {
+		return "", err
+	}
+	
+	return response.ExperimentID, nil
+}
+
 // CreateAggregator는 새로운 Aggregator를 생성합니다 (기본 컨텍스트 사용)
 func (s *AggregatorService) CreateAggregator(input CreateAggregatorInput) (*CreateAggregatorResult, error) {
 	return s.CreateAggregatorWithContext(context.Background(), input)
@@ -112,6 +141,9 @@ func (s *AggregatorService) CreateAggregatorWithContext(ctx context.Context, inp
 		}
 	}
 
+	// MLflow 실험 이름 생성 (고유성 보장)
+	experimentName := fmt.Sprintf("%s-exp-%s", input.Name, time.Now().Format("20060102-150405"))
+
 	// Aggregator 생성
 	aggregator := &models.Aggregator{
 		ID:            uuid.New().String(),
@@ -125,6 +157,7 @@ func (s *AggregatorService) CreateAggregatorWithContext(ctx context.Context, inp
 		Zone:          input.Zone,
 		InstanceType:  input.InstanceType,
 		StorageSpecs:  input.Storage + "GB",
+		MLflowExperimentName: &experimentName,
 	}
 
 	// DB에 저장 (creating 상태로)
