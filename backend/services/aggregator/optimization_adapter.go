@@ -49,9 +49,11 @@ func (a *OptimizationServiceAdapter) RunOptimization(request OptimizationRequest
 		AggregatorConfig: struct {
 			MaxBudget  int `json:"maxBudget"`
 			MaxLatency int `json:"maxLatency"`
+			WeightBalance *int `json:"weightBalance,omitempty"`
 		}{
 			MaxBudget:  request.AggregatorConfig.MaxBudget,
 			MaxLatency: request.AggregatorConfig.MaxLatency,
+			WeightBalance: request.AggregatorConfig.WeightBalance,
 		},
 	}
 
