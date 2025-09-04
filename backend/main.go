@@ -27,6 +27,10 @@ func main() {
 	// Aggregator 의존성 초기화
 	aggregatorDeps := initialization.NewDependencies()
 
+	// SSH 키페어 핸들러 초기화
+	sshKeypairService := services.NewSSHKeypairService(repos.SSHKeypairRepo)
+	sshKeypairHandler := handlers.NewSSHKeypairHandler(sshKeypairService)
+
 	// 핸들러 초기화
 	authHandler := authHandlers.NewAuthHandler(
 		repos.UserRepo,
@@ -35,13 +39,9 @@ func main() {
 		os.Getenv("GITHUB_CLIENT_SECRET"),
 	)
 	cloudHandler := handlers.NewCloudHandler(repos.CloudRepo)
-	flHandler := handlers.NewFederatedLearningHandler(repos.FLRepo, repos.ParticipantRepo, repos.AggregatorRepo)
+	flHandler := handlers.NewFederatedLearningHandler(repos.FLRepo, repos.ParticipantRepo, repos.AggregatorRepo, sshKeypairService)
 	participantHandler := handlers.NewParticipantHandler(repos.ParticipantRepo)
 	aggregatorHandler := aggregatorDeps.AggregatorHandler
-
-	// SSH 키페어 핸들러 초기화
-	sshKeypairService := services.NewSSHKeypairService(repos.SSHKeypairRepo)
-	sshKeypairHandler := handlers.NewSSHKeypairHandler(sshKeypairService)
 
 	// Gin 라우터 설정
 	r := gin.Default()
