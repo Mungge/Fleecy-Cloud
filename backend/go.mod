@@ -88,9 +88,12 @@ require (
 	gorm.io/gorm v1.26.1
 )
 
+require github.com/pkg/sftp v1.13.9
+
 require (
 	github.com/apparentlymart/go-textseg/v15 v15.0.0 // indirect
 	github.com/hashicorp/go-version v1.6.0 // indirect
 	github.com/hashicorp/terraform-json v0.19.0 // indirect
+	github.com/kr/fs v0.1.0 // indirect
 	github.com/zclconf/go-cty v1.14.1 // indirect
 )
