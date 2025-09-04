@@ -1,11 +1,10 @@
-// components/AggregatorSettings.tsx
-import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Label } from "@/components/ui/label";
+// components/AggregatorSettings.tsx (업데이트된 부분)
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "../../../../components/ui/card";
+import { Button } from "../../../../components/ui/button";
+import { Label } from "../../../../components/ui/label";
 import { Slider } from "@/components/ui/slider";
-import { Check } from "lucide-react";
 import { AggregatorOptimizeConfig, CreationStatus } from "../aggregator.types";
-import { MemoryRequirementInfo } from "../components/MemoryRequirementInfo";
+import { MemoryRequirementInfo } from "./MemoryRequirementInfo";
 
 interface AggregatorSettingsProps {
   config: AggregatorOptimizeConfig;
@@ -13,8 +12,7 @@ interface AggregatorSettingsProps {
   onOptimize: () => void;
   isLoading: boolean;
   creationStatus: CreationStatus | null;
-  modelFileSize?: number; // 추가
-  participantCount?: number; // 추가
+  participantCount: number;
 }
 
 export const AggregatorSettings = ({
@@ -23,26 +21,33 @@ export const AggregatorSettings = ({
   onOptimize,
   isLoading,
   creationStatus,
-  modelFileSize,
-  participantCount
+  participantCount,
 }: AggregatorSettingsProps) => {
+  const canOptimize = !isLoading && (!creationStatus || creationStatus.step === "error");
+  
+  //가중치 계산 함수
+  const calculateWeights = (value: number) => {
+    const costWeight = (value) / 10;
+    const latencyWeight = 1 - costWeight;
+    return { costWeight, latencyWeight };
+  };
+
+  const currentWeights = calculateWeights(config.weightBalance ?? 1);
+
   return (
     <Card>
       <CardHeader>
-        <CardTitle>연합학습 집계자 설정</CardTitle>
+        <CardTitle>집계자 설정</CardTitle>
         <CardDescription>
-          연합학습을 위한 집계자의 리소스를 설정하세요.
+          집계자 배치 최적화를 위한 제약 조건을 설정하세요.
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-4">
-        {/* 메모리 요구사항 정보 표시 */}
-        {modelFileSize && participantCount && (
-          <MemoryRequirementInfo 
-            modelFileSize={modelFileSize}
-            participantCount={participantCount}
-            safetyFactor={1.5}
-          />
-        )}
+        {/* 메모리 요구사항 정보 */}
+        <MemoryRequirementInfo 
+          participantCount={participantCount}
+          safetyFactor={1.5}
+        />
 
         {/* 제약조건 설정 */}
         <div className="space-y-2">
@@ -92,6 +97,32 @@ export const AggregatorSettings = ({
             <span>500ms (여유)</span>
           </div>
         </div>
+        
+        {/* 가중치 밸런스 제약조건 */}
+        <div className="space-y-2">
+          <div className="flex justify-between items-center">
+            <Label htmlFor="weightBalance">비용 vs 지연시간 우선순위</Label>
+            <span className="text-sm font-medium text-purple-600">
+              비용 {(currentWeights.costWeight * 100).toFixed(0)}% : 지연시간 {(currentWeights.latencyWeight * 100).toFixed(0)}%
+            </span>
+          </div>
+          <Slider
+            id="weightBalance"
+            value={[config.weightBalance ?? 1]}
+            onValueChange={([value]) => 
+              onConfigChange({ ...config, weightBalance: value })
+            }
+            max={9}
+            min={1}
+            step={1}
+            className="w-full"
+          />
+          <div className="flex justify-between text-xs text-muted-foreground">
+            <span>비용 우선 (10% : 90%)</span>
+            <span>균형 (50% : 50%)</span>
+            <span>지연시간 우선 (90% : 10%)</span>
+          </div>
+        </div>
 
         {/* 현재 설정 요약 */}
         <div className="mt-4 p-3 bg-gray-50 rounded-md">
@@ -100,40 +131,29 @@ export const AggregatorSettings = ({
             월 최대 <span className="font-medium text-green-600">{config.maxBudget.toLocaleString()}원</span> 예산으로{" "}
             <span className="font-medium text-blue-600">{config.maxLatency}ms</span> 이하의 응답속도 보장
           </div>
+          <div className="text-sm mt-1">
+            우선순위: 비용 <span className="font-medium text-purple-600">{(currentWeights.costWeight * 100).toFixed(0)}%</span>, 
+            지연시간 <span className="font-medium text-purple-600">{(currentWeights.latencyWeight * 100).toFixed(0)}%</span>
+          </div>
         </div>
 
-        <div className="pt-4">
+        <Button
+          onClick={onOptimize}
+          disabled={!canOptimize}
+          className="w-full"
+        >
+          {isLoading ? "최적화 중..." : "집계자 배치 최적화"}
+        </Button>
+
+        {creationStatus?.step === "selecting" && (
           <Button
             onClick={onOptimize}
-            disabled={isLoading || creationStatus?.step === "completed"}
+            variant="outline"
             className="w-full"
-            variant={
-              creationStatus?.step === "completed" ? "secondary" : "default"
-            }
           >
-            {isLoading ? (
-              <>
-                <div className="animate-spin rounded-full h-4 w-4 border-t-2 border-b-2 border-white mr-2"></div>
-                {creationStatus?.message || "생성 중..."}
-              </>
-            ) : creationStatus?.step === "completed" ? (
-              <>
-                <Check className="mr-2 h-4 w-4" />
-                생성 완료
-              </>
-            ) : creationStatus?.step === "error" ? (
-              "다시 시도"
-            ) : (
-              "집계자 배치 최적화 실행"
-            )}
+            다시 최적화하기
           </Button>
-
-          {creationStatus?.step === "completed" && (
-            <p className="text-sm text-green-600 text-center mt-2">
-              잠시 후 연합학습 페이지로 이동합니다...
-            </p>
-          )}
-        </div>
+        )}
       </CardContent>
     </Card>
   );

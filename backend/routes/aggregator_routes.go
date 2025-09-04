@@ -5,7 +5,7 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
-func SetupAggregatorRoutes(authorized *gin.RouterGroup, aggregatorHandler *aggregator.AggregatorHandler) {
+func SetupAggregatorRoutes(authorized *gin.RouterGroup, aggregatorHandler *aggregator.AggregatorHandler, mlflowHandler *aggregator.MLflowHandler) {
 	aggregators := authorized.Group("/aggregators")
 	{
 		// Aggregator 배치 최적화
@@ -29,8 +29,9 @@ func SetupAggregatorRoutes(authorized *gin.RouterGroup, aggregatorHandler *aggre
 		// Aggregator 메트릭 업데이트
 		aggregators.PUT("/:id/metrics", aggregatorHandler.UpdateAggregatorMetrics)
 
-		// Aggregator 학습 히스토리 조회
-		aggregators.GET("/:id/training-history", aggregatorHandler.GetTrainingHistory)
+		// MLflow 라우트들
+        aggregators.GET("/:id/training-history", mlflowHandler.GetTrainingHistory)
+        aggregators.GET("/:id/realtime-metrics", mlflowHandler.GetRealTimeMetrics)
 
 		// Aggregator 삭제
 		aggregators.DELETE("/:id", aggregatorHandler.DeleteAggregator)

@@ -23,6 +23,7 @@ type OptimizationRequest struct {
 	AggregatorConfig struct {
 		MaxBudget  int `json:"maxBudget"`
 		MaxLatency int `json:"maxLatency"`
+		WeightBalance *int `json:"weightBalance,omitempty"`
 	} `json:"aggregatorConfig"`
 }
 

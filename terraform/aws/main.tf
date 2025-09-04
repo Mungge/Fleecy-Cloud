@@ -201,7 +201,7 @@ resource "aws_instance" "main" {
     }
   }
 
-  # user_data = file("${path.module}/../common/scripts/setup-monitoring.sh")
+  user_data = var.startup_script
 
   tags = {
     Name = "${var.project_name}-server"

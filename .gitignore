@@ -61,6 +61,7 @@ terraform.tfstate
 terraform.tfstate.*
 
 credentials/
+workspaces/
 frontend/src/components/dashboard/monitoring/
 
 flower-demo/.gitignore

@@ -10,6 +10,7 @@ import (
 	"net/http"
 	"os"
 	"strings"
+	"time"
 
 	"github.com/google/uuid"
 
@@ -17,6 +18,7 @@ import (
 	"github.com/Mungge/Fleecy-Cloud/repository"
 	"github.com/Mungge/Fleecy-Cloud/services"
 	"github.com/Mungge/Fleecy-Cloud/utils"
+	
 )
 
 // AggregatorService는 Aggregator 관련 비즈니스 로직을 처리합니다
@@ -26,17 +28,30 @@ type AggregatorService struct {
 	sshKeypairRepo  *repository.SSHKeypairRepository
 	cloudRepo       *repository.CloudRepository
 	progressTracker *SSEProgressTracker
+	mlflowClient    *MLflowClient
 }
 
 // NewAggregatorService는 새 AggregatorService 인스턴스를 생성합니다
-func NewAggregatorService(repo *repository.AggregatorRepository, flRepo *repository.FederatedLearningRepository, sshKeypairRepo *repository.SSHKeypairRepository, cloudRepo *repository.CloudRepository) *AggregatorService {
-	return &AggregatorService{
-		repo:            repo,
-		flRepo:          flRepo,
-		sshKeypairRepo:  sshKeypairRepo,
-		cloudRepo:       cloudRepo,
-		progressTracker: NewWebSocketProgressTracker(),
-	}
+func NewAggregatorService(
+    repo *repository.AggregatorRepository, 
+    flRepo *repository.FederatedLearningRepository, 
+    sshKeypairRepo *repository.SSHKeypairRepository, 
+    cloudRepo *repository.CloudRepository,
+    mlflowURL string,  // MLflow URL 파라미터 추가
+) *AggregatorService {
+    var mlflowClient *MLflowClient
+    if mlflowURL != "" {
+        mlflowClient = NewMLflowClient(mlflowURL)
+    }
+
+    return &AggregatorService{
+        repo:            repo,
+        flRepo:          flRepo,
+        sshKeypairRepo:  sshKeypairRepo,
+        cloudRepo:       cloudRepo,
+        progressTracker: NewWebSocketProgressTracker(),
+        mlflowClient:    mlflowClient,
+    }
 }
 
 // CreateAggregatorInput Aggregator 생성 입력
@@ -52,9 +67,6 @@ type CreateAggregatorInput struct {
 	Region       string `json:"region" validate:"required"`
 	Zone         string `json:"zone" validate:"required"`
 	InstanceType string `json:"instance_type" validate:"required"`
-
-	// GCP 전용 (선택적)
-	ProjectID string `json:"project_id,omitempty"`
 }
 
 // CreateAggregatorResult Aggregator 생성 결과
@@ -76,6 +88,7 @@ type OptimizationRequest struct {
 	AggregatorConfig struct {
 		MaxBudget  int `json:"maxBudget"`
 		MaxLatency int `json:"maxLatency"`
+		WeightBalance *int `json:"weightBalance,omitempty"`
 	} `json:"aggregatorConfig"`
 }
 
@@ -94,6 +107,20 @@ type OptimizationService interface {
 	RunOptimization(request OptimizationRequest) (interface{}, error)
 }
 
+// MLflow 실험 생성 헬퍼 메서드
+func (s *AggregatorService) createMLflowExperiment(experimentName string) (string, error) {
+	if s.mlflowClient == nil {
+		return "", fmt.Errorf("MLflow client not configured")
+	}
+	
+	response, err := s.mlflowClient.CreateExperiment(experimentName, "", nil)
+	if err != nil {
+		return "", err
+	}
+	
+	return response.ExperimentID, nil
+}
+
 // CreateAggregator는 새로운 Aggregator를 생성합니다 (기본 컨텍스트 사용)
 func (s *AggregatorService) CreateAggregator(input CreateAggregatorInput) (*CreateAggregatorResult, error) {
 	return s.CreateAggregatorWithContext(context.Background(), input)
@@ -101,10 +128,6 @@ func (s *AggregatorService) CreateAggregator(input CreateAggregatorInput) (*Crea
 
 // CreateAggregatorWithContext는 컨텍스트를 지원하는 새로운 Aggregator 생성 메서드입니다
 func (s *AggregatorService) CreateAggregatorWithContext(ctx context.Context, input CreateAggregatorInput) (*CreateAggregatorResult, error) {
-	// 입력 검증
-	if err := s.validateInput(input); err != nil {
-		return nil, err
-	}
 
 	// 동일한 사용자의 동일한 이름 집계자가 이미 존재하는지 확인
 	existingAggregators, err := s.repo.GetAggregatorsByUserID(input.UserID)
@@ -117,6 +140,9 @@ func (s *AggregatorService) CreateAggregatorWithContext(ctx context.Context, inp
 			return nil, fmt.Errorf("동일한 이름의 집계자가 이미 존재합니다: %s", input.Name)
 		}
 	}
+
+	// MLflow 실험 이름 생성 (고유성 보장)
+	experimentName := fmt.Sprintf("%s-exp-%s", input.Name, time.Now().Format("20060102-150405"))
 
 	// Aggregator 생성
 	aggregator := &models.Aggregator{
@@ -131,11 +157,7 @@ func (s *AggregatorService) CreateAggregatorWithContext(ctx context.Context, inp
 		Zone:          input.Zone,
 		InstanceType:  input.InstanceType,
 		StorageSpecs:  input.Storage + "GB",
-	}
-
-	// GCP인 경우 ProjectID 설정
-	if input.CloudProvider == "gcp" && input.ProjectID != "" {
-		aggregator.ProjectID = &input.ProjectID
+		MLflowExperimentName: &experimentName,
 	}
 
 	// DB에 저장 (creating 상태로)
@@ -186,14 +208,6 @@ func (s *AggregatorService) CreateAggregatorWithContext(ctx context.Context, inp
 	}
 
 	return result, nil
-}
-
-// validateInput 입력값 검증
-func (s *AggregatorService) validateInput(input CreateAggregatorInput) error {
-	if input.CloudProvider == "gcp" && input.ProjectID == "" {
-		return ErrGCPNeedsProjectID
-	}
-	return nil
 }
 
 // GetAggregatorByID는 ID로 Aggregator를 조회하고 권한을 확인합니다
@@ -342,16 +356,7 @@ func (s *AggregatorService) deployWithTerraformContext(ctx context.Context, aggr
 			return fmt.Errorf("failed to generate SSH keypair for GCP: %v", err)
 		}
 
-		projectID := ""
-		if aggregator.ProjectID != nil {
-			projectID = *aggregator.ProjectID
-		}
-
-		if projectID == "" {
-			return fmt.Errorf("project ID is required for GCP deployment")
-		}
-
-		_, err = keypairService.GetOrCreateGCPKeypair(aggregator.UserID, projectID, keyName, keyPair.PublicKey, keyPair.PrivateKey)
+		_, err = keypairService.GetOrCreateGCPKeypair(aggregator.UserID, keyName, keyPair.PublicKey, keyPair.PrivateKey)
 		if err != nil {
 			return fmt.Errorf("failed to get or create GCP keypair: %v", err)
 		}
@@ -379,6 +384,20 @@ func (s *AggregatorService) deployWithTerraformContext(ctx context.Context, aggr
 		}
 	}
 
+	var projectID string
+    if aggregator.CloudProvider == "gcp" {
+        // GCP 자격증명에서 project_id 추출
+        var credentials map[string]interface{}
+        if err := json.Unmarshal(cloudConn.CredentialFile, &credentials); err != nil {
+            return fmt.Errorf("failed to parse GCP credentials: %v", err)
+        }
+        if id, ok := credentials["project_id"].(string); ok {
+            projectID = id
+        } else {
+            return fmt.Errorf("project_id not found in GCP credentials")
+        }
+    }
+
 	log.Printf("[%s] 4/5 Terraform 워크스페이스 생성 중...", aggregator.ID)
 	s.progressTracker.SendProgress(aggregator.ID, 4, "Terraform 워크스페이스 생성 중...")
 
@@ -399,9 +418,10 @@ func (s *AggregatorService) deployWithTerraformContext(ctx context.Context, aggr
 		StorageSpecs:  aggregator.StorageSpecs,
 		AggregatorID:  aggregator.ID,
 		Algorithm:     aggregator.Algorithm,
-		ProjectID:     aggregator.ProjectID, // GCP인 경우만 값이 있음
 		AWSAccessKey:  awsAccessKey,
 		AWSSecretKey:  awsSecretKey,
+		ProjectID:     projectID,
+		GCPServiceAccountKey: string(cloudConn.CredentialFile), // JSON을 문자열로 변환
 	}
 
 	// Terraform 작업공간 생성

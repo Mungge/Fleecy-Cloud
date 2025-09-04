@@ -1,4 +1,3 @@
-# versions.tf
 terraform {
   required_version = ">= 1.0"
   
@@ -15,4 +14,5 @@ provider "google" {
   project = var.project_id
   region  = var.region
   zone    = var.zone
+  credentials = var.gcp_credentials_json != "" ? var.gcp_credentials_json : null
 }

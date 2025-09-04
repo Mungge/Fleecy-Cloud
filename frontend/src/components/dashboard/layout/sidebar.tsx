@@ -57,11 +57,6 @@ export default function Sidebar({
       icon: Globe,
       href: "/dashboard/global-models",
     },
-    {
-      label: "집계자 배포 (삭제 예정)",
-      icon: Merge,
-      href: "/dashboard/aggregator/deploy",
-    },
   ];
 
   return (

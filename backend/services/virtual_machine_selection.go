@@ -62,32 +62,38 @@ func (s *VMSelectionService) SelectOptimalVM(participant *models.Participant, cr
 		criteria.MaxMemoryUsage = 80.0 // 기본 80%
 	}
 
-	// 1. OpenStack에서 모든 VM 정보 조회
-	// 먼저 인증 토큰 획득
-	token, err := s.openStackService.GetAuthToken(participant)
-	if err != nil {
-		return nil, fmt.Errorf("OpenStack 인증 실패: %v", err)
-	}
+	fmt.Printf("=== VM 선택 시작 ===\n")
+	fmt.Printf("조건: vCPU>=%d, RAM>=%d, Disk>=%d, 상태=%s, MaxCPU=%.1f%%, MaxMemory=%.1f%%\n", 
+		criteria.MinVCPUs, criteria.MinRAM, criteria.MinDisk, criteria.RequiredStatus, criteria.MaxCPUUsage, criteria.MaxMemoryUsage)
 
-	openStackVMs, err := s.openStackService.ListVMInstances(participant, token)
+	openStackVMs, err := s.openStackService.GetAllVMInstances(participant)
 	if err != nil {
 		return nil, fmt.Errorf("VM 목록 조회 실패: %v", err)
 	}
 
+	fmt.Printf("전체 VM 개수: %d\n", len(openStackVMs))
+
 	// 2. DB 형태로 변환 및 기본 필터링
 	var candidateVMs []VirtualMachine
-	for _, osVM := range openStackVMs {
+	for i, osVM := range openStackVMs {
+		fmt.Printf("[%d/%d] VM 체크: %s (상태:%s, vCPU:%d, RAM:%dMB, Disk:%dGB)\n", 
+			i+1, len(openStackVMs), osVM.Name, osVM.Status, osVM.Flavor.VCPUs, osVM.Flavor.RAM, osVM.Flavor.Disk)
+
 		// 기본 조건 확인
 		if osVM.Status != criteria.RequiredStatus {
+			fmt.Printf("  → 상태 불일치로 제외: %s != %s\n", osVM.Status, criteria.RequiredStatus)
 			continue
 		}
 		if osVM.Flavor.VCPUs < criteria.MinVCPUs {
+			fmt.Printf("  → vCPU 부족으로 제외: %d < %d\n", osVM.Flavor.VCPUs, criteria.MinVCPUs)
 			continue
 		}
 		if osVM.Flavor.RAM < criteria.MinRAM {
+			fmt.Printf("  → RAM 부족으로 제외: %dMB < %dMB\n", osVM.Flavor.RAM, criteria.MinRAM)
 			continue
 		}
 		if osVM.Flavor.Disk < criteria.MinDisk {
+			fmt.Printf("  → Disk 부족으로 제외: %dGB < %dGB\n", osVM.Flavor.Disk, criteria.MinDisk)
 			continue
 		}
 
@@ -108,9 +114,11 @@ func (s *VMSelectionService) SelectOptimalVM(participant *models.Participant, cr
 		}
 
 		candidateVMs = append(candidateVMs, vm)
+		fmt.Printf("  → 기본 조건 통과\n")
 	}
 
 	if len(candidateVMs) == 0 {
+		fmt.Printf("기본 필터링 후 후보: 0개 - 조건을 만족하는 VM이 없음\n")
 		return &VMSelectionResult{
 			SelectedVM:      nil,
 			SelectionReason: "조건을 만족하는 VM을 찾을 수 없습니다",
@@ -118,25 +126,45 @@ func (s *VMSelectionService) SelectOptimalVM(participant *models.Participant, cr
 		}, nil
 	}
 
+	fmt.Printf("기본 필터링 후 후보: %d개\n", len(candidateVMs))
+
 	// 3. 각 VM의 사용률 정보 수집
 	var vmUtilizations []VMUtilization
-	for _, vm := range candidateVMs {
+	for i, vm := range candidateVMs {
+		fmt.Printf("[%d/%d] 사용률 체크: %s\n", i+1, len(candidateVMs), vm.Name)
+		
 		utilization, err := s.getVMUtilization(participant, &vm)
 		if err != nil {
-			// 모니터링 정보를 가져올 수 없는 경우 스킵하거나 기본값 사용
+			fmt.Printf("  → 사용률 조회 실패로 제외: %v\n", err)
 			continue
 		}
 
+		fmt.Printf("  → CPU: %.1f%%, Memory: %.1f%%, Disk: %.1f%%, 종합점수: %.1f, 건강상태: %t\n", 
+			utilization.MonitoringInfo.CPUUsage, 
+			utilization.MonitoringInfo.MemoryUsage,
+			utilization.MonitoringInfo.DiskUsage,
+			utilization.UtilizationScore,
+			utilization.IsHealthy)
+
 		// 사용률 조건 확인
-		if utilization.MonitoringInfo.CPUUsage > criteria.MaxCPUUsage ||
-			utilization.MonitoringInfo.MemoryUsage > criteria.MaxMemoryUsage {
+		if utilization.MonitoringInfo.CPUUsage > criteria.MaxCPUUsage {
+			fmt.Printf("  → CPU 사용률 초과로 제외: %.1f%% > %.1f%%\n", 
+				utilization.MonitoringInfo.CPUUsage, criteria.MaxCPUUsage)
+			continue
+		}
+		
+		if utilization.MonitoringInfo.MemoryUsage > criteria.MaxMemoryUsage {
+			fmt.Printf("  → Memory 사용률 초과로 제외: %.1f%% > %.1f%%\n", 
+				utilization.MonitoringInfo.MemoryUsage, criteria.MaxMemoryUsage)
 			continue
 		}
 
 		vmUtilizations = append(vmUtilizations, *utilization)
+		fmt.Printf("  → 사용률 조건 통과\n")
 	}
 
 	if len(vmUtilizations) == 0 {
+		fmt.Printf("사용률 필터링 후 후보: 0개 - 사용률 조건을 만족하는 VM이 없음\n")
 		return &VMSelectionResult{
 			SelectedVM:      nil,
 			SelectionReason: "사용률 조건을 만족하는 VM을 찾을 수 없습니다",
@@ -144,8 +172,22 @@ func (s *VMSelectionService) SelectOptimalVM(participant *models.Participant, cr
 		}, nil
 	}
 
+	fmt.Printf("사용률 필터링 후 후보: %d개\n", len(vmUtilizations))
+
+	// 최종 후보 VM들 요약 출력
+	fmt.Printf("최종 후보 VM들:\n")
+	for i, util := range vmUtilizations {
+		fmt.Printf("  [%d] %s: CPU=%.1f%%, Memory=%.1f%%, Score=%.1f, Healthy=%t\n", 
+			i+1, util.VM.Name, util.MonitoringInfo.CPUUsage, 
+			util.MonitoringInfo.MemoryUsage, util.UtilizationScore, util.IsHealthy)
+	}
+
 	// 4. VM 선택 (사용률 + 라운드로빈)
 	selectedVM, reason := s.selectVMWithUtilizationAndRoundRobin(participant.ID, vmUtilizations)
+
+	fmt.Printf("최종 선택: %s\n", selectedVM.VM.Name)
+	fmt.Printf("선택 이유: %s\n", reason)
+	fmt.Printf("=== VM 선택 완료 ===\n\n")
 
 	return &VMSelectionResult{
 		SelectedVM:      &selectedVM.VM,
