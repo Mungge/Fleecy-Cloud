@@ -61,3 +61,11 @@ terraform.tfstate
 terraform.tfstate.*
 
 credentials/
+frontend/src/components/dashboard/monitoring/
+
+flower-demo/.gitignore
+flower-demo/flower_demo/__init__.py
+flower-demo/README.md       
+
+frontend/src/api/monitoring.ts
+frontend/src/app/dashboard/monitoring/
