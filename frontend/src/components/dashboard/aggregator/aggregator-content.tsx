@@ -474,14 +474,6 @@ const AggregatorManagementContent: React.FC = () => {
                         size="sm"
                         disabled={aggregator.status !== "running"}
                       >
-                        <Monitor className="h-4 w-4 mr-2" />
-                        모니터링
-                      </Button>
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        disabled={aggregator.status !== "running"}
-                      >
                         <Settings className="h-4 w-4 mr-2" />
                         설정
                       </Button>
