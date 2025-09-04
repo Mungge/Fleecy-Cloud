@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useCallback } from "react";
 import {
 	Card,
 	CardContent,
@@ -47,6 +47,32 @@ export interface AggregatorInstance {
 	mlflowExperimentId?: string;
 }
 
+// API 응답 타입 정의
+interface ApiAggregatorResponse {
+	id: string;
+	name: string;
+	status: "running" | "completed" | "error" | "pending" | "creating";
+	algorithm: string;
+	cloud_provider: string;
+	region: string;
+	instance_type: string;
+	created_at: string;
+	updated_at: string;
+	participant_count?: number;
+	current_round?: number;
+	accuracy?: number;
+	current_cost?: number;
+	estimated_cost?: number;
+	cpu_specs?: string;
+	memory_specs?: string;
+	storage_specs?: string;
+	cpu_usage?: number;
+	memory_usage?: number;
+	network_usage?: number;
+	mlflow_experiment_name?: string;
+	mlflow_experiment_id?: string;
+}
+
 const AggregatorManagementContent: React.FC = () => {
 	const [aggregators, setAggregators] = useState<AggregatorInstance[]>([]);
 	const [selectedAggregator, setSelectedAggregator] = useState<AggregatorInstance | null>(null);
@@ -61,7 +87,7 @@ const AggregatorManagementContent: React.FC = () => {
 	
 		// 2. 모든 쿠키를 순회하며 'accessToken'을 찾습니다.
 		for (let i = 0; i < cookies.length; i++) {
-			let cookie = cookies[i].trim(); // 각 쿠키의 앞뒤 공백 제거
+			const cookie = cookies[i].trim(); // 각 쿠키의 앞뒤 공백 제거
 	
 			// 3. 'accessToken='으로 시작하는 쿠키를 찾습니다.
 			if (cookie.startsWith('token=')) {
@@ -95,8 +121,8 @@ const AggregatorManagementContent: React.FC = () => {
 		});
 	};
 
-	// Aggregator 목록 조회
-	const fetchAggregators = async () => {
+	// Aggregator 목록 조회 - useCallback으로 감싸서 의존성 문제 해결
+	const fetchAggregators = useCallback(async () => {
 		setIsLoading(true);
 		setError(null);
 
@@ -107,10 +133,10 @@ const AggregatorManagementContent: React.FC = () => {
 				throw new Error(`HTTP error! status: ${response.status}`);
 			}
 
-			const data = await response.json();
+			const data: ApiAggregatorResponse[] = await response.json();
 			
 			// API 응답을 프론트엔드 인터페이스에 맞게 변환
-			const transformedAggregators: AggregatorInstance[] = data.map((agg: any) => ({
+			const transformedAggregators: AggregatorInstance[] = data.map((agg: ApiAggregatorResponse) => ({
 				id: agg.id,
 				name: agg.name,
 				status: agg.status,
@@ -151,12 +177,12 @@ const AggregatorManagementContent: React.FC = () => {
 		} finally {
 			setIsLoading(false);
 		}
-	};
+	}, []); // getAuthToken과 fetchWithAuth는 컴포넌트 내부에서 정의되므로 의존성에 포함할 필요 없음
 
 	// 컴포넌트 마운트 시 데이터 로드
 	useEffect(() => {
 		fetchAggregators();
-	}, []);
+	}, [fetchAggregators]);
 
 	// 주기적으로 데이터 새로고침 (실행 중인 aggregator가 있을 때)
 	useEffect(() => {
@@ -169,7 +195,7 @@ const AggregatorManagementContent: React.FC = () => {
 
 			return () => clearInterval(interval);
 		}
-	}, [aggregators]);
+	}, [aggregators, fetchAggregators]);
 
 	const getStatusColor = (status: string) => {
 		switch (status) {
