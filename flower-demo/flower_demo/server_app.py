@@ -3,6 +3,7 @@
 
 from __future__ import annotations
 
+import boto3
 import os
 from pathlib import Path
 
@@ -37,6 +38,8 @@ class SaveFedAvg(FedAvg):
         super().__init__(**kwargs)
         self.mlflow_enabled = mlflow is not None
         self._mlflow_run = None
+        self.cloud_storage_enabled = False
+        self._init_cloud_storage()
 
         if self.mlflow_enabled:
             conf = mlflow_conf or {}
@@ -46,7 +49,57 @@ class SaveFedAvg(FedAvg):
             mlflow.set_tracking_uri(uri)
             mlflow.set_experiment(exp)
             self._mlflow_run = mlflow.start_run(run_name=run_name)
-
+        print(f"[MLflow] 연결 시도: {uri}")
+        try:
+            mlflow.set_tracking_uri(uri)
+            print("[MLflow] 연결 성공")
+        except Exception as e:
+            print(f"[MLflow] 연결 실패: {e}")
+            
+    def _init_cloud_storage(self):
+        storage_type = os.environ.get("CLOUD_STORAGE_TYPE")
+        
+        if storage_type == "s3":
+            try:
+                self.s3_client = boto3.client('s3')
+                self.bucket_name = os.environ.get('S3_BUCKET_NAME')
+                if self.bucket_name:
+                    self.cloud_storage_enabled = True
+                    print(f"[Storage] S3 초기화 완료: {self.bucket_name}")
+            except Exception as e:
+                print(f"[Storage] S3 초기화 실패: {e}")
+                
+        elif storage_type == "gcs":
+            try:
+                from google.cloud import storage
+                self.gcs_client = storage.Client()
+                self.bucket_name = os.environ.get('GCS_BUCKET_NAME')
+                if self.bucket_name:
+                    self.cloud_storage_enabled = True
+                    print(f"[Storage] GCS 초기화 완료: {self.bucket_name}")
+            except Exception as e:
+                print(f"[Storage] GCS 초기화 실패: {e}")
+    
+    def _upload_checkpoint(self, local_path: Path, round_num: int):
+        if not self.cloud_storage_enabled:
+            return
+            
+        cloud_key = f"checkpoints/round-{round_num:03d}.pt"
+        
+        try:
+            if hasattr(self, 's3_client'):  # S3
+                self.s3_client.upload_file(str(local_path), self.bucket_name, cloud_key)
+                print(f"[Storage] S3 업로드 완료: s3://{self.bucket_name}/{cloud_key}")
+                
+            elif hasattr(self, 'gcs_client'):  # GCS
+                bucket = self.gcs_client.bucket(self.bucket_name)
+                blob = bucket.blob(cloud_key)
+                blob.upload_from_filename(str(local_path))
+                print(f"[Storage] GCS 업로드 완료: gs://{self.bucket_name}/{cloud_key}")
+                
+        except Exception as e:
+            print(f"[Storage] 업로드 실패: {e}")
+                        
     def _ml_log(self, metrics: dict, step: int):
         if self.mlflow_enabled and self._mlflow_run and metrics:
             mlflow.log_metrics({k: float(v) for k, v in metrics.items()}, step=step)
@@ -69,6 +122,7 @@ class SaveFedAvg(FedAvg):
                 import torch
                 torch.save(net.state_dict(), ckpt_path.as_posix())
                 print(f"[Server] Saved checkpoint: {ckpt_path}")
+                self._upload_checkpoint(ckpt_path, server_round)
                 if self.mlflow_enabled:
                     mlflow.log_artifact(ckpt_path.as_posix(), artifact_path="checkpoints")
             except Exception as e:

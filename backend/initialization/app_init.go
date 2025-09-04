@@ -192,9 +192,13 @@ func NewDependencies() *Dependencies {
 
 	// Repository 초기화
 	repos := InitializeRepositories()
-
+	mlflowURL := os.Getenv("MLFLOW_URL")
+	if mlflowURL == "" {
+		// 개발 환경 기본값
+		mlflowURL = "http://localhost:5000"
+	}
 	// Aggregator Service 초기화 (새로운 구조)
-	aggregatorService := aggregatorservice.NewAggregatorService(repos.AggregatorRepo, repos.FLRepo, repos.SSHKeypairRepo, repos.CloudRepo)
+	aggregatorService := aggregatorservice.NewAggregatorService(repos.AggregatorRepo, repos.FLRepo, repos.SSHKeypairRepo, repos.CloudRepo, mlflowURL)
 	metricsService := aggregatorservice.NewAggregatorMetricsService(repos.AggregatorRepo)
 	trainingService := aggregatorservice.NewAggregatorTrainingService(repos.AggregatorRepo)
 
