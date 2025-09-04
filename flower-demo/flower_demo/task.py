@@ -103,7 +103,7 @@ def load_data(partition_id: int, num_partitions: int) -> Tuple[DataLoader, DataL
       - NUM_WORKERS (기본값: 2)
       - VAL_SPLIT (기본값: 0.2)  # train 내부에서 검증셋 분할 비율
     """
-    data_root = os.environ.get("DATA_ROOT", os.path.expanduser("~/dev/Covid19-dataset"))
+    data_root = os.environ.get("DATA_ROOT", os.path.expanduser("~/Covid19-dataset"))
     train_dir = os.path.join(data_root, "train")
     test_dir = os.path.join(data_root, "test")  # 필요 시 검증에 사용하거나, train에서 분할 사용
 
