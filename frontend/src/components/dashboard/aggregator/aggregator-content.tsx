@@ -110,25 +110,28 @@ const AggregatorManagementContent: React.FC = () => {
   };
 
   // API 호출을 위한 공통 함수
-  const fetchWithAuth = async (url: string, options: RequestInit = {}) => {
-    const token = getAuthToken();
+  const fetchWithAuth = useCallback(
+    async (url: string, options: RequestInit = {}) => {
+      const token = getAuthToken();
 
-    const defaultOptions: RequestInit = {
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${token}`,
-      },
-    };
+      const defaultOptions: RequestInit = {
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+      };
 
-    return fetch(url, {
-      ...defaultOptions,
-      ...options,
-      headers: {
-        ...defaultOptions.headers,
-        ...options.headers,
-      },
-    });
-  };
+      return fetch(url, {
+        ...defaultOptions,
+        ...options,
+        headers: {
+          ...defaultOptions.headers,
+          ...options.headers,
+        },
+      });
+    },
+    []
+  );
 
   // Aggregator 목록 조회 - useCallback으로 감싸서 의존성 문제 해결
   const fetchAggregators = useCallback(async () => {
@@ -192,7 +195,7 @@ const AggregatorManagementContent: React.FC = () => {
     } finally {
       setIsLoading(false);
     }
-  }, []); // getAuthToken과 fetchWithAuth는 컴포넌트 내부에서 정의되므로 의존성에 포함할 필요 없음
+  }, [fetchWithAuth]); // fetchWithAuth를 dependency에 추가
 
   // 컴포넌트 마운트 시 데이터 로드
   useEffect(() => {
@@ -290,9 +293,9 @@ const AggregatorManagementContent: React.FC = () => {
     <div className="space-y-6">
       <div className="flex justify-between items-center">
         <div>
-          <h1 className="text-3xl font-bold">집계자 관리</h1>
+          <h1 className="text-3xl font-bold">Aggregator 관리</h1>
           <p className="text-muted-foreground mt-2">
-            연합학습 집계자 인스턴스들을 관리하고 모니터링합니다
+            연합학습 Aggregator 인스턴스를 관리하고 모니터링합니다
           </p>
         </div>
         <Button onClick={handleRefresh} disabled={isLoading}>
@@ -341,14 +344,7 @@ const AggregatorManagementContent: React.FC = () => {
             <Wallet className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">
-              {formatCurrency(
-                aggregators.reduce(
-                  (total, agg) => total + (agg.cost?.current || 0),
-                  0
-                )
-              )}
-            </div>
+            <div className="text-2xl font-bold">₩{/* 여기에 비용 값 */}</div>
           </CardContent>
         </Card>
       </div>
