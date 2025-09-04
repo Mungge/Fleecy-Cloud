@@ -290,9 +290,9 @@ const AggregatorManagementContent: React.FC = () => {
     <div className="space-y-6">
       <div className="flex justify-between items-center">
         <div>
-          <h1 className="text-3xl font-bold">Aggregator 관리</h1>
+          <h1 className="text-3xl font-bold">집계자 관리</h1>
           <p className="text-muted-foreground mt-2">
-            연합학습 Aggregator 인스턴스를 관리하고 모니터링합니다
+            연합학습 집계자 인스턴스들을 관리하고 모니터링합니다
           </p>
         </div>
         <Button onClick={handleRefresh} disabled={isLoading}>
