@@ -19,6 +19,11 @@ type Aggregator struct {
 	// GCP 전용 필드 (nullable)
 	ProjectID *string `json:"project_id,omitempty"` // GCP에서만 사용
 
+	// MLflow 연동 필드 추가
+    MLflowExperimentID   *string `json:"mlflow_experiment_id,omitempty"`
+    MLflowExperimentName *string `json:"mlflow_experiment_name,omitempty"`
+    MLflowRunID         *string `json:"mlflow_run_id,omitempty"`
+
 	ParticipantCount int      `json:"participant_count" gorm:"default:0"`
 	CurrentRound     int      `json:"current_round" gorm:"default:0"`
 	Accuracy         *float64 `json:"accuracy,omitempty"`
