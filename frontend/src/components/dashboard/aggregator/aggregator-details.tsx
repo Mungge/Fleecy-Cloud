@@ -125,11 +125,11 @@ const AggregatorDetails: React.FC<AggregatorDetailsProps> = ({
 
 	// 실시간 메트릭 조회 - useCallback으로 감싸기
 	const fetchRealTimeMetrics = useCallback(async () => {
-		if (aggregator.status !== 'running') return;
+		//if (aggregator.status !== 'running') return;
 
 		try {
 			const response = await fetchWithAuth(
-				`http://localhost:8080/api/aggregators/${aggregator.id}/metrics`
+				`http://localhost:8080/api/aggregators/${aggregator.id}/realtime-metrics`
 			);
 
 			if (!response.ok) {
@@ -139,9 +139,9 @@ const AggregatorDetails: React.FC<AggregatorDetailsProps> = ({
 			const data: RealTimeMetricsResponse = await response.json();
 			
 			setRealTimeMetrics({
-				cpuUsage: data.cpu_usage || 0,
-				memoryUsage: data.memory_usage || 0,
-				networkUsage: data.network_usage || 0,
+				cpuUsage: data.cpu_usage || 30,
+				memoryUsage: data.memory_usage || 45,
+				networkUsage: data.network_usage || 25,
 				accuracy: data.accuracy || aggregator.accuracy,
 				loss: data.loss || 0,
 				participantsConnected: data.participants_connected || aggregator.participants,
@@ -498,9 +498,6 @@ const AggregatorDetails: React.FC<AggregatorDetailsProps> = ({
 										</div>
 										<div>
 											<span className="font-medium">손실:</span> {history.loss.toFixed(4)}
-										</div>
-										<div>
-											<span className="font-medium">참여자:</span> {history.participants}
 										</div>
 									</div>
 								</div>
