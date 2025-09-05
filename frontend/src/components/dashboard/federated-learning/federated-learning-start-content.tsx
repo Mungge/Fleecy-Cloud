@@ -4,7 +4,10 @@
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { useAggregatorCreationStore } from "../aggregator/aggregator.types";
-import { startFederatedLearning, getFirstActiveCloudConnection } from "@/api/federatedLearning";
+import {
+	startFederatedLearning,
+	getFirstActiveCloudConnection,
+} from "@/api/federatedLearning";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import {
@@ -56,7 +59,9 @@ const FederatedLearningStartContent = () => {
 
 			// aggregatorId 확인
 			if (!payload.aggregatorId) {
-				throw new Error("Aggregator ID가 없습니다. 먼저 집계자를 배포해주세요.");
+				throw new Error(
+					"Aggregator ID가 없습니다. 먼저 집계자를 배포해주세요."
+				);
 			}
 
 			const result = await startFederatedLearning({
@@ -65,30 +70,31 @@ const FederatedLearningStartContent = () => {
 				federatedLearningData: {
 					name: federatedLearningData.name,
 					description: federatedLearningData.description || "",
-					modelType: federatedLearningData.modelType || "CNN",
+					modelType: federatedLearningData.model_type || "CNN",
 					algorithm: federatedLearningData.algorithm,
 					rounds: federatedLearningData.rounds,
-					participants: federatedLearningData.participants,
+					participants: federatedLearningData.participants || [],
 					modelFileName: federatedLearningData.modelFileName || undefined,
 				},
 			});
 
 			console.log("연합학습 시작 성공:", result);
-			
+
 			toast.success("연합학습이 성공적으로 시작되었습니다!", {
 				description: `연합학습 ID: ${result.federatedLearningId}`,
 				duration: 5000,
 			});
-			
+
 			// 성공 후 대시보드 또는 모니터링 페이지로 이동
 			router.push("/dashboard/federated-learning");
 		} catch (error) {
 			console.error("연합학습 시작 실패:", error);
-			
-			const errorMessage = error instanceof Error 
-				? error.message 
-				: "연합학습 시작에 실패했습니다.";
-			
+
+			const errorMessage =
+				error instanceof Error
+					? error.message
+					: "연합학습 시작에 실패했습니다.";
+
 			toast.error("연합학습 시작 실패", {
 				description: errorMessage,
 				duration: 5000,
@@ -139,7 +145,9 @@ const FederatedLearningStartContent = () => {
 						<CheckCircle className="h-5 w-5 text-green-500" />
 						배포된 집계자 정보
 					</CardTitle>
-					<CardDescription>성공적으로 배포된 집계자 인스턴스 정보</CardDescription>
+					<CardDescription>
+						성공적으로 배포된 집계자 인스턴스 정보
+					</CardDescription>
 				</CardHeader>
 				<CardContent className="grid gap-4 md:grid-cols-2">
 					<div className="space-y-3">
@@ -211,17 +219,23 @@ const FederatedLearningStartContent = () => {
 						<div className="space-y-3">
 							<div className="flex items-center justify-between">
 								<span className="text-sm font-medium">작업 이름</span>
-								<span className="text-sm font-semibold">{federatedLearningData.name}</span>
+								<span className="text-sm font-semibold">
+									{federatedLearningData.name}
+								</span>
 							</div>
 							<div className="flex items-center justify-between">
 								<span className="text-sm font-medium">알고리즘</span>
-								<Badge variant="outline">{federatedLearningData.algorithm}</Badge>
+								<Badge variant="outline">
+									{federatedLearningData.algorithm}
+								</Badge>
 							</div>
 							<div className="flex items-center justify-between">
 								<span className="text-sm font-medium">라운드 수</span>
 								<div className="flex items-center gap-1">
 									<Clock className="h-3 w-3" />
-									<span className="text-sm">{federatedLearningData.rounds}회</span>
+									<span className="text-sm">
+										{federatedLearningData.rounds}회
+									</span>
 								</div>
 							</div>
 						</div>
@@ -231,7 +245,7 @@ const FederatedLearningStartContent = () => {
 								<div className="flex items-center gap-1">
 									<Users className="h-3 w-3" />
 									<span className="text-sm">
-										{federatedLearningData.participants.length}명
+										{federatedLearningData?.participants?.length ?? 0}명
 									</span>
 								</div>
 							</div>
@@ -267,12 +281,13 @@ const FederatedLearningStartContent = () => {
 						참여자 목록
 					</CardTitle>
 					<CardDescription>
-						연합학습에 참여할 {federatedLearningData.participants.length}명의 참여자
+						연합학습에 참여할 {federatedLearningData?.participants?.length ?? 0}
+						명의 참여자
 					</CardDescription>
 				</CardHeader>
 				<CardContent>
 					<div className="grid gap-3 md:grid-cols-2 lg:grid-cols-3">
-						{federatedLearningData.participants.map((participant, index) => (
+						{federatedLearningData?.participants?.map((participant, index) => (
 							<div
 								key={index}
 								className="flex items-center justify-between p-3 border rounded-lg bg-muted/30"
@@ -284,7 +299,9 @@ const FederatedLearningStartContent = () => {
 										</span>
 									</div>
 									<div>
-										<p className="text-sm font-medium">{participant.name || `참여자 ${index + 1}`}</p>
+										<p className="text-sm font-medium">
+											{participant.name || `참여자 ${index + 1}`}
+										</p>
 										<p className="text-xs text-muted-foreground">
 											{participant.id}
 										</p>
