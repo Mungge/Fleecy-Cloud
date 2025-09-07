@@ -4,14 +4,22 @@
 from __future__ import annotations
 
 import os
+import sys
+import argparse
 from pathlib import Path
 
+import flwr as fl
 from flwr.common import Context, ndarrays_to_parameters, parameters_to_ndarrays
 from flwr.server import ServerApp, ServerAppComponents, ServerConfig
 from flwr.server.strategy import FedAvg
 
-from flower_demo.task import Net, get_weights, set_weights
-import mlflow
+from task import Net, get_weights, set_weights
+
+# MLflow import (선택사항)
+try:
+    import mlflow
+except ImportError:
+    mlflow = None
 
 
 # --- 집계 메트릭 함수(가중 평균) ---
@@ -27,7 +35,7 @@ def _metrics_agg_eval(metrics):
     keys = set().union(*(m.keys() for _, m in metrics))  # 모든 키 수집
     agg = {}
     for k in keys:
-        # 없는 클라엔 0으로 취급(원하면 샘플 수 있는 클라만 평균하도록 바꿔도 됨)
+        # 없는 클라이언트는 0으로 취급(원하면 샘플 수 있는 클라이언트만 평균하도록 바꿔도 됨)
         agg[k] = sum(n * float(m.get(k, 0.0)) for n, m in metrics) / tot
     return agg
 
@@ -69,7 +77,7 @@ class SaveFedAvg(FedAvg):
                 import torch
                 torch.save(net.state_dict(), ckpt_path.as_posix())
                 print(f"[Server] Saved checkpoint: {ckpt_path}")
-                if self.mlflow_enabled:
+                if self.mlflow_enabled and self._mlflow_run:
                     mlflow.log_artifact(ckpt_path.as_posix(), artifact_path="checkpoints")
             except Exception as e:
                 print(f"[Server] Failed to save checkpoint for round {server_round}: {e}")
@@ -115,12 +123,13 @@ def server_fn(context: Context) -> ServerAppComponents:
     strategy = SaveFedAvg(
         fraction_fit=fraction_fit,
         fraction_evaluate=1.0,                 # 필요 시 0.3~0.5로 낮추면 메모리 절약
-        min_available_clients=2,
+        min_fit_clients=int(context.run_config.get("min-fit-clients", 2)),
+        min_available_clients=int(context.run_config.get("min-available-clients", 2)),
         initial_parameters=initial_parameters,
         fit_metrics_aggregation_fn=_metrics_agg_fit,
         evaluate_metrics_aggregation_fn=_metrics_agg_eval,
         mlflow_conf={
-            "tracking_uri": os.environ.get("MLFLOW_TRACKING_URI", "http://localhost:5000"),
+            "tracking_uri": os.environ.get("MLFLOW_TRACKING_URI", "file:./mlruns"),
             "experiment_name": os.environ.get("MLFLOW_EXPERIMENT_NAME", "flower-demo"),
             "run_name": os.environ.get("MLFLOW_RUN_NAME", "server-run"),
         },
@@ -128,7 +137,12 @@ def server_fn(context: Context) -> ServerAppComponents:
 
     # 하이퍼파라미터 기록(한 번만)
     if mlflow is not None and strategy._mlflow_run:
-        params = {"num_server_rounds": num_rounds, "fraction_fit": fraction_fit}
+        params = {
+            "num_server_rounds": num_rounds, 
+            "fraction_fit": fraction_fit,
+            "min_fit_clients": int(context.run_config.get("min-fit-clients", 2)),
+            "min_available_clients": int(context.run_config.get("min-available-clients", 2))
+        }
         le = context.run_config.get("local-epochs")
         if le is not None:
             params["local_epochs"] = le
@@ -140,3 +154,104 @@ def server_fn(context: Context) -> ServerAppComponents:
 
 # Create ServerApp
 app = ServerApp(server_fn=server_fn)
+
+
+# TOML 파일에서 설정을 읽는 함수
+def read_toml_config():
+    try:
+        import tomllib  # Python 3.11+
+    except ImportError:
+        try:
+            import tomli as tomllib  # Python < 3.11
+        except ImportError:
+            print("Warning: tomllib/tomli not available. Using default values.")
+            return {}
+    
+    toml_path = Path("pyproject.toml")
+    if not toml_path.exists():
+        print("Warning: pyproject.toml not found. Using default values.")
+        return {}
+    
+    try:
+        with open(toml_path, "rb") as f:
+            config = tomllib.load(f)
+        return config.get("tool", {}).get("flwr", {}).get("app", {}).get("config", {})
+    except Exception as e:
+        print(f"Warning: Failed to read pyproject.toml: {e}. Using default values.")
+        return {}
+
+
+# 직접 실행을 위한 메인 함수
+def main():
+    parser = argparse.ArgumentParser(description="Flower Server")
+    parser.add_argument("--server-address", default="0.0.0.0:9092", 
+                       help="Server address (default: 0.0.0.0:9092)")
+    parser.add_argument("--num-rounds", type=int, default=None,
+                       help="Number of federated learning rounds")
+    parser.add_argument("--min-fit-clients", type=int, default=None,
+                       help="Minimum number of clients for fit")
+    parser.add_argument("--min-available-clients", type=int, default=None,
+                       help="Minimum number of available clients")
+    parser.add_argument("--fraction-fit", type=float, default=1.0,
+                       help="Fraction of clients to use for fit")
+    
+    args = parser.parse_args()
+    
+    # TOML 설정 읽기
+    toml_config = read_toml_config()
+    
+    # 설정 값 결정 (우선순위: 명령행 인수 > TOML > 기본값)
+    num_rounds = args.num_rounds or toml_config.get("num-server-rounds", 10)
+    min_fit_clients = args.min_fit_clients or toml_config.get("min-fit-clients", 2)
+    min_available_clients = args.min_available_clients or toml_config.get("min-available-clients", 2)
+    fraction_fit = args.fraction_fit if args.fraction_fit != 1.0 else toml_config.get("fraction-fit", 1.0)
+    
+    print(f"=== Flower Server Configuration ===")
+    print(f"Server address: {args.server_address}")
+    print(f"Number of rounds: {num_rounds}")
+    print(f"Min fit clients: {min_fit_clients}")
+    print(f"Min available clients: {min_available_clients}")
+    print(f"Fraction fit: {fraction_fit}")
+    print(f"===================================")
+    
+    # 초기 파라미터
+    initial_parameters = ndarrays_to_parameters(get_weights(Net()))
+    
+    # 전략 생성
+    strategy = SaveFedAvg(
+        fraction_fit=fraction_fit,
+        fraction_evaluate=1.0,
+        min_fit_clients=min_fit_clients,
+        min_available_clients=min_available_clients,
+        initial_parameters=initial_parameters,
+        fit_metrics_aggregation_fn=_metrics_agg_fit,
+        evaluate_metrics_aggregation_fn=_metrics_agg_eval,
+        mlflow_conf={
+            "tracking_uri": os.environ.get("MLFLOW_TRACKING_URI", "file:./mlruns"),
+            "experiment_name": os.environ.get("MLFLOW_EXPERIMENT_NAME", "flower-demo"),
+            "run_name": os.environ.get("MLFLOW_RUN_NAME", "server-run"),
+        },
+    )
+    
+    # MLflow 파라미터 기록
+    if mlflow is not None and strategy._mlflow_run:
+        params = {
+            "num_server_rounds": num_rounds, 
+            "fraction_fit": fraction_fit,
+            "min_fit_clients": min_fit_clients,
+            "min_available_clients": min_available_clients
+        }
+        mlflow.log_params(params)
+    
+    # 서버 시작
+    print("Starting Flower server...")
+    fl.server.start_server(
+        server_address=args.server_address,
+        config=fl.server.ServerConfig(num_rounds=num_rounds),
+        strategy=strategy,
+    )
+
+
+if __name__ == "__main__":
+    main()
+

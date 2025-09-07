@@ -19,8 +19,8 @@ dependencies = [
 publisher = "jinhyeok"
 
 [tool.flwr.app.components]
-serverapp = "flower_demo.server_app:app"
-clientapp = "flower_demo.client_app:app"
+serverapp = "server_app:app"
+clientapp = "client_app:app"
 
 [tool.flwr.federations]
 default = "remote-federation"
