@@ -413,7 +413,7 @@ insecure = true
 		},
 		"files": map[string]interface{}{
 			"pyproject.toml": participantPyprojectContent,
-			"server_app.py":  serverAppTemplate,
+			"__init__.py":    "", // 빈 파일로 Python 패키지 생성
 			"client_app.py":  clientAppTemplate,
 			"task.py":        taskTemplate,
 		},
@@ -532,35 +532,29 @@ func (h *FederatedLearningHandler) sendExecuteRequestToAggregator(aggregator *mo
 	
 	err = sshClient.UploadFileContent(dynamicPyprojectContent, fmt.Sprintf("%s/pyproject.toml", workDir))
 	if err != nil {
-		return fmt.Errorf("flower 설정 파일 업로드 실패: %v", err)
+		return fmt.Errorf("pyproject.toml 파일 업로드 실패: %v", err)
 	}
 
-	// flower_demo 패키지 디렉토리 생성
-	_, _, err = sshClient.ExecuteCommand(fmt.Sprintf("mkdir -p %s/flower_demo", workDir))
-	if err != nil {
-		return fmt.Errorf("flower_demo 디렉토리 생성 실패: %v", err)
-	}
-
-	// __init__.py 파일 생성 (Python 패키지로 만들기 위해)
-	err = sshClient.UploadFileContent("", fmt.Sprintf("%s/flower_demo/__init__.py", workDir))
+	// Python 패키지용 __init__.py 파일 생성
+	err = sshClient.UploadFileContent("", fmt.Sprintf("%s/__init__.py", workDir))
 	if err != nil {
 		return fmt.Errorf("__init__.py 파일 업로드 실패: %v", err)
 	}
 
-	// server_app.py 파일을 flower_demo 폴더에 업로드
-	err = sshClient.UploadFileContent(serverAppTemplate, fmt.Sprintf("%s/flower_demo/server_app.py", workDir))
+	// server_app.py 파일을 작업 디렉토리에 직접 업로드
+	err = sshClient.UploadFileContent(serverAppTemplate, fmt.Sprintf("%s/server_app.py", workDir))
 	if err != nil {
 		return fmt.Errorf("서버 앱 파일 업로드 실패: %v", err)
 	}
 
 	// task.py 파일 업로드
-	err = sshClient.UploadFileContent(taskTemplate, fmt.Sprintf("%s/flower_demo/task.py", workDir))
+	err = sshClient.UploadFileContent(taskTemplate, fmt.Sprintf("%s/task.py", workDir))
 	if err != nil {
 		return fmt.Errorf("task.py 파일 업로드 실패: %v", err)
 	}
 
-	// client_app.py 파일을 flower_demo 폴더에 업로드
-	err = sshClient.UploadFileContent(clientAppTemplate, fmt.Sprintf("%s/flower_demo/client_app.py", workDir))
+	// client_app.py 파일을 작업 디렉토리에 직접 업로드
+	err = sshClient.UploadFileContent(clientAppTemplate, fmt.Sprintf("%s/client_app.py", workDir))
 	if err != nil {
 		return fmt.Errorf("클라이언트 앱 파일 업로드 실패: %v", err)
 	}
@@ -594,24 +588,21 @@ pip install --upgrade pip
 
 # 필수 Python 패키지 설치
 echo "필수 Python 패키지를 설치합니다..."
-pip install flwr torch torchvision
+pip install flwr torch torchvision tomli scikit-learn
 
 # 설치된 패키지 확인
 echo "설치된 패키지 확인:"
-pip list | grep -E "(flwr|torch)"
-
-# flwr 명령어 경로 확인
-echo "flwr 명령어 경로: $(which flwr)"
+pip list | grep -E "(flwr|torch|tomli|scikit-learn)"
 
 echo "Python 패키지 설치가 완료되었습니다."
 
-# Flower 서버 실행 (가상환경에서)
+# Flower 서버 실행
 echo "Flower 서버를 시작합니다..."
+echo "참여자 수: ` + fmt.Sprintf("%d", federatedLearning.ParticipantCount) + `"
 echo "라운드 수: ` + fmt.Sprintf("%d", federatedLearning.Rounds) + `"
 echo "포트: 9092"
 
-# 가상환경에서 flwr 실행 (포트 9092 고정)
-source venv/bin/activate && flwr run --run-config num-server-rounds=` + fmt.Sprintf("%d", federatedLearning.Rounds) + ` --superlink 0.0.0.0:9092
+source venv/bin/activate && python3 server_app.py --server-address 0.0.0.0:9092 --num-rounds ` + fmt.Sprintf("%d", federatedLearning.Rounds) + ` --min-fit-clients ` + fmt.Sprintf("%d", federatedLearning.ParticipantCount) + ` --min-available-clients ` + fmt.Sprintf("%d", federatedLearning.ParticipantCount) + `
 `
 
 	err = sshClient.UploadFileContent(runScript, fmt.Sprintf("%s/run_server.sh", workDir))
