@@ -136,7 +136,10 @@ export const FederatedLearningLogsDialog = ({
 	return (
 		<Dialog open={isOpen} onOpenChange={setIsOpen}>
 			<DialogTrigger asChild>{children}</DialogTrigger>
-			<DialogContent className="max-w-6xl max-h-[90vh] overflow-hidden">
+			<DialogContent
+				className="!w-[90vw] !max-w-none max-h-[90vh] overflow-hidden sm:!max-w-none"
+				style={{ width: "80vw", maxWidth: "none" }}
+			>
 				<DialogHeader>
 					<DialogTitle className="flex items-center gap-2">
 						<FileText className="h-5 w-5" />
