@@ -566,3 +566,205 @@ func (s *OpenStackService) getVMIPAddress(participant *models.Participant, insta
 
 	return "", fmt.Errorf("VM에 할당된 IP 주소가 없습니다")
 }
+
+// SelectOptimalVMFromMockData는 Mock VMInstance 데이터를 VirtualMachine으로 변환하여 처리
+func (s *VMSelectionService) SelectOptimalVMFromMockData(participant *models.Participant, criteria VMSelectionCriteria, mockVMs []VMInstance) (*VMSelectionResult, error) {
+	// Mock VMInstance를 VirtualMachine으로 변환
+	var virtualMachines []VirtualMachine
+	for _, mockVM := range mockVMs {
+		vm := VirtualMachine{
+			InstanceID:    mockVM.ID,
+			Name:          mockVM.Name,
+			ParticipantID: participant.ID,
+			Status:        mockVM.Status,
+			FlavorID:      mockVM.Flavor.ID,
+			FlavorName:    mockVM.Flavor.Name,
+			VCPUs:         mockVM.Flavor.VCPUs,
+			RAM:           mockVM.Flavor.RAM,
+			Disk:          mockVM.Flavor.Disk,
+			IPAddresses:   "",
+		}
+		virtualMachines = append(virtualMachines, vm)
+	}
+	
+	// 기존 SelectOptimalVM 로직을 Mock 데이터로 실행
+	return s.selectOptimalVMWithMockMonitoring(participant, criteria, virtualMachines)
+}
+
+// selectOptimalVMWithMockMonitoring은 Mock 모니터링 데이터를 사용하여 VM 선택
+func (s *VMSelectionService) selectOptimalVMWithMockMonitoring(participant *models.Participant, criteria VMSelectionCriteria, vms []VirtualMachine) (*VMSelectionResult, error) {
+	// 기본값 설정
+	if criteria.RequiredStatus == "" {
+		criteria.RequiredStatus = "ACTIVE"
+	}
+	if criteria.MaxCPUUsage == 0 {
+		criteria.MaxCPUUsage = 70.0
+	}
+
+	fmt.Printf("=== VM 선택 시작 (Mock 데이터) ===\n")
+	fmt.Printf("모델 크기: %dMB\n", criteria.ModelSizeMB)
+	fmt.Printf("조건: vCPU>=%d, RAM>=%d, Disk>=%d, 상태=%s, MaxCPU=%.1f%%\n", 
+		criteria.MinVCPUs, criteria.MinRAM, criteria.MinDisk, criteria.RequiredStatus, criteria.MaxCPUUsage)
+
+	fmt.Printf("전체 VM 개수: %d (Mock)\n", len(vms))
+
+	// 1. 기본 필터링 및 모델 크기 기반 동적 체크
+	var candidateVMs []VirtualMachine
+	for i, vm := range vms {
+		fmt.Printf("[%d/%d] VM 체크: %s (상태:%s, vCPU:%d, RAM:%dMB, Disk:%dGB)\n", 
+			i+1, len(vms), vm.Name, vm.Status, vm.VCPUs, vm.RAM, vm.Disk)
+
+		// 기본 조건 확인
+		if vm.Status != criteria.RequiredStatus {
+			fmt.Printf("  → 상태 불일치로 제외: %s != %s\n", vm.Status, criteria.RequiredStatus)
+			continue
+		}
+		if vm.VCPUs < criteria.MinVCPUs {
+			fmt.Printf("  → vCPU 부족으로 제외: %d < %d\n", vm.VCPUs, criteria.MinVCPUs)
+			continue
+		}
+		if vm.RAM < criteria.MinRAM {
+			fmt.Printf("  → RAM 부족으로 제외: %dMB < %dMB\n", vm.RAM, criteria.MinRAM)
+			continue
+		}
+		if vm.Disk < criteria.MinDisk {
+			fmt.Printf("  → Disk 부족으로 제외: %dGB < %dGB\n", vm.Disk, criteria.MinDisk)
+			continue
+		}
+
+		// 모델 크기 기반 동적 리소스 체크 (실제와 동일)
+		requiredMemoryMB := int((float64(criteria.ModelSizeMB) * 2.0)) + 512
+		requiredDiskGB := int((float64(criteria.ModelSizeMB) / 1024.0 * 3.0)) + 1
+		
+		if vm.RAM < requiredMemoryMB {
+			fmt.Printf("  → 모델 크기 대비 RAM 부족으로 제외: %dMB < %dMB (모델:%dMB)\n", 
+				vm.RAM, requiredMemoryMB, criteria.ModelSizeMB)
+			continue
+		}
+		if vm.Disk < requiredDiskGB {
+			fmt.Printf("  → 모델 크기 대비 Disk 부족으로 제외: %dGB < %dGB (모델:%dMB)\n", 
+				vm.Disk, requiredDiskGB, criteria.ModelSizeMB)
+			continue
+		}
+
+		candidateVMs = append(candidateVMs, vm)
+		fmt.Printf("  → 모든 조건 통과\n")
+	}
+
+	if len(candidateVMs) == 0 {
+		fmt.Printf("기본 필터링 후 후보: 0개 - 조건을 만족하는 VM이 없음\n")
+		return &VMSelectionResult{
+			SelectedVM:      nil,
+			SelectionReason: "조건을 만족하는 VM을 찾을 수 없습니다 (Mock)",
+			CandidateCount:  0,
+		}, nil
+	}
+
+	fmt.Printf("기본 필터링 후 후보: %d개\n", len(candidateVMs))
+
+	// 2. Mock 사용률 정보 생성 및 필터링
+	var vmUtilizations []VMUtilization
+	for i, vm := range candidateVMs {
+		fmt.Printf("[%d/%d] 사용률 체크: %s\n", i+1, len(candidateVMs), vm.Name)
+		
+		// Mock 사용률 정보 생성
+		mockMonitoring := s.generateMockMonitoringInfo(vm.InstanceID)
+		
+		utilization := VMUtilization{
+			VM:             vm,
+			MonitoringInfo: *mockMonitoring,
+			IsHealthy:      mockMonitoring.CPUUsage < 80 && mockMonitoring.MemoryUsage < 80,
+			UtilizationScore: 0, // 나중에 계산
+		}
+
+		fmt.Printf("  → CPU: %.1f%%, Memory: %.1f%%, Disk: %.1f%%, 건강상태: %t\n", 
+			utilization.MonitoringInfo.CPUUsage, 
+			utilization.MonitoringInfo.MemoryUsage,
+			utilization.MonitoringInfo.DiskUsage,
+			utilization.IsHealthy)
+
+		// CPU 사용률 조건 확인
+		if utilization.MonitoringInfo.CPUUsage > criteria.MaxCPUUsage {
+			fmt.Printf("  → CPU 사용률 초과로 제외: %.1f%% > %.1f%%\n", 
+				utilization.MonitoringInfo.CPUUsage, criteria.MaxCPUUsage)
+			continue
+		}
+		
+		// 메모리 사용률 동적 계산 (실제와 동일)
+		availableMemoryMB := float64(vm.RAM) * (1.0 - utilization.MonitoringInfo.MemoryUsage/100.0)
+		requiredMemoryMB := float64(criteria.ModelSizeMB) * 2.0 + 512.0
+		
+		if availableMemoryMB < requiredMemoryMB {
+			fmt.Printf("  → 사용 가능한 메모리 부족으로 제외: %.1fMB < %.1fMB\n", 
+				availableMemoryMB, requiredMemoryMB)
+			continue
+		}
+
+		// 디스크 사용률 동적 계산
+		availableDiskGB := float64(vm.Disk) * (1.0 - utilization.MonitoringInfo.DiskUsage/100.0)
+		requiredDiskGB := float64(criteria.ModelSizeMB) / 1024.0 * 3.0 + 1.0
+		
+		if availableDiskGB < requiredDiskGB {
+			fmt.Printf("  → 사용 가능한 디스크 부족으로 제외: %.1fGB < %.1fGB\n", 
+				availableDiskGB, requiredDiskGB)
+			continue
+		}
+
+		vmUtilizations = append(vmUtilizations, utilization)
+		fmt.Printf("  → 모든 사용률 조건 통과\n")
+	}
+
+	if len(vmUtilizations) == 0 {
+		fmt.Printf("사용률 필터링 후 후보: 0개 - 사용률 조건을 만족하는 VM이 없음\n")
+		return &VMSelectionResult{
+			SelectedVM:      nil,
+			SelectionReason: "사용률 조건을 만족하는 VM을 찾을 수 없습니다 (Mock)",
+			CandidateCount:  len(candidateVMs),
+		}, nil
+	}
+
+	fmt.Printf("사용률 필터링 후 후보: %d개\n", len(vmUtilizations))
+
+	// 3. 우선순위 점수 기반 선택 (실제와 동일)
+	selectedUtilization, reason := s.selectVMWithPriorityScore(vmUtilizations, criteria.ModelSizeMB)
+
+	fmt.Printf("최종 선택: %s\n", selectedUtilization.VM.Name)
+	fmt.Printf("선택 이유: %s (Mock)\n", reason)
+	fmt.Printf("=== VM 선택 완료 ===\n\n")
+
+	return &VMSelectionResult{
+		SelectedVM:      &selectedUtilization.VM,
+		SelectionReason: reason + " (Mock 데이터)",
+		CandidateCount:  len(vmUtilizations),
+	}, nil
+}
+
+// generateMockMonitoringInfo는 Mock VM의 모니터링 정보를 생성합니다
+func (s *VMSelectionService) generateMockMonitoringInfo(instanceID string) *VMMonitoringInfo {
+	var cpuUsage, memoryUsage, diskUsage float64
+	
+	switch {
+	case strings.Contains(instanceID, "mock-vm-1"):
+		cpuUsage, memoryUsage, diskUsage = 25.5, 40.2, 15.8
+	case strings.Contains(instanceID, "mock-vm-2"):
+		cpuUsage, memoryUsage, diskUsage = 75.8, 60.3, 30.5  // 높은 사용률
+	case strings.Contains(instanceID, "mock-vm-3"):
+		cpuUsage, memoryUsage, diskUsage = 35.2, 25.1, 12.7  // 낮은 사용률
+	case strings.Contains(instanceID, "mock-vm-4"):
+		cpuUsage, memoryUsage, diskUsage = 0, 0, 0  // 오프라인
+	case strings.Contains(instanceID, "mock-vm-5"):
+		cpuUsage, memoryUsage, diskUsage = 0, 0, 0  // 에러 상태
+	default:
+		cpuUsage, memoryUsage, diskUsage = 50.0, 50.0, 50.0
+	}
+	
+	return &VMMonitoringInfo{
+		InstanceID:   instanceID,
+		CPUUsage:     cpuUsage,
+		MemoryUsage:  memoryUsage,
+		DiskUsage:    diskUsage,
+		NetworkInBytes:    1024 * 1024,  // 1MB
+		NetworkOutBytes:   512 * 1024,   // 512KB
+		LastUpdated:    time.Now(),
+	}
+}

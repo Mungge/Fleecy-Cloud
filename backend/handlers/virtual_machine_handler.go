@@ -3,24 +3,23 @@ package handlers
 import (
 	"fmt"
 	"net/http"
+	"strings"
+	"time"
 
-	"github.com/gin-gonic/gin"
-
+	"github.com/Mungge/Fleecy-Cloud/models"
 	"github.com/Mungge/Fleecy-Cloud/repository"
 	"github.com/Mungge/Fleecy-Cloud/services"
 	"github.com/Mungge/Fleecy-Cloud/utils"
+	"github.com/gin-gonic/gin"
 )
 
-// VirtualMachineHandler는 가상머신 관련 API 핸들러입니다
 type VirtualMachineHandler struct {
 	participantRepo    *repository.ParticipantRepository
 	openStackService   *services.OpenStackService
 	vmSelectionService *services.VMSelectionService
 }
 
-// NewVirtualMachineHandler는 새 VirtualMachineHandler 인스턴스를 생성합니다
 func NewVirtualMachineHandler(participantRepo *repository.ParticipantRepository) *VirtualMachineHandler {
-	// 기본 Prometheus URL은 더미값으로 설정 (실제로는 participant별로 동적 생성)
 	openStackService := services.NewOpenStackService("http://localhost:9090")
 	vmSelectionService := services.NewVMSelectionService(openStackService)
 	return &VirtualMachineHandler{
@@ -30,12 +29,11 @@ func NewVirtualMachineHandler(participantRepo *repository.ParticipantRepository)
 	}
 }
 
-// SelectOptimalVM은 연합학습에 최적의 VM을 선택합니다 (새로 추가)
+// SelectOptimalVM - 깔끔하게 정리
 func (h *VirtualMachineHandler) SelectOptimalVM(c *gin.Context) {
 	userID := utils.GetUserIDFromMiddleware(c)
 	participantID := c.Param("id")
 
-	// 참여자 소유자 확인
 	participant, err := h.participantRepo.GetByID(participantID)
 	if err != nil || participant == nil {
 		c.JSON(http.StatusNotFound, gin.H{"error": "참여자를 찾을 수 없습니다"})
@@ -46,28 +44,50 @@ func (h *VirtualMachineHandler) SelectOptimalVM(c *gin.Context) {
 		return
 	}
 
-	// 요청 본문에서 선택 기준 파싱
 	var criteria services.VMSelectionCriteria
 	if err := c.ShouldBindJSON(&criteria); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "잘못된 요청 형식", "details": err.Error()})
 		return
 	}
 
-	// VM 선택 실행
-	result, err := h.vmSelectionService.SelectOptimalVM(participant, criteria)
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{
-			"error":   "VM 선택 중 오류 발생",
-			"details": err.Error(),
+	// 실제 VM 조회 시도
+	vmInstances, err := h.openStackService.GetAllVMInstances(participant)
+
+	// 실제 VM이 없으면 Mock 데이터로 처리
+	if err != nil || len(vmInstances) == 0 {
+		mockVMs := generateMockVMInstances(participant.ID)
+		criteriaMock := createMockCriteria(500)
+		result, err := h.vmSelectionService.SelectOptimalVMFromMockData(participant, criteriaMock, mockVMs)
+		
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{
+				"error": "Mock VM 선택 실패", "details": err.Error(),
+			})
+			return
+		}
+
+		c.JSON(http.StatusOK, gin.H{
+			"success": true,
+			"message": "최적의 VM이 선택되었습니다 (Mock 데이터)",
+			"data":    result,
+			"is_mock": true,
 		})
 		return
 	}
 
-	// 선택된 VM이 없는 경우 (빈 구조체인지 확인)
+	// 실제 VM 처리
+	result, err := h.vmSelectionService.SelectOptimalVM(participant, criteria)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"error": "VM 선택 실패", "details": err.Error(),
+		})
+		return
+	}
+
 	if result.SelectedVM == nil || result.SelectedVM.InstanceID == "" {
 		c.JSON(http.StatusNotFound, gin.H{
-			"error":           "조건을 만족하는 VM을 찾을 수 없습니다",
-			"reason":          result.SelectionReason,
+			"error": "조건을 만족하는 VM 없음",
+			"reason": result.SelectionReason,
 			"candidate_count": result.CandidateCount,
 		})
 		return
@@ -77,104 +97,148 @@ func (h *VirtualMachineHandler) SelectOptimalVM(c *gin.Context) {
 		"success": true,
 		"message": "최적의 VM이 선택되었습니다",
 		"data":    result,
+		"is_mock": false,
 	})
 }
 
-// GetVMUtilizations는 참가자의 모든 VM 사용률 정보를 조회합니다
+func createMockCriteria(modelSizeMB int) services.VMSelectionCriteria {
+    return services.VMSelectionCriteria{
+        MinVCPUs:         1,
+        MinRAM:           512,
+        MinDisk:          5,
+        RequiredStatus:   "ACTIVE",
+        MaxCPUUsage:      70.0,
+        MaxMemoryUsage:   80.0,
+        ModelSizeMB:      modelSizeMB,
+    }
+}
+
+func (h *VirtualMachineHandler) GetVMStats(c *gin.Context) {
+	// 권한 확인 로직...
+	participant, err := h.getParticipantWithAuth(c)
+	if err != nil {
+		return // 에러는 getParticipantWithAuth에서 처리
+	}
+
+	vmInstances, err := h.openStackService.GetAllVMInstances(participant)
+	isMockData := false
+
+	if err != nil || len(vmInstances) == 0 {
+		vmInstances = generateMockVMInstances(participant.ID)
+		isMockData = true
+	}
+
+	stats := calculateVMStats(vmInstances, isMockData)
+	message := "실제 OpenStack VM 통계"
+	if isMockData {
+		message = "Mock 데이터 통계"
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"success": true,
+		"data":    stats,
+		"message": message,
+		"is_mock": isMockData,
+	})
+}
+
+func (h *VirtualMachineHandler) GetVMRequests(c *gin.Context) {
+	participant, err := h.getParticipantWithAuth(c)
+	if err != nil {
+		return
+	}
+
+	vmInstances, err := h.openStackService.GetAllVMInstances(participant)
+	isMockData := false
+
+	if err != nil || len(vmInstances) == 0 {
+		vmInstances = generateMockVMInstances(participant.ID)
+		isMockData = true
+	}
+
+	message := "VM 목록 조회 완료"
+	if isMockData {
+		message = "Mock 데이터 VM 목록"
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"success": true,
+		"message": message,
+		"data":    vmInstances,
+		"count":   len(vmInstances),
+		"is_mock": isMockData,
+	})
+}
+
+// 나머지 메서드들...
 func (h *VirtualMachineHandler) GetVMUtilizations(c *gin.Context) {
-	userID := utils.GetUserIDFromMiddleware(c)
-	participantID := c.Param("id")
-
-	// 참여자 소유자 확인
-	participant, err := h.participantRepo.GetByID(participantID)
-	if err != nil || participant == nil {
-		c.JSON(http.StatusNotFound, gin.H{"error": "참여자를 찾을 수 없습니다"})
-		return
-	}
-	if participant.UserID != userID {
-		c.JSON(http.StatusForbidden, gin.H{"error": "권한이 없습니다"})
+	participant, err := h.getParticipantWithAuth(c)
+	if err != nil {
 		return
 	}
 
-	// VM 사용률 정보 조회
 	utilizations, err := h.vmSelectionService.GetVMUtilizations(participant)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{
-			"error":   "VM 사용률 조회 중 오류 발생",
-			"details": err.Error(),
+			"error": "VM 사용률 조회 실패", "details": err.Error(),
 		})
 		return
 	}
 
 	c.JSON(http.StatusOK, gin.H{
 		"success": true,
-		"message": "VM 사용률 정보를 성공적으로 조회했습니다",
+		"message": "VM 사용률 정보 조회 성공",
 		"data":    utilizations,
 		"count":   len(utilizations),
 	})
 }
 
-// ResetVMSelectionRoundRobin은 VM 선택 라운드로빈을 초기화합니다 (새로 추가)
 func (h *VirtualMachineHandler) ResetVMSelectionRoundRobin(c *gin.Context) {
-	userID := utils.GetUserIDFromMiddleware(c)
-	participantID := c.Param("id")
-
-	// 참여자 소유자 확인
-	participant, err := h.participantRepo.GetByID(participantID)
-	if err != nil || participant == nil {
-		c.JSON(http.StatusNotFound, gin.H{"error": "참여자를 찾을 수 없습니다"})
-		return
-	}
-	if participant.UserID != userID {
-		c.JSON(http.StatusForbidden, gin.H{"error": "권한이 없습니다"})
+	participant, err := h.getParticipantWithAuth(c)
+	if err != nil {
 		return
 	}
 
-	h.vmSelectionService.ResetRoundRobinIndex(participantID)
-
+	h.vmSelectionService.ResetRoundRobinIndex(participant.ID)
 	c.JSON(http.StatusOK, gin.H{
 		"success": true,
-		"message": "라운드로빈 인덱스가 초기화되었습니다",
+		"message": "라운드로빈 인덱스 초기화 완료",
 	})
 }
 
-// GetVMStats는 참여자의 VM 통계를 조회합니다
-func (h *VirtualMachineHandler) GetVMStats(c *gin.Context) {
+// 헬퍼 함수들
+func (h *VirtualMachineHandler) getParticipantWithAuth(c *gin.Context) (*models.Participant, error) {
 	userID := utils.GetUserIDFromMiddleware(c)
 	participantID := c.Param("id")
 
-	// 권한 확인
 	participant, err := h.participantRepo.GetByID(participantID)
-	if err != nil || participant == nil || participant.UserID != userID {
+	if err != nil || participant == nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "참여자를 찾을 수 없습니다"})
+		return nil, err
+	}
+	if participant.UserID != userID {
 		c.JSON(http.StatusForbidden, gin.H{"error": "권한이 없습니다"})
-		return
+		return nil, fmt.Errorf("권한 없음")
 	}
+	return participant, nil
+}
 
-	// OpenStack에서 실시간 VM 목록을 가져와서 통계 계산
-	vmInstances, err := h.openStackService.GetAllVMInstances(participant)
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": fmt.Sprintf("VM 목록 조회 실패: %v", err)})
-		return
-	}
-
-	// 실시간 통계 계산
+func calculateVMStats(vmInstances []services.VMInstance, isMockData bool) map[string]interface{} {
 	stats := map[string]interface{}{
-		"total":     len(vmInstances),
-		"active":    0,
-		"available": 0,
-		"busy":      0,
-		"error":     0,
-		"building":  0,
-		"shutoff":   0,
+		"total": len(vmInstances), "active": 0, "available": 0, 
+		"busy": 0, "error": 0, "building": 0, "shutoff": 0,
+		"is_mock": isMockData,
 	}
 
 	for _, vm := range vmInstances {
 		switch vm.Status {
 		case "ACTIVE":
 			stats["active"] = stats["active"].(int) + 1
-			// ACTIVE 상태인 VM은 기본적으로 사용 가능으로 간주
-			// 실제로는 현재 작업 중인지 확인해야 하지만, 여기서는 단순화
-			stats["available"] = stats["available"].(int) + 1
+			if isMockData && strings.Contains(vm.ID, "mock-vm-2") {
+				stats["busy"] = stats["busy"].(int) + 1
+			} else {
+				stats["available"] = stats["available"].(int) + 1
+			}
 		case "ERROR":
 			stats["error"] = stats["error"].(int) + 1
 		case "BUILD", "BUILDING":
@@ -183,32 +247,62 @@ func (h *VirtualMachineHandler) GetVMStats(c *gin.Context) {
 			stats["shutoff"] = stats["shutoff"].(int) + 1
 		}
 	}
-
-	c.JSON(http.StatusOK, gin.H{"data": stats})
+	return stats
 }
 
-// GetOpenStackVMs는 OpenStack에서 직접 VM 목록을 조회합니다
-func (h *VirtualMachineHandler) GetVMRequests(c *gin.Context) {
-	userID := utils.GetUserIDFromMiddleware(c)
-	participantID := c.Param("id")
-
-	// 권한 확인
-	participant, err := h.participantRepo.GetByID(participantID)
-	if err != nil || participant == nil || participant.UserID != userID {
-		c.JSON(http.StatusForbidden, gin.H{"error": "권한이 없습니다"})
-		return
+func generateMockVMInstances(participantID string) []services.VMInstance {
+	return []services.VMInstance{
+		{
+			ID: fmt.Sprintf("mock-vm-1-%s", participantID),
+			Name: "저사양-테스트VM-1", Status: "ACTIVE", PowerState: 1,
+			Flavor: services.FlavorDetails{ID: "flavor-small", Name: "small", VCPUs: 1, RAM: 2048, Disk: 20},
+			Addresses: map[string][]struct {
+				Addr string `json:"addr"`
+				Type string `json:"OS-EXT-IPS:type"`
+			}{"private": {{Addr: "192.168.1.10", Type: "fixed"}}},
+			AvailabilityZone: "nova",
+			Created: time.Now().Add(-24 * time.Hour).Format(time.RFC3339),
+			Updated: time.Now().Format(time.RFC3339),
+		},
+		{
+			ID: fmt.Sprintf("mock-vm-2-%s", participantID),
+			Name: "중사양-테스트VM-2", Status: "ACTIVE", PowerState: 1,
+			Flavor: services.FlavorDetails{ID: "flavor-medium", Name: "medium", VCPUs: 2, RAM: 4096, Disk: 50},
+			Addresses: map[string][]struct {
+				Addr string `json:"addr"`
+				Type string `json:"OS-EXT-IPS:type"`
+			}{"private": {{Addr: "192.168.1.11", Type: "fixed"}}},
+			AvailabilityZone: "nova",
+			Created: time.Now().Add(-12 * time.Hour).Format(time.RFC3339),
+			Updated: time.Now().Format(time.RFC3339),
+		},
+		{
+			ID: fmt.Sprintf("mock-vm-3-%s", participantID),
+			Name: "고사양-테스트VM-3", Status: "ACTIVE", PowerState: 1,
+			Flavor: services.FlavorDetails{ID: "flavor-large", Name: "large", VCPUs: 4, RAM: 8192, Disk: 100},
+			Addresses: map[string][]struct {
+				Addr string `json:"addr"`
+				Type string `json:"OS-EXT-IPS:type"`
+			}{"private": {{Addr: "192.168.1.12", Type: "fixed"}}},
+			AvailabilityZone: "nova",
+			Created: time.Now().Add(-6 * time.Hour).Format(time.RFC3339),
+			Updated: time.Now().Format(time.RFC3339),
+		},
+		{
+			ID: fmt.Sprintf("mock-vm-4-%s", participantID),
+			Name: "오프라인-테스트VM-4", Status: "SHUTOFF", PowerState: 4,
+			Flavor: services.FlavorDetails{ID: "flavor-medium", Name: "medium", VCPUs: 2, RAM: 4096, Disk: 40},
+			AvailabilityZone: "nova",
+			Created: time.Now().Add(-48 * time.Hour).Format(time.RFC3339),
+			Updated: time.Now().Add(-2 * time.Hour).Format(time.RFC3339),
+		},
+		{
+			ID: fmt.Sprintf("mock-vm-5-%s", participantID),
+			Name: "에러-테스트VM-5", Status: "ERROR", PowerState: 0,
+			Flavor: services.FlavorDetails{ID: "flavor-small", Name: "small", VCPUs: 1, RAM: 1024, Disk: 10},
+			AvailabilityZone: "nova",
+			Created: time.Now().Add(-72 * time.Hour).Format(time.RFC3339),
+			Updated: time.Now().Add(-1 * time.Hour).Format(time.RFC3339),
+		},
 	}
-
-	// OpenStack에서 직접 VM 목록 조회
-	vmInstances, err := h.openStackService.GetAllVMInstances(participant)
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": fmt.Sprintf("OpenStack VM 목록 조회 실패: %v", err)})
-		return
-	}
-
-	c.JSON(http.StatusOK, gin.H{
-		"message": "VM 목록 조회가 완료되었습니다",
-		"data":    vmInstances,
-		"count":   len(vmInstances),
-	})
 }
