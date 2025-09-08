@@ -91,7 +91,7 @@ func (h *FederatedLearningHandler) GetFederatedLearning(c *gin.Context) {
 	if fl.AggregatorID != nil {
 		aggregator, err := h.aggregatorRepo.GetAggregatorByID(*fl.AggregatorID)
 		if err == nil && aggregator != nil {
-			mlflowURL = fmt.Sprintf("http://%s:5001", aggregator.PublicIP)
+			mlflowURL = fmt.Sprintf("http://%s:5000", aggregator.PublicIP)
 		}
 	}
 
@@ -348,7 +348,7 @@ func (h *FederatedLearningHandler) sendFederatedLearningExecuteRequests(federate
 // sendExecuteRequestToParticipant는 개별 참여자에게 연합학습 실행 요청을 보냅니다
 func (h *FederatedLearningHandler) sendExecuteRequestToParticipant(participant *models.Participant, federatedLearning *models.FederatedLearning) error {
 
-	requestURL := fmt.Sprintf("%s:5001/api/fl/execute-local", participant.OpenStackEndpoint)
+	requestURL := fmt.Sprintf("%s:5000/api/fl/execute-local", participant.OpenStackEndpoint)
 	
 	fmt.Printf("참여자 서버 URL: %s\n", requestURL)
 
@@ -572,8 +572,8 @@ echo "Python 패키지 설치가 완료되었습니다."
 echo "MLflow 서버를 시작합니다..."
 export MLFLOW_TRACKING_URI="file:./mlruns"
 export MLFLOW_EXPERIMENT_NAME="federated-learning-` + federatedLearning.ID + `"
-nohup mlflow server --backend-store-uri file:./mlruns --default-artifact-root ./mlruns --host 0.0.0.0 --port 5001 > mlflow.log 2>&1 &
-echo "MLflow 서버가 포트 5001에서 시작되었습니다."
+nohup mlflow server --backend-store-uri file:./mlruns --default-artifact-root ./mlruns --host 0.0.0.0 --port 5000 > mlflow.log 2>&1 &
+echo "MLflow 서버가 포트 5000에서 시작되었습니다."
 
 # MLflow 서버 시작 대기
 sleep 5
@@ -777,8 +777,8 @@ func (h *FederatedLearningHandler) GetMLflowDashboardURL(c *gin.Context) {
 		return
 	}
 	
-	// MLflow 대시보드 URL 생성 (포트 5001)
-	mlflowURL := fmt.Sprintf("http://%s:5001", aggregator.PublicIP)
+	// MLflow 대시보드 URL 생성 (포트 5000)
+	mlflowURL := fmt.Sprintf("http://%s:5000", aggregator.PublicIP)
 	
 	response := gin.H{
 		"federatedLearningId": fl.ID,
@@ -833,7 +833,7 @@ func (h *FederatedLearningHandler) GetMLflowMetrics(c *gin.Context) {
 	}
 	
 	// MLflow API를 통해 메트릭 조회
-	mlflowBaseURL := fmt.Sprintf("http://%s:5001", aggregator.PublicIP)
+	mlflowBaseURL := fmt.Sprintf("http://%s:5000", aggregator.PublicIP)
 	experimentName := fmt.Sprintf("federated-learning-%s", fl.ID)
 	
 	metrics, err := h.fetchMLflowMetrics(mlflowBaseURL, experimentName)
@@ -1036,7 +1036,7 @@ func (h *FederatedLearningHandler) GetLatestMetrics(c *gin.Context) {
 	}
 	
 	// MLflow API를 통해 최신 메트릭만 조회
-	mlflowBaseURL := fmt.Sprintf("http://%s:5001", aggregator.PublicIP)
+	mlflowBaseURL := fmt.Sprintf("http://%s:5000", aggregator.PublicIP)
 	experimentName := fmt.Sprintf("federated-learning-%s", fl.ID)
 	
 	latestMetrics, err := h.fetchLatestMLflowMetrics(mlflowBaseURL, experimentName)
