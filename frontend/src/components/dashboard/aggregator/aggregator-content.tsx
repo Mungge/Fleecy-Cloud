@@ -10,6 +10,7 @@ import {
 } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { toast } from "sonner";
 import {
 	AlertDialog,
 	AlertDialogAction,
@@ -19,10 +20,10 @@ import {
 	AlertDialogFooter,
 	AlertDialogHeader,
 	AlertDialogTitle,
+	AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
 import AggregatorDetails from "@/components/dashboard/aggregator/aggregator-details";
 import { Eye, Monitor, Zap, CheckCircle2, Wallet, Trash2 } from "lucide-react";
-import { toast } from "sonner";
 
 export interface AggregatorInstance {
 	id: string;
@@ -92,29 +93,19 @@ const AggregatorManagementContent: React.FC = () => {
 	const [isLoading, setIsLoading] = useState(true);
 	const [showDetails, setShowDetails] = useState(false);
 	const [error, setError] = useState<string | null>(null);
-	const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
-	const [aggregatorToDelete, setAggregatorToDelete] = useState<{
-		id: string;
-		name: string;
-	} | null>(null);
 
-	// 인증 토큰 가져오기 (실제 구현에 맞게 수정 필요)
+	// 인증 토큰 가져오기
 	const getAuthToken = () => {
-		// 1. document.cookie는 "key1=value1; key2=value2; ..." 형태의 문자열을 반환합니다.
 		const cookies = document.cookie.split(";");
 
-		// 2. 모든 쿠키를 순회하며 'accessToken'을 찾습니다.
 		for (let i = 0; i < cookies.length; i++) {
-			const cookie = cookies[i].trim(); // 각 쿠키의 앞뒤 공백 제거
+			const cookie = cookies[i].trim();
 
-			// 3. 'accessToken='으로 시작하는 쿠키를 찾습니다.
 			if (cookie.startsWith("token=")) {
-				// 4. '=' 뒷부분의 토큰 값만 잘라서 반환합니다.
 				return cookie.substring("token=".length, cookie.length);
 			}
 		}
 
-		// 5. 'accessToken' 쿠키를 찾지 못하면 빈 문자열을 반환합니다.
 		return "";
 	};
 
@@ -206,47 +197,7 @@ const AggregatorManagementContent: React.FC = () => {
 		}
 	}, [fetchWithAuth]); // fetchWithAuth를 dependency에 추가
 
-	// 삭제 다이얼로그 열기 함수
-	const openDeleteDialog = useCallback(
-		(aggregatorId: string, aggregatorName: string) => {
-			setAggregatorToDelete({ id: aggregatorId, name: aggregatorName });
-			setDeleteDialogOpen(true);
-		},
-		[]
-	);
-
-	// Aggregator 삭제 함수
-	const confirmDeleteAggregator = useCallback(async () => {
-		if (!aggregatorToDelete) return;
-
-		try {
-			const response = await fetchWithAuth(
-				`http://localhost:8080/api/aggregators/${aggregatorToDelete.id}`,
-				{
-					method: "DELETE",
-				}
-			);
-
-			if (!response.ok) {
-				throw new Error(`HTTP error! status: ${response.status}`);
-			}
-
-			// 성공적으로 삭제되면 목록에서 제거
-			setAggregators((prev) =>
-				prev.filter((agg) => agg.id !== aggregatorToDelete.id)
-			);
-			toast.success(
-				`"${aggregatorToDelete.name}" 집계자가 성공적으로 삭제되었습니다.`
-			);
-
-			// 다이얼로그 닫기
-			setDeleteDialogOpen(false);
-			setAggregatorToDelete(null);
-		} catch (error) {
-			console.error("Aggregator 삭제 실패:", error);
-			toast.error(`"${aggregatorToDelete.name}" 집계자 삭제에 실패했습니다.`);
-		}
-	}, [fetchWithAuth, fetchAggregators, aggregatorToDelete]); // 컴포넌트 마운트 시 데이터 로드
+	// 컴포넌트 마운트 시 데이터 로드
 	useEffect(() => {
 		fetchAggregators();
 	}, [fetchAggregators]);
@@ -309,6 +260,38 @@ const AggregatorManagementContent: React.FC = () => {
 		await fetchAggregators();
 	};
 
+	const handleDeleteAggregator = useCallback(
+		async (aggregatorId: string, aggregatorName: string) => {
+			try {
+				const response = await fetchWithAuth(
+					`http://localhost:8080/api/aggregators/${aggregatorId}`,
+					{
+						method: "DELETE",
+					}
+				);
+
+				if (response.ok) {
+					toast.success(
+						`"${aggregatorName}" 집계자가 성공적으로 삭제되었습니다.`
+					);
+					// 목록을 다시 불러와서 UI 업데이트
+					await fetchAggregators();
+				} else {
+					const errorData = await response.json();
+					throw new Error(errorData.error || "삭제에 실패했습니다.");
+				}
+			} catch (error) {
+				console.error("집계자 삭제 실패:", error);
+				toast.error(
+					`삭제 실패: ${
+						error instanceof Error ? error.message : "알 수 없는 오류"
+					}`
+				);
+			}
+		},
+		[fetchWithAuth, fetchAggregators]
+	);
+
 	const formatDate = (dateString: string) => {
 		return new Date(dateString).toLocaleString("ko-KR");
 	};
@@ -334,12 +317,6 @@ const AggregatorManagementContent: React.FC = () => {
 			<AggregatorDetails
 				aggregator={aggregatorWithAccuracy}
 				onBack={() => setShowDetails(false)}
-				onDelete={(aggregatorId) => {
-					setAggregators((prev) =>
-						prev.filter((agg) => agg.id !== aggregatorId)
-					);
-					setShowDetails(false);
-				}}
 			/>
 		);
 	}
@@ -362,7 +339,7 @@ const AggregatorManagementContent: React.FC = () => {
 			<div className="grid grid-cols-1 md:grid-cols-4 gap-4">
 				<Card>
 					<CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-						<CardTitle className="text-sm font-medium">총 인스턴스</CardTitle>
+						<CardTitle className="text-sm font-medium">총 Aggregator</CardTitle>
 						<span className="h-4 w-4 text-muted-foreground">
 							<Monitor className="h-4 w-4 text-muted-foreground" />
 						</span>
@@ -426,7 +403,7 @@ const AggregatorManagementContent: React.FC = () => {
 			{/* Aggregator 목록 */}
 			<Card>
 				<CardHeader>
-					<CardTitle>연합학습 집계자 인스턴스</CardTitle>
+					<CardTitle>연합학습 집계자가 인스턴스</CardTitle>
 					<CardDescription>
 						활성화된 연합학습 집계자 인스턴스 목록
 					</CardDescription>
@@ -534,16 +511,40 @@ const AggregatorManagementContent: React.FC = () => {
 												<Eye className="h-4 w-4 mr-2" />
 												상세 보기
 											</Button>
-											<Button
-												variant="destructive"
-												size="sm"
-												onClick={() =>
-													openDeleteDialog(aggregator.id, aggregator.name)
-												}
-											>
-												<Trash2 className="h-4 w-4 mr-2" />
-												삭제
-											</Button>
+											<AlertDialog>
+												<AlertDialogTrigger asChild>
+													<Button variant="destructive" size="sm">
+														<Trash2 className="h-4 w-4 mr-2" />
+														삭제
+													</Button>
+												</AlertDialogTrigger>
+												<AlertDialogContent>
+													<AlertDialogHeader>
+														<AlertDialogTitle>
+															집계자 삭제 확인
+														</AlertDialogTitle>
+														<AlertDialogDescription>
+															정말로 &ldquo;{aggregator.name}&rdquo; 집계자를
+															삭제하시겠습니까? 이 작업은 되돌릴 수 없으며,
+															관련된 모든 데이터가 영구적으로 삭제됩니다.
+														</AlertDialogDescription>
+													</AlertDialogHeader>
+													<AlertDialogFooter>
+														<AlertDialogCancel>취소</AlertDialogCancel>
+														<AlertDialogAction
+															onClick={() =>
+																handleDeleteAggregator(
+																	aggregator.id,
+																	aggregator.name
+																)
+															}
+															className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+														>
+															삭제
+														</AlertDialogAction>
+													</AlertDialogFooter>
+												</AlertDialogContent>
+											</AlertDialog>
 										</div>
 									</div>
 								</div>
@@ -552,30 +553,6 @@ const AggregatorManagementContent: React.FC = () => {
 					)}
 				</CardContent>
 			</Card>
-
-			{/* 삭제 확인 다이얼로그 */}
-			<AlertDialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
-				<AlertDialogContent>
-					<AlertDialogHeader>
-						<AlertDialogTitle>집계자 삭제 확인</AlertDialogTitle>
-						<AlertDialogDescription>
-							정말로 <strong>&quot;{aggregatorToDelete?.name}&quot;</strong>{" "}
-							집계자를 삭제하시겠습니까?
-							<br />이 작업은 되돌릴 수 없으며, 관련된 모든 데이터가 영구적으로
-							삭제됩니다.
-						</AlertDialogDescription>
-					</AlertDialogHeader>
-					<AlertDialogFooter>
-						<AlertDialogCancel>취소</AlertDialogCancel>
-						<AlertDialogAction
-							onClick={confirmDeleteAggregator}
-							className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
-						>
-							삭제
-						</AlertDialogAction>
-					</AlertDialogFooter>
-				</AlertDialogContent>
-			</AlertDialog>
 		</div>
 	);
 };
