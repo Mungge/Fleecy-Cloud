@@ -58,10 +58,64 @@ export interface AggregatorInstance {
 	// MLflow 관련 필드
 	mlflowExperimentName?: string;
 	mlflowExperimentId?: string;
+	id: string;
+	name: string;
+	status: "running" | "completed" | "error" | "pending" | "creating";
+	algorithm: string;
+	federatedLearningId?: string;
+	federatedLearningName: string;
+	cloudProvider: string;
+	region: string;
+	instanceType: string;
+	createdAt: string;
+	lastUpdated: string;
+	participants: number;
+	rounds: number;
+	currentRound: number;
+	accuracy?: number;
+	cost?: {
+		current: number;
+		estimated: number;
+	};
+	specs: {
+		cpu: string;
+		memory: string;
+		storage: string;
+	};
+	metrics: {
+		cpuUsage: number;
+		memoryUsage: number;
+		networkUsage: number;
+	};
+	// MLflow 관련 필드
+	mlflowExperimentName?: string;
+	mlflowExperimentId?: string;
 }
 
 // API 응답 타입 정의
 interface ApiAggregatorResponse {
+	id: string;
+	name: string;
+	status: "running" | "completed" | "error" | "pending" | "creating";
+	algorithm: string;
+	cloud_provider: string;
+	region: string;
+	instance_type: string;
+	created_at: string;
+	updated_at: string;
+	participant_count?: number;
+	current_round?: number;
+	accuracy?: number;
+	current_cost?: number;
+	estimated_cost?: number;
+	cpu_specs?: string;
+	memory_specs?: string;
+	storage_specs?: string;
+	cpu_usage?: number;
+	memory_usage?: number;
+	network_usage?: number;
+	mlflow_experiment_name?: string;
+	mlflow_experiment_id?: string;
 	id: string;
 	name: string;
 	status: "running" | "completed" | "error" | "pending" | "creating";
@@ -102,6 +156,9 @@ const AggregatorManagementContent: React.FC = () => {
 		// 2. 모든 쿠키를 순회하며 'accessToken'을 찾습니다.
 		for (let i = 0; i < cookies.length; i++) {
 			const cookie = cookies[i].trim(); // 각 쿠키의 앞뒤 공백 제거
+		// 2. 모든 쿠키를 순회하며 'accessToken'을 찾습니다.
+		for (let i = 0; i < cookies.length; i++) {
+			const cookie = cookies[i].trim(); // 각 쿠키의 앞뒤 공백 제거
 
 			// 3. 'accessToken='으로 시작하는 쿠키를 찾습니다.
 			if (cookie.startsWith("token=")) {
@@ -109,7 +166,16 @@ const AggregatorManagementContent: React.FC = () => {
 				return cookie.substring("token=".length, cookie.length);
 			}
 		}
+			// 3. 'accessToken='으로 시작하는 쿠키를 찾습니다.
+			if (cookie.startsWith("token=")) {
+				// 4. '=' 뒷부분의 토큰 값만 잘라서 반환합니다.
+				return cookie.substring("token=".length, cookie.length);
+			}
+		}
 
+		// 5. 'accessToken' 쿠키를 찾지 못하면 빈 문자열을 반환합니다.
+		return "";
+	};
 		// 5. 'accessToken' 쿠키를 찾지 못하면 빈 문자열을 반환합니다.
 		return "";
 	};
