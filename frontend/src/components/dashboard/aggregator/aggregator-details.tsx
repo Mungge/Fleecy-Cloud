@@ -1,5 +1,4 @@
 "use client";
-
 import React, { useState, useEffect, useCallback } from "react";
 import {
 	Card,
@@ -247,12 +246,6 @@ const AggregatorDetails: React.FC<AggregatorDetailsProps> = ({
 		return new Date(dateString).toLocaleString("ko-KR");
 	};
 
-	const formatCurrency = (amount: number) => {
-		return new Intl.NumberFormat("ko-KR", {
-			style: "currency",
-			currency: "USD",
-		}).format(amount);
-	};
 	const formatCurrency = (amount: number) => {
 		return new Intl.NumberFormat("ko-KR", {
 			style: "currency",
