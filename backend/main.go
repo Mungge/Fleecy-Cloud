@@ -52,7 +52,7 @@ func main() {
 	// MLflow 핸들러 초기화
 	mlflowURL := os.Getenv("MLFLOW_TRACKING_URI")
 	if mlflowURL == "" {
-		mlflowURL = "http://localhost:5001" // 기본값
+		mlflowURL = "http://localhost:5000" // 기본값
 	}
 	mlflowHandler := aggregator.NewMLflowHandler(mlflowURL,repos.AggregatorRepo)
 	log.Printf("MLflow 서버 URL: %s", mlflowURL)
