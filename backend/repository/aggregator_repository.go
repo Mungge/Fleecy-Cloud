@@ -23,13 +23,25 @@ func (r *AggregatorRepository) CreateAggregator(aggregator *models.Aggregator) e
 func (r *AggregatorRepository) GetAggregatorsByUserID(userID int64) ([]*models.Aggregator, error) {
 	var aggregators []*models.Aggregator
 	err := r.db.Where("user_id = ?", userID).
-		Preload("FederatedLearning").
 		Order("created_at DESC").
 		Find(&aggregators).Error
 	return aggregators, err
 }
 
 func (r *AggregatorRepository) GetAggregatorByID(id string) (*models.Aggregator, error) {
+	var aggregator models.Aggregator
+	err := r.db.Where("id = ?", id).
+		First(&aggregator).Error
+	if err != nil {
+		if err == gorm.ErrRecordNotFound {
+			return nil, nil
+		}
+		return nil, err
+	}
+	return &aggregator, nil
+}
+
+func (r *AggregatorRepository) GetAggregatorByIDWithFederatedLearning(id string) (*models.Aggregator, error) {
 	var aggregator models.Aggregator
 	err := r.db.Where("id = ?", id).
 		Preload("FederatedLearning").

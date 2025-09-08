@@ -91,9 +91,12 @@ const AggregatorDetails: React.FC<AggregatorDetailsProps> = ({
 	onDelete,
 }) => {
 	const [realTimeMetrics, setRealTimeMetrics] = useState({
-		cpuUsage: aggregator.metrics.cpuUsage,
-		memoryUsage: aggregator.metrics.memoryUsage,
-		networkUsage: aggregator.metrics.networkUsage,
+		cpuUsage: 0,
+		memoryUsage: 0,
+		networkUsage: 0,
+		diskUsage: 0,
+		networkIn: 0,
+		networkOut: 0,
 		accuracy: aggregator.accuracy,
 		loss: 0,
 		participantsConnected: aggregator.participants,
@@ -106,6 +109,13 @@ const AggregatorDetails: React.FC<AggregatorDetailsProps> = ({
 	const [isLoading, setIsLoading] = useState(false);
 	const [error, setError] = useState<string | null>(null);
 	const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+
+	// MLflow 정보 조회
+	const [mlflowInfo, setMlflowInfo] = useState<{
+		mlflow_url?: string;
+		experiment_url?: string;
+		mlflow_accessible?: boolean;
+	}>({});
 
 	// 인증 토큰 가져오기
 	const getAuthToken = () => {
@@ -146,8 +156,37 @@ const AggregatorDetails: React.FC<AggregatorDetailsProps> = ({
 		[]
 	);
 
-	// 실시간 메트릭 조회 - useCallback으로 감싸기
-	const fetchRealTimeMetrics = useCallback(async () => {
+	// MLflow 정보 조회 함수
+	const fetchMLflowInfo = useCallback(async () => {
+		try {
+			const response = await fetchWithAuth(
+				`http://localhost:8080/api/aggregators/${aggregator.id}/mlflow-info`
+			);
+
+			if (response.ok) {
+				const data = await response.json();
+				setMlflowInfo(data);
+			}
+		} catch (error) {
+			console.error("MLflow 정보 조회 실패:", error);
+		}
+	}, [aggregator.id, fetchWithAuth]);
+
+	// MLflow에서 보기 버튼 클릭 핸들러
+	const handleViewMLflow = useCallback(() => {
+		if (mlflowInfo.experiment_url) {
+			window.open(mlflowInfo.experiment_url, "_blank");
+		} else if (mlflowInfo.mlflow_url) {
+			window.open(mlflowInfo.mlflow_url, "_blank");
+		} else {
+			alert(
+				"MLflow에 접근할 수 없습니다. Aggregator가 실행 중인지 확인해주세요."
+			);
+		}
+	}, [mlflowInfo]);
+
+	// 실시간 메트릭 조회 (MLflow 기반) - useCallback으로 감싸기
+	const fetchTrainingMetrics = useCallback(async () => {
 		if (aggregator.status !== "running") return;
 
 		try {
@@ -161,19 +200,15 @@ const AggregatorDetails: React.FC<AggregatorDetailsProps> = ({
 
 			const data: RealTimeMetricsResponse = await response.json();
 
-			setRealTimeMetrics({
-				cpuUsage: data.cpu_usage || 0,
-				memoryUsage: data.memory_usage || 0,
-				networkUsage: data.network_usage || 0,
+			setRealTimeMetrics((prev) => ({
+				...prev,
 				accuracy: data.accuracy || aggregator.accuracy,
 				loss: data.loss || 0,
 				participantsConnected:
 					data.participants_connected || aggregator.participants,
-				lastUpdated: data.timestamp || new Date().toISOString(),
-			});
+			}));
 		} catch (error) {
-			console.error("실시간 메트릭 조회 실패:", error);
-			setError("실시간 메트릭을 불러오는데 실패했습니다.");
+			console.error("훈련 메트릭 조회 실패:", error);
 		}
 	}, [
 		aggregator.id,
@@ -182,6 +217,40 @@ const AggregatorDetails: React.FC<AggregatorDetailsProps> = ({
 		aggregator.participants,
 		fetchWithAuth,
 	]);
+
+	// 시스템 메트릭 조회 (Prometheus 기반) - useCallback으로 감싸기
+	const fetchSystemMetrics = useCallback(async () => {
+		try {
+			const response = await fetchWithAuth(
+				`http://localhost:8080/api/aggregators/${aggregator.id}/system-metrics`
+			);
+
+			if (!response.ok) {
+				if (response.status === 503 || response.status === 400) {
+					// Prometheus 서비스 불가 또는 IP 없음
+					console.warn("시스템 메트릭 조회 불가");
+					return;
+				}
+				throw new Error(`HTTP error! status: ${response.status}`);
+			}
+
+			const data = await response.json();
+
+			setRealTimeMetrics((prev) => ({
+				...prev,
+				cpuUsage: data.cpu_usage || 0,
+				memoryUsage: data.memory_usage || 0,
+				diskUsage: data.disk_usage || 0,
+				networkIn: data.network_in || 0,
+				networkOut: data.network_out || 0,
+				networkUsage:
+					((data.network_in || 0) + (data.network_out || 0)) / (1024 * 1024), // MB로 변환
+				lastUpdated: data.last_updated || new Date().toISOString(),
+			}));
+		} catch (error) {
+			console.error("시스템 메트릭 조회 실패:", error);
+		}
+	}, [aggregator.id, fetchWithAuth]);
 
 	// 학습 히스토리 조회 - useCallback으로 감싸기
 	const fetchTrainingHistory = useCallback(async () => {
@@ -205,6 +274,11 @@ const AggregatorDetails: React.FC<AggregatorDetailsProps> = ({
 			setIsLoading(false);
 		}
 	}, [aggregator.id, fetchWithAuth]);
+
+	// 전체 메트릭 조회 함수
+	const fetchAllMetrics = useCallback(async () => {
+		await Promise.all([fetchTrainingMetrics(), fetchSystemMetrics()]);
+	}, [fetchTrainingMetrics, fetchSystemMetrics]);
 
 	// Aggregator 삭제 함수
 	const handleDelete = useCallback(async () => {
@@ -236,20 +310,21 @@ const AggregatorDetails: React.FC<AggregatorDetailsProps> = ({
 
 	// 컴포넌트 마운트 시 초기 데이터 로드
 	useEffect(() => {
-		fetchRealTimeMetrics();
+		fetchAllMetrics();
 		fetchTrainingHistory();
-	}, [fetchRealTimeMetrics, fetchTrainingHistory]);
+		fetchMLflowInfo();
+	}, [fetchAllMetrics, fetchTrainingHistory, fetchMLflowInfo]);
 
 	// 실행 중인 경우 주기적으로 실시간 메트릭 업데이트
 	useEffect(() => {
 		if (aggregator.status === "running") {
 			const interval = setInterval(() => {
-				fetchRealTimeMetrics();
+				fetchAllMetrics();
 			}, 5000); // 5초마다 업데이트
 
 			return () => clearInterval(interval);
 		}
-	}, [aggregator.status, fetchRealTimeMetrics]);
+	}, [aggregator.status, fetchAllMetrics]);
 
 	const getStatusColor = (status: string) => {
 		switch (status) {
@@ -319,7 +394,7 @@ const AggregatorDetails: React.FC<AggregatorDetailsProps> = ({
 					</div>
 				</div>
 				<div className="flex space-x-2">
-					<Button variant="outline" onClick={fetchRealTimeMetrics}>
+					<Button variant="outline" onClick={fetchAllMetrics}>
 						새로고침
 					</Button>
 					{aggregator.status === "running" && (
@@ -480,7 +555,9 @@ const AggregatorDetails: React.FC<AggregatorDetailsProps> = ({
 			<Card>
 				<CardHeader>
 					<CardTitle>시스템 메트릭</CardTitle>
-					<CardDescription>실시간 시스템 리소스 사용량</CardDescription>
+					<CardDescription>
+						실시간 시스템 리소스 사용량 (Prometheus 기반)
+					</CardDescription>
 				</CardHeader>
 				<CardContent>
 					<div className="space-y-6">
@@ -488,7 +565,7 @@ const AggregatorDetails: React.FC<AggregatorDetailsProps> = ({
 							<div className="flex justify-between">
 								<span className="text-sm font-medium">CPU 사용률</span>
 								<span className="text-sm text-muted-foreground">
-									{realTimeMetrics.cpuUsage}%
+									{realTimeMetrics.cpuUsage.toFixed(1)}%
 								</span>
 							</div>
 							<Progress value={realTimeMetrics.cpuUsage} className="h-2" />
@@ -498,7 +575,7 @@ const AggregatorDetails: React.FC<AggregatorDetailsProps> = ({
 							<div className="flex justify-between">
 								<span className="text-sm font-medium">메모리 사용률</span>
 								<span className="text-sm text-muted-foreground">
-									{realTimeMetrics.memoryUsage}%
+									{realTimeMetrics.memoryUsage.toFixed(1)}%
 								</span>
 							</div>
 							<Progress value={realTimeMetrics.memoryUsage} className="h-2" />
@@ -506,12 +583,36 @@ const AggregatorDetails: React.FC<AggregatorDetailsProps> = ({
 
 						<div className="space-y-2">
 							<div className="flex justify-between">
-								<span className="text-sm font-medium">네트워크 사용률</span>
+								<span className="text-sm font-medium">디스크 사용률</span>
 								<span className="text-sm text-muted-foreground">
-									{realTimeMetrics.networkUsage}%
+									{realTimeMetrics.diskUsage.toFixed(1)}%
 								</span>
 							</div>
-							<Progress value={realTimeMetrics.networkUsage} className="h-2" />
+							<Progress value={realTimeMetrics.diskUsage} className="h-2" />
+						</div>
+
+						<div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+							<div className="text-center p-3 bg-muted rounded-lg">
+								<div className="text-lg font-bold text-green-600">
+									{(realTimeMetrics.networkIn / (1024 * 1024)).toFixed(2)} MB
+								</div>
+								<div className="text-sm text-muted-foreground">
+									네트워크 수신
+								</div>
+							</div>
+							<div className="text-center p-3 bg-muted rounded-lg">
+								<div className="text-lg font-bold text-blue-600">
+									{(realTimeMetrics.networkOut / (1024 * 1024)).toFixed(2)} MB
+								</div>
+								<div className="text-sm text-muted-foreground">
+									네트워크 송신
+								</div>
+							</div>
+						</div>
+
+						<div className="text-xs text-muted-foreground text-center">
+							마지막 업데이트:{" "}
+							{new Date(realTimeMetrics.lastUpdated).toLocaleString("ko-KR")}
 						</div>
 					</div>
 				</CardContent>
@@ -619,7 +720,19 @@ const AggregatorDetails: React.FC<AggregatorDetailsProps> = ({
 							)}
 						</div>
 						<div className="mt-4">
-							<Button variant="outline">MLflow에서 보기</Button>
+							<Button
+								variant="outline"
+								onClick={handleViewMLflow}
+								disabled={!mlflowInfo.mlflow_accessible}
+							>
+								MLflow에서 보기
+							</Button>
+							{!mlflowInfo.mlflow_accessible && (
+								<p className="text-sm text-muted-foreground mt-2">
+									MLflow 서버에 접근할 수 없습니다. Aggregator가 실행 중인지
+									확인해주세요.
+								</p>
+							)}
 						</div>
 					</CardContent>
 				</Card>

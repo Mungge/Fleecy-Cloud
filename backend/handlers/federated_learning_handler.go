@@ -5,6 +5,7 @@ import (
 	_ "embed"
 	"encoding/json"
 	"fmt"
+	"io"
 	"net/http"
 	"strings"
 	"time"
@@ -332,37 +333,24 @@ func (h *FederatedLearningHandler) sendFederatedLearningExecuteRequests(federate
 		return // 집계자 실행 요청이 실패하면 전체 프로세스 중단
 	}
 
-	// 2. 집계자 실행 요청이 성공한 후 참여자들에게 실행 요청 전송
+	// 2. 집계자 실행 요청이 성공한 후, 집계자 서버가 준비될 때까지 대기
+	fmt.Printf("집계자 서버 준비 상태 확인 중...\n")
+	if err := h.waitForAggregatorReady(aggregator); err != nil {
+		fmt.Printf("집계자 서버 준비 대기 실패: %v\n", err)
+		return
+	}
+
+	fmt.Printf("집계자 서버 준비 완료! 참여자들에게 요청을 전송합니다.\n")
+	// 3. 집계자가 준비된 후 참여자들에게 실행 요청 전송
 	h.sendExecuteRequestToParticipants(federatedLearning, participants)
 }
 
 // sendExecuteRequestToParticipant는 개별 참여자에게 연합학습 실행 요청을 보냅니다
 func (h *FederatedLearningHandler) sendExecuteRequestToParticipant(participant *models.Participant, federatedLearning *models.FederatedLearning) error {
-	// OpenStack 엔드포인트에서 IP만 추출하여 participant server 주소 구성
-	endpoint := strings.TrimSuffix(participant.OpenStackEndpoint, "/")
+
+	requestURL := fmt.Sprintf("%s:5000/api/fl/execute-local", participant.OpenStackEndpoint)
 	
-	// URL에서 IP 부분만 추출
-	var ip string
-	if strings.HasPrefix(endpoint, "http://") || strings.HasPrefix(endpoint, "https://") {
-		// http://34.59.40.229/v3 형태에서 34.59.40.229 추출
-		parts := strings.Split(endpoint, "/")
-		if len(parts) >= 3 {
-			ip = parts[2] // "34.59.40.229" 또는 "34.59.40.229:5000"
-			if strings.Contains(ip, ":") {
-				ip = strings.Split(ip, ":")[0] // 포트가 있으면 제거
-			}
-		}
-	} else {
-		// 스키마가 없는 경우 첫 번째 부분을 IP로 사용
-		parts := strings.Split(endpoint, "/")
-		ip = parts[0]
-		if strings.Contains(ip, ":") {
-			ip = strings.Split(ip, ":")[0] // 포트가 있으면 제거
-		}
-	}
-	
-	// participant server URL 구성
-	requestURL := fmt.Sprintf("http://%s:5000/api/fl/execute-local", ip)
+	fmt.Printf("참여자 서버 URL: %s\n", requestURL)
 
 	// 집계자 주소 가져오기
 	aggregatorAddress, err := h.getAggregatorAddress(federatedLearning)
@@ -388,8 +376,10 @@ func (h *FederatedLearningHandler) sendExecuteRequestToParticipant(participant *
 	}
 
 	// 요청 로깅
-	fmt.Printf("참여자 %s에게 로컬 실행 요청 전송: %s\n", participant.ID, requestURL)
+	fmt.Printf("=== 참여자 %s에게 로컬 실행 요청 전송 ===\n", participant.ID)
+	fmt.Printf("요청 URL: %s\n", requestURL)
 	fmt.Printf("집계자 주소: %s\n", aggregatorAddress)
+	fmt.Printf("요청 페이로드: %s\n", string(jsonData))
 
 	// HTTP 요청 생성
 	req, err := http.NewRequest("POST", requestURL, bytes.NewBuffer(jsonData))
@@ -405,26 +395,33 @@ func (h *FederatedLearningHandler) sendExecuteRequestToParticipant(participant *
 		Timeout: 120 * time.Second, // 2분 타임아웃 (패키지 설치 + 초기 응답)
 	}
 
+	fmt.Printf("HTTP 요청 전송 중...\n")
 	resp, err := client.Do(req)
 	if err != nil {
-		fmt.Printf("참여자 %s에게 요청 전송 실패: %v\n", participant.ID, err)
+		fmt.Printf("❌ 참여자 %s에게 요청 전송 실패: %v\n", participant.ID, err)
 		return fmt.Errorf("HTTP 요청 전송 실패: %v", err)
 	}
 	defer resp.Body.Close()
 
+	fmt.Printf("응답 상태 코드: %d\n", resp.StatusCode)
+
 	// 응답 본문 읽기 (디버깅용)
-	var responseBody []byte
-	if resp.Body != nil {
-		responseBody, _ = json.Marshal(resp.Body)
+	responseBody, err := io.ReadAll(resp.Body)
+	if err != nil {
+		fmt.Printf("응답 본문 읽기 실패: %v\n", err)
+		responseBody = []byte("응답 본문 읽기 실패")
 	}
 
 	// 응답 상태 코드 확인
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		fmt.Printf("참여자 %s 요청 실패: 상태 코드 %d, 응답: %s\n", participant.ID, resp.StatusCode, string(responseBody))
-		return fmt.Errorf("HTTP 요청 실패: 상태 코드 %d", resp.StatusCode)
+		fmt.Printf("❌ 참여자 %s 요청 실패: 상태 코드 %d\n", participant.ID, resp.StatusCode)
+		fmt.Printf("응답 본문: %s\n", string(responseBody))
+		return fmt.Errorf("HTTP 요청 실패: 상태 코드 %d, 응답: %s", resp.StatusCode, string(responseBody))
 	}
 
-	fmt.Printf("참여자 %s에게 로컬 실행 요청 전송 성공 (상태 코드: %d)\n", participant.ID, resp.StatusCode)
+	fmt.Printf("✅ 참여자 %s에게 로컬 실행 요청 전송 성공 (상태 코드: %d)\n", participant.ID, resp.StatusCode)
+	fmt.Printf("응답 본문: %s\n", string(responseBody))
+	fmt.Printf("=== 요청 완료 ===\n\n")
 	return nil
 }
 
@@ -587,7 +584,41 @@ echo "참여자 수: ` + fmt.Sprintf("%d", federatedLearning.ParticipantCount) +
 echo "라운드 수: ` + fmt.Sprintf("%d", federatedLearning.Rounds) + `"
 echo "포트: 9092"
 
-source venv/bin/activate && python3 server_app.py --server-address 0.0.0.0:9092 --num-rounds ` + fmt.Sprintf("%d", federatedLearning.Rounds) + ` --min-fit-clients ` + fmt.Sprintf("%d", federatedLearning.ParticipantCount) + ` --min-available-clients ` + fmt.Sprintf("%d", federatedLearning.ParticipantCount) + `
+# 서버 준비 상태 파일 생성 함수
+create_ready_file() {
+    echo "서버가 준비되었습니다 - $(date)" > server_ready.txt
+    echo "✅ 서버 준비 상태 파일 생성됨"
+}
+
+	// 서버 실행 후 준비 완료 표시
+(
+    source venv/bin/activate && \
+    python3 server_app.py --server-address 0.0.0.0:9092 --num-rounds ` + fmt.Sprintf("%d", federatedLearning.Rounds) + ` --min-fit-clients ` + fmt.Sprintf("%d", federatedLearning.ParticipantCount) + ` --min-available-clients ` + fmt.Sprintf("%d", federatedLearning.ParticipantCount) + ` &
+    
+    # 서버 프로세스 시작 후 충분한 대기 시간
+    echo "Flower 서버 프로세스 시작 대기 중..."
+    sleep 10
+    
+    # 서버가 실제로 포트를 리스닝하고 있는지 확인 (더 긴 대기 시간)
+    timeout=60  # 1분 대기
+    count=0
+    while ! nc -z localhost 9092 && [ $count -lt $timeout ]; do
+        echo "Flower 서버 시작 대기 중... ($count/$timeout)"
+        sleep 2
+        count=$((count + 2))
+    done
+    
+    if nc -z localhost 9092; then
+        echo "✅ Flower 서버가 포트 9092에서 정상적으로 시작됨"
+        create_ready_file
+    else
+        echo "❌ Flower 서버 시작 실패 - 포트 9092에서 응답 없음"
+        exit 1
+    fi
+    
+    # 백그라운드 프로세스 대기
+    wait
+) &echo "Flower 서버 시작 스크립트가 백그라운드에서 실행 중입니다."
 `
 
 	err = sshClient.UploadFileContent(runScript, fmt.Sprintf("%s/run_server.sh", workDir))
@@ -608,7 +639,12 @@ source venv/bin/activate && python3 server_app.py --server-address 0.0.0.0:9092 
 		return fmt.Errorf("flower 서버 실행 실패: %v, stdout: %s, stderr: %s", err, stdout, stderr)
 	}
 
-	fmt.Printf("집계자 %s에서 Flower 서버 실행 성공: %s\n", aggregator.Name, stdout)
+	fmt.Printf("집계자 %s에서 Flower 서버 실행 성공\n", aggregator.Name)
+	fmt.Printf("서버가 완전히 시작될 때까지 잠시 대기합니다...\n")
+
+	// 서버 시작을 위한 초기 대기 시간 (30초)
+	time.Sleep(30 * time.Second)
+	
 	return nil
 }
 
@@ -633,6 +669,71 @@ func (h *FederatedLearningHandler) getAggregatorAddress(federatedLearning *model
 
 	// 포트 9092 고정
 	return fmt.Sprintf("%s:9092", aggregator.PublicIP), nil
+}
+
+// waitForAggregatorReady는 집계자 서버가 준비될 때까지 대기합니다
+func (h *FederatedLearningHandler) waitForAggregatorReady(aggregator *models.Aggregator) error {
+	maxRetries := 40 // 최대 40번 시도 (약 7분)
+	retryInterval := 10 * time.Second // 10초 간격
+
+	fmt.Printf("집계자 서버 준비 상태 확인 중... (로그 파일 기반)\n")
+	fmt.Printf("집계자 IP: %s\n", aggregator.PublicIP)
+
+	for i := 0; i < maxRetries; i++ {
+		sshClient := utils.NewSSHClient(aggregator.PublicIP, "22", "ubuntu", "/home/jinhyeok/dev/Fleecy-Cloud/backend/keys/fl-keypair.pem")
+		if sshClient != nil {
+			// 1. 로그 파일에서 Flower 서버 시작 확인
+			logOutput, _, logErr := sshClient.ExecuteCommand("tail -20 ~/federated_learning/flower_server.log")
+			if logErr == nil && len(strings.TrimSpace(logOutput)) > 0 {
+				// Flower 서버가 시작되었는지 확인하는 키워드들
+				if strings.Contains(logOutput, "Starting Flower server") && 
+				   strings.Contains(logOutput, "gRPC server running") {
+					fmt.Printf("✅ 집계자 서버 준비 완료! Flower 서버 시작 로그 확인됨 (시도 %d/%d)\n", i+1, maxRetries)
+					fmt.Printf("📋 서버 로그 일부:\n%s\n", logOutput)
+					return nil
+				}
+				
+				// 준비 상태 파일 생성 메시지 확인
+				if strings.Contains(logOutput, "✅ 서버 준비 상태 파일 생성됨") {
+					fmt.Printf("✅ 집계자 서버 준비 완료! 준비 상태 메시지 확인됨 (시도 %d/%d)\n", i+1, maxRetries)
+					return nil
+				}
+				
+				// ROUND 1 시작 확인 (더 확실한 준비 상태)
+				if strings.Contains(logOutput, "[ROUND 1]") {
+					fmt.Printf("✅ 집계자 서버 준비 완료! Round 1 시작 확인됨 (시도 %d/%d)\n", i+1, maxRetries)
+					return nil
+				}
+			}
+
+			// 2. 상태 파일 존재 확인 (백업 방법)
+			_, _, fileErr := sshClient.ExecuteCommand("ls ~/federated_learning/server_ready.txt")
+			if fileErr == nil {
+				fmt.Printf("✅ 집계자 서버 준비 완료! 상태 파일 확인됨 (시도 %d/%d)\n", i+1, maxRetries)
+				return nil
+			}
+
+			// 3. 프로세스 확인 (추가 백업 방법)
+			output, _, procErr := sshClient.ExecuteCommand("pgrep -f 'server_app.py'")
+			if procErr == nil && len(strings.TrimSpace(output)) > 0 {
+				fmt.Printf("✅ 집계자 서버 준비 완료! server_app.py 프로세스 확인됨 (PID: %s) (시도 %d/%d)\n", strings.TrimSpace(output), i+1, maxRetries)
+				return nil
+			}
+
+			// 현재 로그 상태 출력 (디버깅용)
+			if i % 3 == 0 && len(strings.TrimSpace(logOutput)) > 0 { // 3번에 한 번만 출력
+				fmt.Printf("📋 현재 로그 상태:\n%s\n", logOutput)
+			}
+		}
+
+		fmt.Printf("⏳ 집계자 서버 준비 중... (시도 %d/%d)\n", i+1, maxRetries)
+		
+		if i < maxRetries-1 {
+			time.Sleep(retryInterval)
+		}
+	}
+
+	return fmt.Errorf("집계자 서버가 %d초 내에 준비되지 않았습니다", maxRetries*int(retryInterval.Seconds()))
 }
 
 // GetMLflowDashboardURL은 연합학습의 MLflow 대시보드 URL을 반환합니다
