@@ -187,7 +187,7 @@ const AggregatorDetails: React.FC<AggregatorDetailsProps> = ({
 		);
 	}
 
-	const points = (data?.metrics ?? []).map((m: any) => ({
+	const points = data.metrics.map((m: { step: number; value: number }) => ({
 		step: m.step,
 		value: m.value,
 	}));
@@ -802,7 +802,19 @@ const AggregatorDetails: React.FC<AggregatorDetailsProps> = ({
 					)}
 
 					<div className="flex space-x-2">
-						<Button variant="outline">MLflow에서 보기</Button>
+						<Button 
+						variant="outline"
+						onClick={handleViewMLflow}
+						disabled={!mlflowInfo.mlflow_accessible}
+						>
+							MLflow에서 보기
+						</Button>
+						{!mlflowInfo.mlflow_accessible && (
+							<p className="text-sm text-muted-foreground mt-2">
+								MLflow 서버에 접근할 수 없습니다. Aggregator가 실행 중인지
+								확인해주세요.
+							</p>
+						)}
 						{realTimeMetrics.runId && (
 						<Button variant="outline">상세 메트릭 보기</Button>
 						)}
@@ -861,6 +873,7 @@ const AggregatorDetails: React.FC<AggregatorDetailsProps> = ({
 					)}
 				</CardContent>
 			</Card>
+
 
 			{/* 삭제 확인 다이얼로그 */}
 			<AlertDialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
