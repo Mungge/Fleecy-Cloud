@@ -72,7 +72,6 @@ export function VMListDialog({
       <DialogContent className="!max-w-[80vw] w-full min-h-[700px] max-h-[95vh] overflow-auto flex flex-col">
         <DialogHeader>
           <DialogTitle>가상머신 목록</DialogTitle>
-          {/* 👇 이 부분이 수정되었습니다. */}
           <DialogDescription>
             {selectedParticipant?.name} 클러스터의 가상머신 목록
           </DialogDescription>
