@@ -253,6 +253,12 @@ const AggregatorDetails: React.FC<AggregatorDetailsProps> = ({
 			currency: "USD",
 		}).format(amount);
 	};
+	const formatCurrency = (amount: number) => {
+		return new Intl.NumberFormat("ko-KR", {
+			style: "currency",
+			currency: "USD",
+		}).format(amount);
+	};
 
 	const progressPercentage =
 		(aggregator.currentRound / aggregator.rounds) * 100;
