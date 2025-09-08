@@ -54,12 +54,12 @@ func main() {
 	if prometheusURL == "" {
 		prometheusURL = "http://localhost:9090" // 기본값
 	}
-	prometheusService := services.NewPrometheusService(prometheusURL)
+	prometheusService := services.CreatePrometheusService(prometheusURL)
 	log.Printf("Prometheus 서버 URL: %s", prometheusURL)
 
 	// MLflow 핸들러 초기화 - aggregator의 public IP를 사용
 	mlflowHandler := aggregator.NewMLflowHandler("", repos.AggregatorRepo, prometheusService)
-	log.Printf("MLflow 서버는 각 aggregator의 public IP:5000을 사용합니다.")
+	log.Printf("MLflow 서버는 각 aggregator의 public IP:5001을 사용합니다.")
 
 	// Gin 라우터 설정
 	r := gin.Default()

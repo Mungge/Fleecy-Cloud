@@ -86,7 +86,7 @@ func NewOpenStackService(prometheusURL string) *OpenStackService {
 		client: &http.Client{
 			Timeout: 30 * time.Second,
 		},
-		prometheusService: NewPrometheusService(prometheusURL),
+		prometheusService: CreatePrometheusService(prometheusURL),
 	}
 }
 
@@ -505,7 +505,7 @@ func (s *OpenStackService) GetVMMonitoringInfoWithParticipant(participant *model
 	}
 
 	// 해당 participant 전용 Prometheus 서비스 생성
-	prometheusService := NewPrometheusService(prometheusURL)
+	prometheusService := CreatePrometheusService(prometheusURL)
 
 	return prometheusService.GetVMMonitoringInfoWithIP(vmIP)
 }
