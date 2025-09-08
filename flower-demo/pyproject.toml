@@ -29,8 +29,8 @@ publisher = "jinhyeok"
 # Point to your ServerApp and ClientApp objects
 # Format: "<module>:<object>"
 [tool.flwr.app.components]
-serverapp = "flower_demo.server_app:app"
-clientapp = "flower_demo.client_app:app"
+serverapp = "server_app:app"
+clientapp = "client_app:app"
 
 # Custom config values accessible via `context.run_config`
 [tool.flwr.app.config]

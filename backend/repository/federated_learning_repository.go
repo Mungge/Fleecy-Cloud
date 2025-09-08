@@ -103,3 +103,11 @@ func (r *FederatedLearningRepository) GetAll() ([]*models.FederatedLearning, err
 	err := r.db.Find(&learnings).Error
 	return learnings, err
 }
+
+// GetByAggregatorID는 특정 집계자에 속한 연합학습들을 조회합니다
+func (r *FederatedLearningRepository) GetByAggregatorID(aggregatorID string) ([]*models.FederatedLearning, error) {
+	var learnings []*models.FederatedLearning
+	err := r.db.Where("aggregator_id = ?", aggregatorID).
+		Find(&learnings).Error
+	return learnings, err
+}

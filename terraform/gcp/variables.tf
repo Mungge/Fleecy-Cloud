@@ -42,7 +42,7 @@ variable "allowed_ips" {
 variable "custom_ports" {
   description = "프로덕션 환경에서 허용할 사용자 지정 포트들"
   type        = list(number)
-  default     = [8080, 9000]
+  default     = [8080, 9000, 9092]
 }
 
 variable "ssh_public_key_content" {

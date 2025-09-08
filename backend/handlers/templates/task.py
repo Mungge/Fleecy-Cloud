@@ -191,7 +191,7 @@ def test(net, testloader, device):
             running_loss += loss
             steps += 1
 
-            preds = logits.argmax(dim=1)          # 확률/softmax 불필요 (AUC 제거)
+            preds = logits.argmax(dim=1)
             all_labels.append(labels.cpu())
             all_preds.append(preds.cpu())
 

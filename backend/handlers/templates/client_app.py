@@ -1,10 +1,13 @@
 """flower-demo: A Flower / PyTorch app."""
 
+import argparse
+import os
 import torch
 
+import flwr as fl
 from flwr.client import ClientApp, NumPyClient
 from flwr.common import Context
-from flower_demo.task import Net, get_weights, load_data, set_weights, test, train
+from task import Net, get_weights, load_data, set_weights, test, train
 
 
 # Define Flower Client and client_fn
@@ -40,18 +43,48 @@ class FlowerClient(NumPyClient):
 
 
 def client_fn(context: Context):
-    # Load model and data
+    # Load model and data (no partitioning - each client uses its own local dataset)
     net = Net()
-    partition_id = context.node_config["partition-id"]
-    num_partitions = context.node_config["num-partitions"]
-    trainloader, valloader = load_data(partition_id, num_partitions)
+    trainloader, valloader = load_data()  # partition parameters removed
     local_epochs = context.run_config["local-epochs"]
 
     # Return Client instance
     return FlowerClient(net, trainloader, valloader, local_epochs).to_client()
 
 
-# Flower ClientApp
-app = ClientApp(
-    client_fn,
-)
+# Flower ClientApp (for flwr run command)
+app = ClientApp(client_fn)
+
+
+# 직접 실행을 위한 메인 함수
+def main():
+    parser = argparse.ArgumentParser(description="Flower Client")
+    parser.add_argument("--server-address", default="localhost:9092",
+                       help="Server address (default: localhost:9092)")
+    parser.add_argument("--local-epochs", type=int, default=1,
+                       help="Number of local epochs (default: 1)")
+    
+    args = parser.parse_args()
+    
+    print(f"=== Flower Client Configuration ===")
+    print(f"Server address: {args.server_address}")
+    print(f"Local epochs: {args.local_epochs}")
+    print(f"===================================")
+    
+    # Load model and data (no partitioning - each client uses its own local dataset)
+    net = Net()
+    trainloader, valloader = load_data()  # partition parameters removed
+    
+    # Create client instance
+    client = FlowerClient(net, trainloader, valloader, args.local_epochs)
+    
+    # Start client
+    print("Starting Flower client...")
+    fl.client.start_client(
+        server_address=args.server_address,
+        client=client.to_client(),
+    )
+
+
+if __name__ == "__main__":
+    main()
