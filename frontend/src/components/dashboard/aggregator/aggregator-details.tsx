@@ -594,7 +594,11 @@ const AggregatorDetails: React.FC<AggregatorDetailsProps> = ({
       <Card>
         <CardHeader>
           <CardTitle>시스템 메트릭</CardTitle>
-          <CardDescription>실시간 시스템 리소스 사용량</CardDescription>
+          <CardDescription>
+            실시간 시스템 리소스 사용량 (
+            {systemMetrics.source === "prometheus" ? "Prometheus" : "Database"}{" "}
+            기반)
+          </CardDescription>
         </CardHeader>
         <CardContent>
           <div className="space-y-6">
