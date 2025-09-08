@@ -237,7 +237,7 @@ func (h *MLflowHandler) GetTrainingHistory(c *gin.Context) {
 	// MLflow 클라이언트를 aggregator IP로 동적 생성
 	var mlflowURL string
 	if aggregator.PublicIP != "" {
-		mlflowURL = fmt.Sprintf("http://%s:5001", aggregator.PublicIP)
+		mlflowURL = fmt.Sprintf("http://%s:5000", aggregator.PublicIP)
 	} else {
 		// TODO: 실제 aggregator IP로 변경 필요
 		// fallback으로 환경변수나 고정 IP 사용
@@ -245,7 +245,7 @@ func (h *MLflowHandler) GetTrainingHistory(c *gin.Context) {
 		if aggregatorIP == "" {
 			aggregatorIP = "YOUR_ACTUAL_AGGREGATOR_IP" // 실제 IP로 변경하세요
 		}
-		mlflowURL = fmt.Sprintf("http://%s:5001", aggregatorIP)
+		mlflowURL = fmt.Sprintf("http://%s:5000", aggregatorIP)
 		log.Printf("GetTrainingHistory - PublicIP가 없어서 환경변수/기본값 사용: %s", aggregatorIP)
 	}
 	
@@ -385,12 +385,12 @@ func (h *MLflowHandler) GetRealTimeMetrics(c *gin.Context) {
 	// MLflow 클라이언트를 aggregator IP로 동적 생성
 	var mlflowURL string
 	if aggregator.PublicIP != "" {
-		mlflowURL = fmt.Sprintf("http://%s:5001", aggregator.PublicIP)
+		mlflowURL = fmt.Sprintf("http://%s:5000", aggregator.PublicIP)
 	} else {
 		// TODO: 실제 aggregator IP로 변경 필요
 		// fallback으로 환경변수나 고정 IP 사용
 		aggregatorIP := os.Getenv("AGGREGATOR_IP")
-		mlflowURL = fmt.Sprintf("http://%s:5001", aggregatorIP)
+		mlflowURL = fmt.Sprintf("http://%s:5000", aggregatorIP)
 	}
 	
 	mlflowClient := NewMLflowClient(mlflowURL)
@@ -614,14 +614,14 @@ func (h *MLflowHandler) GetMLflowInfo(c *gin.Context) {
 	// MLflow URL 구성
 	var mlflowURL string
 	if aggregator.PublicIP != "" {
-		mlflowURL = fmt.Sprintf("http://%s:5001", aggregator.PublicIP)
+		mlflowURL = fmt.Sprintf("http://%s:5000", aggregator.PublicIP)
 	} else {
 		// fallback으로 환경변수나 고정 IP 사용
 		aggregatorIP := os.Getenv("AGGREGATOR_IP")
 		if aggregatorIP == "" {
 			aggregatorIP = "localhost" // 로컬 개발용
 		}
-		mlflowURL = fmt.Sprintf("http://%s:5001", aggregatorIP)
+		mlflowURL = fmt.Sprintf("http://%s:5000", aggregatorIP)
 	}
 
 	// 실험 이름 결정

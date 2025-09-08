@@ -49,7 +49,7 @@ variable "allowed_ips" {
 variable "custom_ports" {
   description = "추가로 열고 싶은 포트 목록 (개발환경이 아닐 때)"
   type        = list(number)
-  default     = [8080, 9000, 5000, 5001, 9092]
+  default     = [8080, 9000, 5000, 9092]
 }
 
 variable "aws_access_key" {
