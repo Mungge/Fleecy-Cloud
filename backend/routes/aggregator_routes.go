@@ -32,6 +32,8 @@ func SetupAggregatorRoutes(authorized *gin.RouterGroup, aggregatorHandler *aggre
 		// MLflow 라우트들
         aggregators.GET("/:id/training-history", mlflowHandler.GetTrainingHistory)
         aggregators.GET("/:id/realtime-metrics", mlflowHandler.GetRealTimeMetrics)
+        aggregators.GET("/:id/system-metrics", mlflowHandler.GetSystemMetrics)
+        aggregators.GET("/:id/mlflow-info", mlflowHandler.GetMLflowInfo)
 
 		// Aggregator 삭제
 		aggregators.DELETE("/:id", aggregatorHandler.DeleteAggregator)

@@ -132,3 +132,11 @@ func (r *AggregatorRepository) GetAggregatorStats(userID int64) (map[string]inte
 		"total_cost": totalCost,
 	}, nil
 }
+
+// GetAggregatorsByStatus는 특정 상태의 집계자들을 조회합니다
+func (r *AggregatorRepository) GetAggregatorsByStatus(status string) ([]*models.Aggregator, error) {
+	var aggregators []*models.Aggregator
+	err := r.db.Where("status = ?", status).
+		Find(&aggregators).Error
+	return aggregators, err
+}

@@ -54,8 +54,19 @@ func main() {
 	if mlflowURL == "" {
 		mlflowURL = "http://localhost:5000" // 기본값
 	}
-	mlflowHandler := aggregator.NewMLflowHandler(mlflowURL,repos.AggregatorRepo)
+
+	// Prometheus 서비스 초기화
+	prometheusURL := os.Getenv("PROMETHEUS_URL")
+	if prometheusURL == "" {
+		prometheusURL = "http://localhost:9090" // 기본값
+	}
+	prometheusService := services.NewPrometheusService(prometheusURL)
+	log.Printf("Prometheus 서버 URL: %s", prometheusURL)
+
+	mlflowHandler := aggregator.NewMLflowHandler(mlflowURL, repos.AggregatorRepo, prometheusService)
 	log.Printf("MLflow 서버 URL: %s", mlflowURL)
+
+	// ...existing code...
 
 	// Gin 라우터 설정
 	r := gin.Default()
