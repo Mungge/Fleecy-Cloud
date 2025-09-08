@@ -323,17 +323,17 @@ func (h *FederatedLearningHandler) sendFederatedLearningExecuteRequests(federate
 
 // sendExecuteRequestToParticipant는 개별 참여자에게 연합학습 실행 요청을 보냅니다
 func (h *FederatedLearningHandler) sendExecuteRequestToParticipant(participant *models.Participant, federatedLearning *models.FederatedLearning) error {
-	// OpenStack 엔드포인트에서 포트 5000으로 요청 URL 구성
+	// OpenStack 엔드포인트에서 포트 5001으로 요청 URL 구성
 	endpoint := strings.TrimSuffix(participant.OpenStackEndpoint, "/")
-	if strings.HasSuffix(endpoint, ":5000") {
-		// 이미 5000 포트가 있는 경우
+	if strings.HasSuffix(endpoint, ":5001") {
+		// 이미 5001 포트가 있는 경우
 	} else if strings.Contains(endpoint, ":") {
-		// 다른 포트가 있는 경우 5000으로 변경
+		// 다른 포트가 있는 경우 5001으로 변경
 		parts := strings.Split(endpoint, ":")
-		endpoint = parts[0] + ":" + parts[1] + ":5000"
+		endpoint = parts[0] + ":" + parts[1] + ":5001"
 	} else {
-		// 포트가 없는 경우 5000 추가
-		endpoint = endpoint + ":5000"
+		// 포트가 없는 경우 5001 추가
+		endpoint = endpoint + ":5001"
 	}
 
 	requestURL := endpoint + "/api/fl/execute"
