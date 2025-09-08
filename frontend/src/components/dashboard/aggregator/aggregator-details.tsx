@@ -10,6 +10,18 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
+import {
+	AlertDialog,
+	AlertDialogAction,
+	AlertDialogCancel,
+	AlertDialogContent,
+	AlertDialogDescription,
+	AlertDialogFooter,
+	AlertDialogHeader,
+	AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
+import { Trash2 } from "lucide-react";
+import { toast } from "sonner";
 
 // 타입 정의 추가
 interface RealTimeMetricsResponse {
@@ -70,11 +82,13 @@ interface AggregatorDetailsProps {
 		mlflowExperimentId?: string;
 	};
 	onBack: () => void;
+	onDelete?: (aggregatorId: string) => void;
 }
 
 const AggregatorDetails: React.FC<AggregatorDetailsProps> = ({
 	aggregator,
 	onBack,
+	onDelete,
 }) => {
 	const [realTimeMetrics, setRealTimeMetrics] = useState({
 		cpuUsage: aggregator.metrics.cpuUsage,
@@ -91,6 +105,7 @@ const AggregatorDetails: React.FC<AggregatorDetailsProps> = ({
 	>([]);
 	const [isLoading, setIsLoading] = useState(false);
 	const [error, setError] = useState<string | null>(null);
+	const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
 
 	// 인증 토큰 가져오기
 	const getAuthToken = () => {
@@ -191,6 +206,34 @@ const AggregatorDetails: React.FC<AggregatorDetailsProps> = ({
 		}
 	}, [aggregator.id, fetchWithAuth]);
 
+	// Aggregator 삭제 함수
+	const handleDelete = useCallback(async () => {
+		try {
+			const response = await fetchWithAuth(
+				`http://localhost:8080/api/aggregators/${aggregator.id}`,
+				{
+					method: "DELETE",
+				}
+			);
+
+			if (!response.ok) {
+				throw new Error(`HTTP error! status: ${response.status}`);
+			}
+
+			toast.success(`"${aggregator.name}" 집계자가 성공적으로 삭제되었습니다.`);
+
+			// 삭제 후 콜백 실행 (목록으로 돌아가기)
+			if (onDelete) {
+				onDelete(aggregator.id);
+			}
+			setDeleteDialogOpen(false);
+			onBack();
+		} catch (error) {
+			console.error("Aggregator 삭제 실패:", error);
+			toast.error(`"${aggregator.name}" 집계자 삭제에 실패했습니다.`);
+		}
+	}, [aggregator.id, aggregator.name, fetchWithAuth, onDelete, onBack]);
+
 	// 컴포넌트 마운트 시 초기 데이터 로드
 	useEffect(() => {
 		fetchRealTimeMetrics();
@@ -271,7 +314,7 @@ const AggregatorDetails: React.FC<AggregatorDetailsProps> = ({
 							</Badge>
 						</div>
 						<p className="text-muted-foreground mt-1">
-							Aggregator 상세 정보 및 실시간 모니터링
+							연합학습 집계자 상세 정보 및 실시간 모니터링
 						</p>
 					</div>
 				</div>
@@ -282,6 +325,14 @@ const AggregatorDetails: React.FC<AggregatorDetailsProps> = ({
 					{aggregator.status === "running" && (
 						<Button variant="destructive">중지</Button>
 					)}
+					<Button
+						variant="destructive"
+						onClick={() => setDeleteDialogOpen(true)}
+						disabled={aggregator.status === "running"}
+					>
+						<Trash2 className="h-4 w-4 mr-2" />
+						삭제
+					</Button>
 				</div>
 			</div>
 
@@ -354,94 +405,7 @@ const AggregatorDetails: React.FC<AggregatorDetailsProps> = ({
 						</div>
 					</CardContent>
 				</Card>
-				{/* 기본 정보 카드 */}
-				<div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-					<Card>
-						<CardHeader>
-							<CardTitle>기본 정보</CardTitle>
-						</CardHeader>
-						<CardContent className="space-y-4">
-							<div className="grid grid-cols-2 gap-4">
-								<div>
-									<p className="text-sm font-medium text-muted-foreground">
-										ID
-									</p>
-									<p className="font-mono text-sm">{aggregator.id}</p>
-								</div>
-								<div>
-									<p className="text-sm font-medium text-muted-foreground">
-										알고리즘
-									</p>
-									<p>{aggregator.algorithm}</p>
-								</div>
-								<div>
-									<p className="text-sm font-medium text-muted-foreground">
-										연합학습
-									</p>
-									<p>{aggregator.federatedLearningName}</p>
-								</div>
-								<div>
-									<p className="text-sm font-medium text-muted-foreground">
-										클라우드 제공자
-									</p>
-									<p>{aggregator.cloudProvider}</p>
-								</div>
-								<div>
-									<p className="text-sm font-medium text-muted-foreground">
-										리전
-									</p>
-									<p>{aggregator.region}</p>
-								</div>
-								<div>
-									<p className="text-sm font-medium text-muted-foreground">
-										인스턴스 타입
-									</p>
-									<p>{aggregator.instanceType}</p>
-								</div>
-								<div>
-									<p className="text-sm font-medium text-muted-foreground">
-										생성일
-									</p>
-									<p>{formatDate(aggregator.createdAt)}</p>
-								</div>
-								<div>
-									<p className="text-sm font-medium text-muted-foreground">
-										마지막 업데이트
-									</p>
-									<p>{formatDate(new Date().toISOString())}</p>
-								</div>
-							</div>
-						</CardContent>
-					</Card>
 
-					<Card>
-						<CardHeader>
-							<CardTitle>하드웨어 사양</CardTitle>
-						</CardHeader>
-						<CardContent className="space-y-4">
-							<div className="grid grid-cols-1 gap-4">
-								<div>
-									<p className="text-sm font-medium text-muted-foreground">
-										CPU
-									</p>
-									<p>{aggregator.specs.cpu}</p>
-								</div>
-								<div>
-									<p className="text-sm font-medium text-muted-foreground">
-										메모리
-									</p>
-									<p>{aggregator.specs.memory}</p>
-								</div>
-								<div>
-									<p className="text-sm font-medium text-muted-foreground">
-										스토리지
-									</p>
-									<p>{aggregator.specs.storage}</p>
-								</div>
-							</div>
-						</CardContent>
-					</Card>
-				</div>
 				<Card>
 					<CardHeader>
 						<CardTitle>하드웨어 사양</CardTitle>
@@ -660,6 +624,30 @@ const AggregatorDetails: React.FC<AggregatorDetailsProps> = ({
 					</CardContent>
 				</Card>
 			)}
+
+			{/* 삭제 확인 다이얼로그 */}
+			<AlertDialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
+				<AlertDialogContent>
+					<AlertDialogHeader>
+						<AlertDialogTitle>집계자 삭제 확인</AlertDialogTitle>
+						<AlertDialogDescription>
+							정말로 <strong>&quot;{aggregator.name}&quot;</strong> 집계자를
+							삭제하시겠습니까?
+							<br />이 작업은 되돌릴 수 없으며, 관련된 모든 데이터가 영구적으로
+							삭제됩니다.
+						</AlertDialogDescription>
+					</AlertDialogHeader>
+					<AlertDialogFooter>
+						<AlertDialogCancel>취소</AlertDialogCancel>
+						<AlertDialogAction
+							onClick={handleDelete}
+							className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+						>
+							삭제
+						</AlertDialogAction>
+					</AlertDialogFooter>
+				</AlertDialogContent>
+			</AlertDialog>
 		</div>
 	);
 };
