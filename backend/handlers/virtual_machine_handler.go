@@ -29,7 +29,6 @@ func NewVirtualMachineHandler(participantRepo *repository.ParticipantRepository)
 	}
 }
 
-// SelectOptimalVM - 깔끔하게 정리
 func (h *VirtualMachineHandler) SelectOptimalVM(c *gin.Context) {
 	userID := utils.GetUserIDFromMiddleware(c)
 	participantID := c.Param("id")
