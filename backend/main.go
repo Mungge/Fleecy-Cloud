@@ -66,18 +66,7 @@ func main() {
 	mlflowHandler := aggregator.NewMLflowHandler(mlflowURL, repos.AggregatorRepo, prometheusService)
 	log.Printf("MLflow 서버 URL: %s", mlflowURL)
 
-	// MLflow 동기화 서비스 초기화 및 시작
-	mlflowSyncService := services.NewMLflowSyncService(repos.AggregatorRepo, repos.FLRepo)
-	mlflowSyncService.Start()
-	log.Printf("MLflow 동기화 서비스가 시작되었습니다.")
-
-	// 애플리케이션 종료 시 동기화 서비스 정리
-	defer func() {
-		if mlflowSyncService.IsRunning() {
-			mlflowSyncService.Stop()
-			log.Printf("MLflow 동기화 서비스가 정리되었습니다.")
-		}
-	}()
+	// ...existing code...
 
 	// Gin 라우터 설정
 	r := gin.Default()
