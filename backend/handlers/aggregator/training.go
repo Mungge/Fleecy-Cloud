@@ -73,15 +73,13 @@ func NewMLflowClient(baseURL string) *MLflowClient {
 
 // 핸들러 구조체
 type MLflowHandler struct {
-	mlflowClient     *MLflowClient
-	aggregatorRepo   *repository.AggregatorRepository
+	aggregatorRepo    *repository.AggregatorRepository
 	prometheusService *services.PrometheusService
 }
 
 func NewMLflowHandler(mlflowURL string, aggregatorRepo *repository.AggregatorRepository, prometheusService *services.PrometheusService) *MLflowHandler {
 	return &MLflowHandler{
-		mlflowClient:     NewMLflowClient(mlflowURL),
-		aggregatorRepo:   aggregatorRepo,
+		aggregatorRepo:    aggregatorRepo,
 		prometheusService: prometheusService,
 	}
 }
@@ -222,7 +220,7 @@ func (h *MLflowHandler) GetTrainingHistory(c *gin.Context) {
 	aggregatorID := c.Param("id")
 
 	// DB에서 aggregator 정보 조회 (권한 확인 포함)
-	aggregator, err := h.aggregatorRepo.GetAggregatorByID(aggregatorID)
+	aggregator, err := h.aggregatorRepo.GetAggregatorByIDWithFederatedLearning(aggregatorID)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{
 			"error":   "Aggregator 조회 실패",
@@ -373,7 +371,7 @@ func (h *MLflowHandler) GetRealTimeMetrics(c *gin.Context) {
 	aggregatorID := c.Param("id")
 
 	// DB에서 aggregator 정보 조회
-	aggregator, err := h.aggregatorRepo.GetAggregatorByID(aggregatorID)
+	aggregator, err := h.aggregatorRepo.GetAggregatorByIDWithFederatedLearning(aggregatorID)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Aggregator 조회 실패"})
 		return
@@ -520,14 +518,9 @@ func (h *MLflowHandler) GetSystemMetrics(c *gin.Context) {
 	// Aggregator의 IP 주소 확인
 	if aggregator.PublicIP == "" {
 		log.Printf("GetSystemMetrics - PublicIP가 없음: %s", aggregatorID)
-		// IP가 없으면 기본값 반환
-		c.JSON(http.StatusOK, gin.H{
-			"cpu_usage":     0.0,
-			"memory_usage":  0.0,
-			"disk_usage":    0.0,
-			"network_in":    0,
-			"network_out":   0,
-			"last_updated":  time.Now().Format(time.RFC3339),
+		c.JSON(http.StatusBadRequest, gin.H{
+			"error": "시스템 메트릭을 조회할 수 없습니다",
+			"details": "Aggregator의 Public IP가 설정되지 않았습니다",
 		})
 		return
 	}
@@ -537,15 +530,10 @@ func (h *MLflowHandler) GetSystemMetrics(c *gin.Context) {
 		vmInfo, err := h.prometheusService.GetVMMonitoringInfoWithIP(aggregator.PublicIP)
 		if err != nil {
 			log.Printf("GetSystemMetrics - Prometheus 조회 실패: %v", err)
-			// Prometheus 조회 실패 시 DB에 저장된 값 반환
-			c.JSON(http.StatusOK, gin.H{
-				"cpu_usage":     aggregator.CPUUsage,
-				"memory_usage":  aggregator.MemoryUsage,
-				"disk_usage":    0.0, // DB에 저장되지 않은 값
-				"network_in":    0,   // DB에 저장되지 않은 값
-				"network_out":   0,   // DB에 저장되지 않은 값
-				"network_usage": aggregator.NetworkUsage,
-				"last_updated":  time.Now().Format(time.RFC3339),
+			// Prometheus 조회 실패 시 오류 반환
+			c.JSON(http.StatusServiceUnavailable, gin.H{
+				"error": "시스템 메트릭을 조회할 수 없습니다",
+				"details": "Prometheus 서버 연결 실패",
 			})
 			return
 		}
@@ -559,20 +547,11 @@ func (h *MLflowHandler) GetSystemMetrics(c *gin.Context) {
 			"network_out":   vmInfo.NetworkOutBytes,
 			"last_updated":  vmInfo.LastUpdated.Format(time.RFC3339),
 		})
-
-		// DB에도 업데이트 (네트워크 사용량은 in+out의 평균 또는 합계로 계산)
-		networkUsage := float64(vmInfo.NetworkInBytes+vmInfo.NetworkOutBytes) / 1024 / 1024 // MB로 변환
-		h.aggregatorRepo.UpdateAggregatorMetrics(aggregatorID, vmInfo.CPUUsage, vmInfo.MemoryUsage, networkUsage)
 	} else {
-		// Prometheus 서비스가 없으면 DB에 저장된 값 반환
-		c.JSON(http.StatusOK, gin.H{
-			"cpu_usage":     aggregator.CPUUsage,
-			"memory_usage":  aggregator.MemoryUsage,
-			"disk_usage":    0.0,
-			"network_in":    0,
-			"network_out":   0,
-			"network_usage": aggregator.NetworkUsage,
-			"last_updated":  time.Now().Format(time.RFC3339),
+		// Prometheus 서비스가 없으면 서비스 불가 오류 반환
+		c.JSON(http.StatusServiceUnavailable, gin.H{
+			"error": "시스템 메트릭 서비스가 사용할 수 없습니다",
+			"details": "Prometheus 서비스가 구성되지 않았습니다",
 		})
 	}
 }
@@ -599,7 +578,7 @@ func (h *MLflowHandler) GetMLflowInfo(c *gin.Context) {
 	aggregatorID := c.Param("id")
 
 	// DB에서 aggregator 정보 조회
-	aggregator, err := h.aggregatorRepo.GetAggregatorByID(aggregatorID)
+	aggregator, err := h.aggregatorRepo.GetAggregatorByIDWithFederatedLearning(aggregatorID)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Aggregator 조회 실패"})
 		return

@@ -144,7 +144,7 @@ class AggregatorOptimizer:
                     'avgLatency': avg_latency,
                     'maxLatency': max_latency,
                     'vcpu': price['v_cpu_count'],
-                    'memory': price['memory_gb'],
+                    'memory': int(price['memory_gb'] * 1024),  # GB를 MB로 변환
                     'hourlyPrice': price['hourly_price']
                 })
         

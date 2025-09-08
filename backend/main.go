@@ -49,12 +49,6 @@ func main() {
 	sshKeypairService = services.NewSSHKeypairService(repos.SSHKeypairRepo)
 	sshKeypairHandler = handlers.NewSSHKeypairHandler(sshKeypairService)
 
-	// MLflow 핸들러 초기화
-	mlflowURL := os.Getenv("MLFLOW_TRACKING_URI")
-	if mlflowURL == "" {
-		mlflowURL = "http://localhost:5000" // 기본값
-	}
-
 	// Prometheus 서비스 초기화
 	prometheusURL := os.Getenv("PROMETHEUS_URL")
 	if prometheusURL == "" {
@@ -63,21 +57,9 @@ func main() {
 	prometheusService := services.NewPrometheusService(prometheusURL)
 	log.Printf("Prometheus 서버 URL: %s", prometheusURL)
 
-	mlflowHandler := aggregator.NewMLflowHandler(mlflowURL, repos.AggregatorRepo, prometheusService)
-	log.Printf("MLflow 서버 URL: %s", mlflowURL)
-
-	// MLflow 동기화 서비스 초기화 및 시작
-	mlflowSyncService := services.NewMLflowSyncService(repos.AggregatorRepo, repos.FLRepo)
-	mlflowSyncService.Start()
-	log.Printf("MLflow 동기화 서비스가 시작되었습니다.")
-
-	// 애플리케이션 종료 시 동기화 서비스 정리
-	defer func() {
-		if mlflowSyncService.IsRunning() {
-			mlflowSyncService.Stop()
-			log.Printf("MLflow 동기화 서비스가 정리되었습니다.")
-		}
-	}()
+	// MLflow 핸들러 초기화 - aggregator의 public IP를 사용
+	mlflowHandler := aggregator.NewMLflowHandler("", repos.AggregatorRepo, prometheusService)
+	log.Printf("MLflow 서버는 각 aggregator의 public IP:5000을 사용합니다.")
 
 	// Gin 라우터 설정
 	r := gin.Default()
@@ -99,10 +81,9 @@ func main() {
 	// 헬스체크 엔드포인트 (인증 불필요)
 	r.GET("/health", func(c *gin.Context) {
 		c.JSON(200, gin.H{
-			"status":     "ok",
-			"mlflow_url": mlflowURL,
-			"timestamp":  time.Now().Unix(),
-			"version":    "1.0.0",
+			"status":    "ok",
+			"timestamp": time.Now().Unix(),
+			"version":   "1.0.0",
 		})
 	})
 
@@ -132,7 +113,6 @@ func main() {
 
 	log.Printf("서버 시작...")
 	log.Printf("포트: %s", port)
-	log.Printf("MLflow URL: %s", mlflowURL)
 	log.Printf("환경: %s", gin.Mode())
 	log.Printf("CORS 허용 도메인: http://localhost:3000")
 	
