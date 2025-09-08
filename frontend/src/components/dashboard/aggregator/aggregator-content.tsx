@@ -239,9 +239,6 @@ const AggregatorManagementContent: React.FC = () => {
 				`"${aggregatorToDelete.name}" 집계자가 성공적으로 삭제되었습니다.`
 			);
 
-			// 목록 새로고침
-			await fetchAggregators();
-
 			// 다이얼로그 닫기
 			setDeleteDialogOpen(false);
 			setAggregatorToDelete(null);
