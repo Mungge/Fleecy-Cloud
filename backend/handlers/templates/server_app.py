@@ -120,7 +120,7 @@ def server_fn(context: Context) -> ServerAppComponents:
         fit_metrics_aggregation_fn=_metrics_agg_fit,
         evaluate_metrics_aggregation_fn=_metrics_agg_eval,
         mlflow_conf={
-            "tracking_uri": os.environ.get("MLFLOW_TRACKING_URI", "http://localhost:5001"),
+            "tracking_uri": os.environ.get("MLFLOW_TRACKING_URI", "http://localhost:5000"),
             "experiment_name": os.environ.get("MLFLOW_EXPERIMENT_NAME", "flower-demo"),
             "run_name": os.environ.get("MLFLOW_RUN_NAME", "server-run"),
         },
