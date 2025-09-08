@@ -23,6 +23,21 @@ func SetupFederatedLearningRoutes(authorized *gin.RouterGroup, federatedLearning
 		// 특정 연합학습 작업의 로그 스트리밍
 		federated.GET("/:id/logs/stream", federatedLearningHandler.StreamFederatedLearningLogs)
 
+		// 특정 연합학습 작업의 MLflow 대시보드 URL 조회
+		federated.GET("/:id/mlflow", federatedLearningHandler.GetMLflowDashboardURL)
+
+		// 특정 연합학습 작업의 MLflow 메트릭 조회
+		federated.GET("/:id/metrics", federatedLearningHandler.GetMLflowMetrics)
+
+		// 특정 연합학습 작업의 최신 메트릭 조회 (폴링용)
+		federated.GET("/:id/metrics/latest", federatedLearningHandler.GetLatestMetrics)
+
+		// 특정 연합학습 작업의 MLflow 메트릭을 DB에 동기화
+		federated.POST("/:id/metrics/sync", federatedLearningHandler.SyncMLflowMetricsToDatabase)
+
+		// 특정 연합학습 작업의 저장된 학습 히스토리 조회 (DB에서)
+		federated.GET("/:id/training-history", federatedLearningHandler.GetStoredTrainingHistory)
+
 		// 특정 연합학습 작업 업데이트
 		federated.PUT("/:id", federatedLearningHandler.UpdateFederatedLearning)
 

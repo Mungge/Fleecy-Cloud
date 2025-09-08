@@ -123,8 +123,8 @@ def server_fn(context: Context) -> ServerAppComponents:
     strategy = SaveFedAvg(
         fraction_fit=fraction_fit,
         fraction_evaluate=1.0,                 # 필요 시 0.3~0.5로 낮추면 메모리 절약
-        min_fit_clients=int(context.run_config.get("min-fit-clients", 2)),
-        min_available_clients=int(context.run_config.get("min-available-clients", 2)),
+        min_fit_clients=int(context.run_config.get("min-fit-clients", 1)),
+        min_available_clients=int(context.run_config.get("min-available-clients", 1)),
         initial_parameters=initial_parameters,
         fit_metrics_aggregation_fn=_metrics_agg_fit,
         evaluate_metrics_aggregation_fn=_metrics_agg_eval,
@@ -202,8 +202,8 @@ def main():
     
     # 설정 값 결정 (우선순위: 명령행 인수 > TOML > 기본값)
     num_rounds = args.num_rounds or toml_config.get("num-server-rounds", 10)
-    min_fit_clients = args.min_fit_clients or toml_config.get("min-fit-clients", 2)
-    min_available_clients = args.min_available_clients or toml_config.get("min-available-clients", 2)
+    min_fit_clients = args.min_fit_clients or toml_config.get("min-fit-clients", 1)
+    min_available_clients = args.min_available_clients or toml_config.get("min-available-clients", 1)
     fraction_fit = args.fraction_fit if args.fraction_fit != 1.0 else toml_config.get("fraction-fit", 1.0)
     
     print(f"=== Flower Server Configuration ===")

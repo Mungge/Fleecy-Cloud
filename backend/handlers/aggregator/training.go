@@ -4,11 +4,15 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
+	"log"
 	"net/http"
+	"os"
 	"sort"
 	"time"
 
+	"github.com/Mungge/Fleecy-Cloud/models"
 	"github.com/Mungge/Fleecy-Cloud/repository"
+	"github.com/Mungge/Fleecy-Cloud/services"
 	"github.com/Mungge/Fleecy-Cloud/utils"
 	"github.com/gin-gonic/gin"
 )
@@ -69,14 +73,16 @@ func NewMLflowClient(baseURL string) *MLflowClient {
 
 // 핸들러 구조체
 type MLflowHandler struct {
-	mlflowClient   *MLflowClient
-	aggregatorRepo *repository.AggregatorRepository
+	mlflowClient     *MLflowClient
+	aggregatorRepo   *repository.AggregatorRepository
+	prometheusService *services.PrometheusService
 }
 
-func NewMLflowHandler(mlflowURL string, aggregatorRepo *repository.AggregatorRepository) *MLflowHandler {
+func NewMLflowHandler(mlflowURL string, aggregatorRepo *repository.AggregatorRepository, prometheusService *services.PrometheusService) *MLflowHandler {
 	return &MLflowHandler{
-		mlflowClient:   NewMLflowClient(mlflowURL),
-		aggregatorRepo: aggregatorRepo,
+		mlflowClient:     NewMLflowClient(mlflowURL),
+		aggregatorRepo:   aggregatorRepo,
+		prometheusService: prometheusService,
 	}
 }
 
@@ -230,18 +236,28 @@ func (h *MLflowHandler) GetTrainingHistory(c *gin.Context) {
 		return
 	}
 
-	// MLflow 실험명 결정
-	var experimentName string
-	if aggregator.MLflowExperimentName != nil && *aggregator.MLflowExperimentName != "" {
-		experimentName = *aggregator.MLflowExperimentName
+	// MLflow 클라이언트를 aggregator IP로 동적 생성
+	var mlflowURL string
+	if aggregator.PublicIP != "" {
+		mlflowURL = fmt.Sprintf("http://%s:5000", aggregator.PublicIP)
 	} else {
-		// 기본 실험명 사용 (레거시 지원)
-		experimentName = "flower-demo"
+		// TODO: 실제 aggregator IP로 변경 필요
+		// fallback으로 환경변수나 고정 IP 사용
+		aggregatorIP := os.Getenv("AGGREGATOR_IP")
+		if aggregatorIP == "" {
+			aggregatorIP = "YOUR_ACTUAL_AGGREGATOR_IP" // 실제 IP로 변경하세요
+		}
+		mlflowURL = fmt.Sprintf("http://%s:5000", aggregatorIP)
+		log.Printf("GetTrainingHistory - PublicIP가 없어서 환경변수/기본값 사용: %s", aggregatorIP)
 	}
+	
+	mlflowClient := NewMLflowClient(mlflowURL)
+	log.Printf("GetTrainingHistory - Using MLflow URL: %s for aggregator: %s (PublicIP: %s)", mlflowURL, aggregatorID, aggregator.PublicIP)
 
 	// MLflow에서 실험 조회
-	experiments, err := h.mlflowClient.GetExperiments()
+	experiments, err := mlflowClient.GetExperiments()
 	if err != nil {
+		log.Printf("MLflow 연결 실패: %v", err)
 		c.JSON(http.StatusInternalServerError, gin.H{
 			"error":   "MLflow 실험 조회 실패",
 			"details": err.Error(),
@@ -249,24 +265,46 @@ func (h *MLflowHandler) GetTrainingHistory(c *gin.Context) {
 		return
 	}
 
-	// 해당 실험 찾기
-	var experimentID string
+	log.Printf("MLflow에서 찾은 실험들:")
 	for _, exp := range experiments {
-		if exp.Name == experimentName {
+		log.Printf("- Experiment ID: %s, Name: %s", exp.ExperimentID, exp.Name)
+	}
+
+	// aggregator의 federated learning ID를 통해 실험 찾기
+	var experimentID string
+	var expectedExperimentName string
+	
+	// aggregator에 연결된 federated learning 조회
+	if aggregator.FederatedLearning != nil {
+		expectedExperimentName = fmt.Sprintf("federated-learning-%s", aggregator.FederatedLearning.ID)
+		log.Printf("연결된 FederatedLearning ID: %s", aggregator.FederatedLearning.ID)
+	} else {
+		// FederatedLearning 관계가 로드되지 않은 경우, aggregator ID로 시도
+		expectedExperimentName = fmt.Sprintf("federated-learning-%s", aggregatorID)
+		log.Printf("FederatedLearning 관계 없음, aggregator ID 사용: %s", aggregatorID)
+	}
+	
+	log.Printf("찾고 있는 실험명: %s", expectedExperimentName)
+	
+	for _, exp := range experiments {
+		if exp.Name == expectedExperimentName {
 			experimentID = exp.ExperimentID
+			log.Printf("GetTrainingHistory - 매칭되는 연합학습 실험 '%s' 사용: %s", exp.Name, experimentID)
 			break
 		}
 	}
 
 	if experimentID == "" {
-		c.JSON(http.StatusNotFound, gin.H{
-			"error": fmt.Sprintf("실험 '%s'을 찾을 수 없습니다", experimentName),
-		})
+		log.Printf("GetTrainingHistory - 실험을 찾을 수 없음. 빈 배열 반환")
+		// 실험이 없으면 빈 배열 반환
+		c.JSON(http.StatusOK, []interface{}{})
 		return
 	}
 
+	log.Printf("GetTrainingHistory - 사용할 실험 ID: %s", experimentID)
+
 	// runs 조회
-	runs, err := h.mlflowClient.GetRuns(experimentID)
+	runs, err := mlflowClient.GetRuns(experimentID)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{
 			"error":   "MLflow runs 조회 실패",
@@ -295,7 +333,7 @@ func (h *MLflowHandler) GetTrainingHistory(c *gin.Context) {
 
 	// 5. 정의된 모든 메트릭 '키'에 대해 GetMetricHistory를 '각각' 호출합니다.
 	for _, key := range metricKeys {
-		history, err := h.mlflowClient.GetMetricHistory(latestRun.Info.RunID, key)
+		history, err := mlflowClient.GetMetricHistory(latestRun.Info.RunID, key)
 		if err != nil {
 			// 특정 메트릭 조회가 실패해도 로그만 남기고 계속 진행 (예: train_loss가 없는 경우)
 			fmt.Printf("정보: 메트릭 '%s'의 히스토리 조회 실패 (값이 없을 수 있음): %v\n", key, err)
@@ -313,7 +351,7 @@ func (h *MLflowHandler) GetTrainingHistory(c *gin.Context) {
 	}
 
 	// 7. buildTrainingHistory 헬퍼 함수를 호출하여 최종 결과를 생성합니다.
-	trainingHistory := h.buildTrainingHistory(stepData, latestRun)
+	trainingHistory := h.buildTrainingHistory(stepData, latestRun, aggregator)
 
 	// 만약 trainingHistory가 nil이면 빈 슬라이스로 바꿔서 JSON `[]`을 반환하도록 보장
 	if trainingHistory == nil {
@@ -346,30 +384,54 @@ func (h *MLflowHandler) GetRealTimeMetrics(c *gin.Context) {
 		return
 	}
 
-	// MLflow 실험명 결정
-	var experimentName string
-	if aggregator.MLflowExperimentName != nil && *aggregator.MLflowExperimentName != "" {
-		experimentName = *aggregator.MLflowExperimentName
+	// MLflow 클라이언트를 aggregator IP로 동적 생성
+	var mlflowURL string
+	if aggregator.PublicIP != "" {
+		mlflowURL = fmt.Sprintf("http://%s:5000", aggregator.PublicIP)
 	} else {
-		experimentName = "flower-demo" // 기본값
+		// TODO: 실제 aggregator IP로 변경 필요
+		// fallback으로 환경변수나 고정 IP 사용
+		aggregatorIP := os.Getenv("AGGREGATOR_IP")
+		mlflowURL = fmt.Sprintf("http://%s:5000", aggregatorIP)
 	}
+	
+	mlflowClient := NewMLflowClient(mlflowURL)
+	log.Printf("GetRealTimeMetrics - Using MLflow URL: %s for aggregator: %s (PublicIP: %s)", mlflowURL, aggregatorID, aggregator.PublicIP)
 
 	// 실험 및 runs 조회
-	experiments, err := h.mlflowClient.GetExperiments()
+	experiments, err := mlflowClient.GetExperiments()
 	if err != nil {
+		log.Printf("GetRealTimeMetrics - MLflow 연결 실패: %v", err)
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "MLflow 연결 실패"})
 		return
 	}
 
-	var experimentID string
+	log.Printf("GetRealTimeMetrics - MLflow에서 찾은 실험들:")
 	for _, exp := range experiments {
-		if exp.Name == experimentName {
+		log.Printf("- Experiment ID: %s, Name: %s", exp.ExperimentID, exp.Name)
+	}
+
+	// aggregator의 federated learning ID를 통해 실험 찾기
+	var experimentID string
+	var expectedExperimentName string
+	
+	// aggregator에 연결된 federated learning 조회
+	if aggregator.FederatedLearning != nil {
+		expectedExperimentName = fmt.Sprintf("federated-learning-%s", aggregator.FederatedLearning.ID)
+	} else {
+		// FederatedLearning 관계가 로드되지 않은 경우, aggregator ID로 시도
+		expectedExperimentName = fmt.Sprintf("federated-learning-%s", aggregatorID)
+	}
+	
+	for _, exp := range experiments {
+		if exp.Name == expectedExperimentName {
 			experimentID = exp.ExperimentID
 			break
 		}
 	}
-
+	
 	if experimentID == "" {
+		log.Printf("GetRealTimeMetrics - 실험을 찾을 수 없음. 기본값 반환")
 		// 실험이 없으면 기본값 반환
 		c.JSON(http.StatusOK, gin.H{
 			"accuracy":     0,
@@ -383,7 +445,9 @@ func (h *MLflowHandler) GetRealTimeMetrics(c *gin.Context) {
 		return
 	}
 
-	runs, err := h.mlflowClient.GetRuns(experimentID)
+	log.Printf("GetRealTimeMetrics - 사용할 실험 ID: %s", experimentID)
+
+	runs, err := mlflowClient.GetRuns(experimentID)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "runs 조회 실패"})
 		return
@@ -420,11 +484,179 @@ func (h *MLflowHandler) GetRealTimeMetrics(c *gin.Context) {
 	})
 }
 
+// GetSystemMetrics godoc
+// @Summary 집계자 시스템 메트릭 조회
+// @Description Prometheus를 통해 집계자 VM의 실시간 시스템 메트릭을 조회합니다.
+// @Tags aggregators
+// @Accept json
+// @Produce json
+// @Param id path string true "Aggregator ID"
+// @Success 200 {object} map[string]interface{}
+// @Failure 404 {object} map[string]string
+// @Failure 500 {object} map[string]string
+// @Router /api/aggregators/{id}/system-metrics [get]
+func (h *MLflowHandler) GetSystemMetrics(c *gin.Context) {
+	// 사용자 인증 확인
+	userID, err := utils.GetUserIDFromContext(c)
+	if err != nil {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "인증이 필요합니다"})
+		return
+	}
+
+	aggregatorID := c.Param("id")
+
+	// DB에서 aggregator 정보 조회
+	aggregator, err := h.aggregatorRepo.GetAggregatorByID(aggregatorID)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Aggregator 조회 실패"})
+		return
+	}
+
+	if aggregator == nil || aggregator.UserID != userID {
+		c.JSON(http.StatusNotFound, gin.H{"error": "Aggregator를 찾을 수 없습니다"})
+		return
+	}
+
+	// Aggregator의 IP 주소 확인
+	if aggregator.PublicIP == "" {
+		log.Printf("GetSystemMetrics - PublicIP가 없음: %s", aggregatorID)
+		// IP가 없으면 기본값 반환
+		c.JSON(http.StatusOK, gin.H{
+			"cpu_usage":     0.0,
+			"memory_usage":  0.0,
+			"disk_usage":    0.0,
+			"network_in":    0,
+			"network_out":   0,
+			"last_updated":  time.Now().Format(time.RFC3339),
+		})
+		return
+	}
+
+	// Prometheus를 통해 실제 시스템 메트릭 조회
+	if h.prometheusService != nil {
+		vmInfo, err := h.prometheusService.GetVMMonitoringInfoWithIP(aggregator.PublicIP)
+		if err != nil {
+			log.Printf("GetSystemMetrics - Prometheus 조회 실패: %v", err)
+			// Prometheus 조회 실패 시 DB에 저장된 값 반환
+			c.JSON(http.StatusOK, gin.H{
+				"cpu_usage":     aggregator.CPUUsage,
+				"memory_usage":  aggregator.MemoryUsage,
+				"disk_usage":    0.0, // DB에 저장되지 않은 값
+				"network_in":    0,   // DB에 저장되지 않은 값
+				"network_out":   0,   // DB에 저장되지 않은 값
+				"network_usage": aggregator.NetworkUsage,
+				"last_updated":  time.Now().Format(time.RFC3339),
+			})
+			return
+		}
+
+		// 실제 Prometheus 데이터 반환
+		c.JSON(http.StatusOK, gin.H{
+			"cpu_usage":     vmInfo.CPUUsage,
+			"memory_usage":  vmInfo.MemoryUsage,
+			"disk_usage":    vmInfo.DiskUsage,
+			"network_in":    vmInfo.NetworkInBytes,
+			"network_out":   vmInfo.NetworkOutBytes,
+			"last_updated":  vmInfo.LastUpdated.Format(time.RFC3339),
+		})
+
+		// DB에도 업데이트 (네트워크 사용량은 in+out의 평균 또는 합계로 계산)
+		networkUsage := float64(vmInfo.NetworkInBytes+vmInfo.NetworkOutBytes) / 1024 / 1024 // MB로 변환
+		h.aggregatorRepo.UpdateAggregatorMetrics(aggregatorID, vmInfo.CPUUsage, vmInfo.MemoryUsage, networkUsage)
+	} else {
+		// Prometheus 서비스가 없으면 DB에 저장된 값 반환
+		c.JSON(http.StatusOK, gin.H{
+			"cpu_usage":     aggregator.CPUUsage,
+			"memory_usage":  aggregator.MemoryUsage,
+			"disk_usage":    0.0,
+			"network_in":    0,
+			"network_out":   0,
+			"network_usage": aggregator.NetworkUsage,
+			"last_updated":  time.Now().Format(time.RFC3339),
+		})
+	}
+}
+
+// GetMLflowInfo godoc
+// @Summary MLflow 정보 조회
+// @Description 집계자의 MLflow 실험 정보와 URL을 조회합니다.
+// @Tags aggregators
+// @Accept json
+// @Produce json
+// @Param id path string true "Aggregator ID"
+// @Success 200 {object} map[string]interface{}
+// @Failure 404 {object} map[string]string
+// @Failure 500 {object} map[string]string
+// @Router /api/aggregators/{id}/mlflow-info [get]
+func (h *MLflowHandler) GetMLflowInfo(c *gin.Context) {
+	// 사용자 인증 확인
+	userID, err := utils.GetUserIDFromContext(c)
+	if err != nil {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "인증이 필요합니다"})
+		return
+	}
+
+	aggregatorID := c.Param("id")
+
+	// DB에서 aggregator 정보 조회
+	aggregator, err := h.aggregatorRepo.GetAggregatorByID(aggregatorID)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Aggregator 조회 실패"})
+		return
+	}
+
+	if aggregator == nil || aggregator.UserID != userID {
+		c.JSON(http.StatusNotFound, gin.H{"error": "Aggregator를 찾을 수 없습니다"})
+		return
+	}
+
+	// MLflow URL 구성
+	var mlflowURL string
+	if aggregator.PublicIP != "" {
+		mlflowURL = fmt.Sprintf("http://%s:5000", aggregator.PublicIP)
+	} else {
+		// fallback으로 환경변수나 고정 IP 사용
+		aggregatorIP := os.Getenv("AGGREGATOR_IP")
+		if aggregatorIP == "" {
+			aggregatorIP = "localhost" // 로컬 개발용
+		}
+		mlflowURL = fmt.Sprintf("http://%s:5000", aggregatorIP)
+	}
+
+	// 실험 이름 결정
+	var experimentName string
+	if aggregator.FederatedLearning != nil {
+		experimentName = fmt.Sprintf("federated-learning-%s", aggregator.FederatedLearning.ID)
+	} else {
+		experimentName = fmt.Sprintf("federated-learning-%s", aggregatorID)
+	}
+
+	// MLflow UI URL 구성
+	experimentURL := fmt.Sprintf("%s/#/experiments", mlflowURL)
+	if aggregator.MLflowExperimentID != nil && *aggregator.MLflowExperimentID != "" {
+		experimentURL = fmt.Sprintf("%s/#/experiments/%s", mlflowURL, *aggregator.MLflowExperimentID)
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"mlflow_url":        mlflowURL,
+		"experiment_url":    experimentURL,
+		"experiment_name":   experimentName,
+		"experiment_id":     aggregator.MLflowExperimentID,
+		"has_experiment":    aggregator.MLflowExperimentID != nil && *aggregator.MLflowExperimentID != "",
+		"aggregator_ip":     aggregator.PublicIP,
+		"mlflow_accessible": aggregator.PublicIP != "",
+	})
+}
+
 // Helper 메서드들
 
 // buildTrainingHistory는 MLflow run 데이터로부터 학습 히스토리를 생성합니다
-func (h *MLflowHandler) buildTrainingHistory(stepData map[int]map[string]interface{}, runInfo *MLflowRun) []TrainingRound {
+func (h *MLflowHandler) buildTrainingHistory(stepData map[int]map[string]interface{}, runInfo *MLflowRun, aggregator *models.Aggregator) []TrainingRound {
 	var trainingHistory []TrainingRound
+
+	// 실제 참가자 수를 가져옵니다
+	participantCount := h.getActualParticipantCount(aggregator)
+	log.Printf("buildTrainingHistory - 실제 참가자 수: %d", participantCount)
 
 	for step, metrics := range stepData {
 		// 맵에서 안전하게 float 값을 가져오는 헬퍼 함수
@@ -442,6 +674,9 @@ func (h *MLflowHandler) buildTrainingHistory(stepData map[int]map[string]interfa
 			roundTimestamp = runInfo.Info.StartTime // 실패 시 run의 시작 시간으로 대체
 		}
 
+		// 라운드 지속 시간을 계산합니다 (실제로는 각 라운드별 시간을 계산해야 하지만, 여기서는 추정값 사용)
+		duration := h.calculateRoundDuration(step, stepData)
+
 		round := TrainingRound{
 			Round:             step,
 			Accuracy:          getFloat("accuracy"),
@@ -449,8 +684,8 @@ func (h *MLflowHandler) buildTrainingHistory(stepData map[int]map[string]interfa
 			F1Score:           getFloat("f1_macro"),
 			Precision:         getFloat("precision_macro"),
 			Recall:            getFloat("recall_macro"),
-			Duration:          120, // 기본값
-			ParticipantsCount: 3,   // 기본값
+			Duration:          duration,       // 계산된 지속 시간
+			ParticipantsCount: participantCount, // 실제 참가자 수
 			Timestamp:         time.Unix(roundTimestamp/1000, 0).Format(time.RFC3339),
 		}
 		if round.Loss == 0.0 {
@@ -512,4 +747,55 @@ func getMetricValue(metrics map[string]float64, key string, defaultValue float64
 		return value
 	}
 	return defaultValue
+}
+
+// getActualParticipantCount는 실제 참가자 수를 조회합니다
+func (h *MLflowHandler) getActualParticipantCount(aggregator *models.Aggregator) int {
+	// 집계자에 연결된 연합학습이 있는 경우
+	if aggregator.FederatedLearning != nil {
+		// 데이터베이스에서 실제 참가자 수 조회
+		// 여기서는 aggregator의 ParticipantCount 필드를 사용하거나
+		// 별도 쿼리로 연합학습 참가자 수를 조회할 수 있습니다
+		if aggregator.ParticipantCount > 0 {
+			return aggregator.ParticipantCount
+		}
+		
+		// FederatedLearning의 participant_count 사용
+		if aggregator.FederatedLearning.ParticipantCount > 0 {
+			return aggregator.FederatedLearning.ParticipantCount
+		}
+	}
+	
+	// aggregator 자체의 participant count 사용
+	if aggregator.ParticipantCount > 0 {
+		return aggregator.ParticipantCount
+	}
+	
+	// 기본값 반환
+	return 1
+}
+
+// calculateRoundDuration는 라운드 지속 시간을 계산합니다 (추정값)
+func (h *MLflowHandler) calculateRoundDuration(step int, stepData map[int]map[string]interface{}) int {
+	// 실제로는 각 라운드의 시작/종료 타임스탬프를 비교해야 하지만,
+	// 여기서는 타임스탬프 기반 추정값을 계산합니다
+	
+	// 이전 스텝과 현재 스텝의 타임스탬프 차이를 계산
+	if step > 1 {
+		if prevStepData, exists := stepData[step-1]; exists {
+			currentTs, currentOk := stepData[step]["timestamp"].(int64)
+			prevTs, prevOk := prevStepData["timestamp"].(int64)
+			
+			if currentOk && prevOk && currentTs > prevTs {
+				// 밀리초를 초로 변환
+				durationSeconds := (currentTs - prevTs) / 1000
+				if durationSeconds > 0 && durationSeconds < 3600 { // 1시간 이하인 경우만
+					return int(durationSeconds)
+				}
+			}
+		}
+	}
+	
+	// 기본값 반환 (2분)
+	return 120
 }

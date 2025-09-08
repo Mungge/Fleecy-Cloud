@@ -43,11 +43,9 @@ class FlowerClient(NumPyClient):
 
 
 def client_fn(context: Context):
-    # Load model and data
+    # Load model and data (no partitioning - each client uses its own local dataset)
     net = Net()
-    partition_id = context.node_config["partition-id"]
-    num_partitions = context.node_config["num-partitions"]
-    trainloader, valloader = load_data(partition_id, num_partitions)
+    trainloader, valloader = load_data()  # partition parameters removed
     local_epochs = context.run_config["local-epochs"]
 
     # Return Client instance
@@ -63,10 +61,6 @@ def main():
     parser = argparse.ArgumentParser(description="Flower Client")
     parser.add_argument("--server-address", default="localhost:9092",
                        help="Server address (default: localhost:9092)")
-    parser.add_argument("--partition-id", type=int, default=0,
-                       help="Client partition ID (default: 0)")
-    parser.add_argument("--num-partitions", type=int, default=2,
-                       help="Total number of partitions (default: 2)")
     parser.add_argument("--local-epochs", type=int, default=1,
                        help="Number of local epochs (default: 1)")
     
@@ -74,14 +68,12 @@ def main():
     
     print(f"=== Flower Client Configuration ===")
     print(f"Server address: {args.server_address}")
-    print(f"Partition ID: {args.partition_id}")
-    print(f"Total partitions: {args.num_partitions}")
     print(f"Local epochs: {args.local_epochs}")
     print(f"===================================")
     
-    # Load model and data
+    # Load model and data (no partitioning - each client uses its own local dataset)
     net = Net()
-    trainloader, valloader = load_data(args.partition_id, args.num_partitions)
+    trainloader, valloader = load_data()  # partition parameters removed
     
     # Create client instance
     client = FlowerClient(net, trainloader, valloader, args.local_epochs)
@@ -90,7 +82,7 @@ def main():
     print("Starting Flower client...")
     fl.client.start_client(
         server_address=args.server_address,
-        client=client,
+        client=client.to_client(),
     )
 
 

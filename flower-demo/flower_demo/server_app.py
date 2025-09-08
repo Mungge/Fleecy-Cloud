@@ -11,7 +11,7 @@ from flwr.common import Context, ndarrays_to_parameters, parameters_to_ndarrays
 from flwr.server import ServerApp, ServerAppComponents, ServerConfig
 from flwr.server.strategy import FedAvg
 
-from flower_demo.task import Net, get_weights, set_weights
+from task import Net, get_weights, set_weights
 import mlflow
 
 
@@ -175,7 +175,7 @@ def server_fn(context: Context) -> ServerAppComponents:
         evaluate_metrics_aggregation_fn=_metrics_agg_eval,
         mlflow_conf={
             "tracking_uri": os.environ.get("MLFLOW_TRACKING_URI", "http://localhost:5000"),
-            "experiment_name": os.environ.get("MLFLOW_EXPERIMENT_NAME", "flower-demo"),
+            "experiment_name": os.environ.get("MLFLOW_EXPERIMENT_NAME", "flower-fl"),
             "run_name": os.environ.get("MLFLOW_RUN_NAME", "server-run"),
         },
     )
