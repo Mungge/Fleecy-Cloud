@@ -22,6 +22,8 @@ import {
 } from "@/components/ui/alert-dialog";
 import { Trash2 } from "lucide-react";
 import { toast } from "sonner";
+import { LineChart, Line, XAxis, YAxis, Tooltip, CartesianGrid } from "recharts";
+import useSWR from "swr";
 
 // 기존 타입 정의들...
 interface RealTimeMetricsResponse {
@@ -33,6 +35,7 @@ interface RealTimeMetricsResponse {
 	participants_connected: number;
 	current_round: number;
 	timestamp: string;
+	run_id?: string;
 }
 
 interface TrainingHistoryResponse {
@@ -101,6 +104,7 @@ const AggregatorDetails: React.FC<AggregatorDetailsProps> = ({
 		loss: 0,
 		participantsConnected: aggregator.participants,
 		lastUpdated: new Date().toISOString(),
+		runId: "",
 	});
 
 	const [trainingHistory, setTrainingHistory] = useState<
@@ -130,6 +134,83 @@ const AggregatorDetails: React.FC<AggregatorDetailsProps> = ({
 		}
 
 		return "";
+	};
+	// SWR용 fetcher 함수
+	const fetcher = (url: string) => {
+		const token = getAuthToken();
+		return fetch(url, {
+		  headers: {
+			"Content-Type": "application/json",
+			Authorization: `Bearer ${token}`,
+		  },
+		}).then((r) => {
+		  if (!r.ok) {
+			throw new Error(`HTTP error! status: ${r.status}`);
+		  }
+		  return r.json();
+		});
+	  };
+	
+	// MLflow 메트릭 차트 컴포넌트 (useSWR 사용)
+	const MLflowMetricChart: React.FC<{ runId: string; metricKey: string }> = ({ runId, metricKey }) => {
+	const { data, error, isLoading } = useSWR(
+		runId ? `http://localhost:8080/api/mlflow/metric?run_id=${runId}&key=${metricKey}` : null,
+		fetcher,
+		{ 
+		refreshInterval: 5000,
+		revalidateOnFocus: false,
+		dedupingInterval: 2000,
+		}
+	);
+
+	if (isLoading) {
+		return (
+		<div className="flex justify-center items-center h-64">
+			<div className="animate-spin rounded-full h-8 w-8 border-t-2 border-b-2 border-primary"></div>
+		</div>
+		);
+	}
+
+	if (error) {
+		return (
+		<div className="flex justify-center items-center h-64">
+			<div className="text-red-500 text-sm">차트 로드 실패: {error.message}</div>
+		</div>
+		);
+	}
+
+	if (!data) {
+		return (
+		<div className="flex justify-center items-center h-64">
+			<div className="text-gray-500 text-sm">데이터가 없습니다</div>
+		</div>
+		);
+	}
+
+	const points = (data?.metrics ?? []).map((m: any) => ({
+		step: m.step,
+		value: m.value,
+	}));
+
+	if (points.length === 0) {
+		return (
+		<div className="flex justify-center items-center h-64">
+			<div className="text-gray-500 text-sm">메트릭 데이터가 없습니다</div>
+		</div>
+		);
+	}
+
+	return (
+		<div className="w-full">
+		<LineChart width={600} height={300} data={points}>
+			<CartesianGrid strokeDasharray="3 3" />
+			<XAxis dataKey="step" />
+			<YAxis />
+			<Tooltip />
+			<Line type="monotone" dataKey="value" dot={false} stroke="#8884d8" strokeWidth={2} />
+		</LineChart>
+		</div>
+	);
 	};
 
 	// API 호출을 위한 공통 함수 - useCallback으로 감싸기
@@ -191,7 +272,7 @@ const AggregatorDetails: React.FC<AggregatorDetailsProps> = ({
 
 		try {
 			const response = await fetchWithAuth(
-				`http://localhost:8080/api/aggregators/${aggregator.id}/metrics`
+				`http://localhost:8080/api/aggregators/${aggregator.id}/realtime-metrics`
 			);
 
 			if (!response.ok) {
@@ -647,6 +728,91 @@ const AggregatorDetails: React.FC<AggregatorDetailsProps> = ({
 				</Card>
 			)}
 
+			{/* MLflow 정보 및 차트 */}
+			{aggregator.mlflowExperimentName && (
+				<Card>
+				<CardHeader>
+					<CardTitle>MLflow 실험 및 메트릭</CardTitle>
+					<CardDescription>MLflow에서 추적되는 실험 정보 및 실시간 메트릭 차트</CardDescription>
+				</CardHeader>
+				<CardContent>
+					<div className="space-y-6">
+					{/* 기본 MLflow 정보 */}
+					<div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+						<div>
+						<p className="text-sm font-medium text-muted-foreground">실험 이름</p>
+						<p className="font-mono">{aggregator.mlflowExperimentName}</p>
+						</div>
+						{aggregator.mlflowExperimentId && (
+						<div>
+							<p className="text-sm font-medium text-muted-foreground">실험 ID</p>
+							<p className="font-mono">{aggregator.mlflowExperimentId}</p>
+						</div>
+						)}
+						{realTimeMetrics.runId && (
+						<div className="col-span-2">
+							<p className="text-sm font-medium text-muted-foreground">실행 ID</p>
+							<p className="font-mono">{realTimeMetrics.runId}</p>
+						</div>
+						)}
+					</div>
+
+					{/* MLflow 메트릭 차트 */}
+					{realTimeMetrics.runId ? (
+						<div className="space-y-4">
+						<h4 className="text-lg font-semibold">실시간 메트릭 차트</h4>
+
+						{/* 메트릭들 */}
+						<div className="grid grid-cols-1 lg:grid-cols-2 gap-4 mt-4">
+							<div className="border rounded-lg p-4">
+							<h5 className="text-md font-medium mb-2">정확도 변화</h5>
+							<MLflowMetricChart 
+								runId={realTimeMetrics.runId} 
+								metricKey="accuracy" 
+							/>
+							</div>
+							<div className="border rounded-lg p-4">
+							<h5 className="text-md font-medium mb-2">손실 변화</h5>
+							<MLflowMetricChart 
+								runId={realTimeMetrics.runId} 
+								metricKey="val_loss" 
+							/>
+							</div>
+							<div className="border rounded-lg p-4">
+							<h5 className="text-md font-medium mb-2">F1 Score</h5>
+							<MLflowMetricChart 
+								runId={realTimeMetrics.runId} 
+								metricKey="f1_macro" 
+							/>
+							</div>
+							<div className="border rounded-lg p-4">
+							<h5 className="text-md font-medium mb-2">Precision</h5>
+							<MLflowMetricChart 
+								runId={realTimeMetrics.runId} 
+								metricKey="precision_macro" 
+							/>
+							</div>
+						</div>
+						</div>
+					) : (
+						<div className="text-center py-8 text-muted-foreground">
+						<p>MLflow Run ID가 없어서 차트를 표시할 수 없습니다.</p>
+						<p className="text-sm mt-2">학습이 시작되면 차트가 표시됩니다.</p>
+						</div>
+					)}
+
+					<div className="flex space-x-2">
+						<Button variant="outline">MLflow에서 보기</Button>
+						{realTimeMetrics.runId && (
+						<Button variant="outline">상세 메트릭 보기</Button>
+						)}
+					</div>
+					</div>
+				</CardContent>
+				</Card>
+			)}
+
+
 			{/* 학습 히스토리 */}
 			<Card>
 				<CardHeader>
@@ -695,48 +861,6 @@ const AggregatorDetails: React.FC<AggregatorDetailsProps> = ({
 					)}
 				</CardContent>
 			</Card>
-
-			{/* MLflow 정보 */}
-			{aggregator.mlflowExperimentName && (
-				<Card>
-					<CardHeader>
-						<CardTitle>MLflow 실험</CardTitle>
-					</CardHeader>
-					<CardContent>
-						<div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-							<div>
-								<p className="text-sm font-medium text-muted-foreground">
-									실험 이름
-								</p>
-								<p className="font-mono">{aggregator.mlflowExperimentName}</p>
-							</div>
-							{aggregator.mlflowExperimentId && (
-								<div>
-									<p className="text-sm font-medium text-muted-foreground">
-										실험 ID
-									</p>
-									<p className="font-mono">{aggregator.mlflowExperimentId}</p>
-								</div>
-							)}
-						</div>
-						<div className="mt-4">
-							<Button
-								variant="outline"
-								onClick={handleViewMLflow}
-								disabled={!mlflowInfo.mlflow_accessible}
-							>
-								MLflow에서 보기
-							</Button>
-							{!mlflowInfo.mlflow_accessible && (
-								<p className="text-sm text-muted-foreground mt-2">
-									MLflow 서버에 접근할 수 없습니다. Aggregator가 실행 중인지
-									확인해주세요.
-								</p>
-							)}
-						</div>
-					</CardContent>
-				</Card>
-			)}
 
 			{/* 삭제 확인 다이얼로그 */}
 			<AlertDialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
