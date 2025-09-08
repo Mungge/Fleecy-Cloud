@@ -255,7 +255,6 @@ const AggregatorDetails: React.FC<AggregatorDetailsProps> = ({
 
 	const progressPercentage =
 		(aggregator.currentRound / aggregator.rounds) * 100;
-
 	return (
 		<div className="space-y-6">
 			{/* 헤더 */}
@@ -355,7 +354,94 @@ const AggregatorDetails: React.FC<AggregatorDetailsProps> = ({
 						</div>
 					</CardContent>
 				</Card>
+				{/* 기본 정보 카드 */}
+				<div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+					<Card>
+						<CardHeader>
+							<CardTitle>기본 정보</CardTitle>
+						</CardHeader>
+						<CardContent className="space-y-4">
+							<div className="grid grid-cols-2 gap-4">
+								<div>
+									<p className="text-sm font-medium text-muted-foreground">
+										ID
+									</p>
+									<p className="font-mono text-sm">{aggregator.id}</p>
+								</div>
+								<div>
+									<p className="text-sm font-medium text-muted-foreground">
+										알고리즘
+									</p>
+									<p>{aggregator.algorithm}</p>
+								</div>
+								<div>
+									<p className="text-sm font-medium text-muted-foreground">
+										연합학습
+									</p>
+									<p>{aggregator.federatedLearningName}</p>
+								</div>
+								<div>
+									<p className="text-sm font-medium text-muted-foreground">
+										클라우드 제공자
+									</p>
+									<p>{aggregator.cloudProvider}</p>
+								</div>
+								<div>
+									<p className="text-sm font-medium text-muted-foreground">
+										리전
+									</p>
+									<p>{aggregator.region}</p>
+								</div>
+								<div>
+									<p className="text-sm font-medium text-muted-foreground">
+										인스턴스 타입
+									</p>
+									<p>{aggregator.instanceType}</p>
+								</div>
+								<div>
+									<p className="text-sm font-medium text-muted-foreground">
+										생성일
+									</p>
+									<p>{formatDate(aggregator.createdAt)}</p>
+								</div>
+								<div>
+									<p className="text-sm font-medium text-muted-foreground">
+										마지막 업데이트
+									</p>
+									<p>{formatDate(new Date().toISOString())}</p>
+								</div>
+							</div>
+						</CardContent>
+					</Card>
 
+					<Card>
+						<CardHeader>
+							<CardTitle>하드웨어 사양</CardTitle>
+						</CardHeader>
+						<CardContent className="space-y-4">
+							<div className="grid grid-cols-1 gap-4">
+								<div>
+									<p className="text-sm font-medium text-muted-foreground">
+										CPU
+									</p>
+									<p>{aggregator.specs.cpu}</p>
+								</div>
+								<div>
+									<p className="text-sm font-medium text-muted-foreground">
+										메모리
+									</p>
+									<p>{aggregator.specs.memory}</p>
+								</div>
+								<div>
+									<p className="text-sm font-medium text-muted-foreground">
+										스토리지
+									</p>
+									<p>{aggregator.specs.storage}</p>
+								</div>
+							</div>
+						</CardContent>
+					</Card>
+				</div>
 				<Card>
 					<CardHeader>
 						<CardTitle>하드웨어 사양</CardTitle>
