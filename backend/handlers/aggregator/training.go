@@ -539,8 +539,6 @@ func (h *MLflowHandler) GetSystemMetrics(c *gin.Context) {
 	// VM의 Prometheus URL로 새로운 서비스 생성
 	prometheusURL := fmt.Sprintf("http://%s:9090", aggregator.PublicIP)
 	vmPrometheusService := services.CreatePrometheusService(prometheusURL)
-	
-	log.Printf("VM %s Prometheus에 연결 시도: %s", aggregator.PublicIP, prometheusURL)
 
 	// 헬스체크 후 메트릭 조회
 	if !vmPrometheusService.IsHealthy() {

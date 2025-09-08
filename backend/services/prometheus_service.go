@@ -58,7 +58,6 @@ func (p *PrometheusService) executeQueryWithContext(ctx context.Context, query s
 	params.Add("query", query)
 
 	queryURL := fmt.Sprintf("%s/api/v1/query?%s", p.baseURL, params.Encode())
-	log.Printf("Prometheus 쿼리 실행: %s", queryURL)
 
 	req, err := http.NewRequestWithContext(ctx, "GET", queryURL, nil)
 	if err != nil {
@@ -135,8 +134,6 @@ func (p *PrometheusService) GetVMMonitoringInfoWithIP(vmIP string) (*VMMonitorin
 	} else {
 		instanceLabel = fmt.Sprintf("%s:9100", vmIP)
 	}
-
-	log.Printf("VM %s에 대해 인스턴스 라벨 사용: %s", vmIP, instanceLabel)
 
 	// 각 메트릭 조회
 	cpuUsage, err := p.GetVMCPUUsageByIPWithContext(ctx, instanceLabel)
@@ -264,7 +261,6 @@ func (p *PrometheusService) findMatchingInstance(vmIP string) string {
     // node-exporter job에서 첫 번째로 UP 상태인 인스턴스 사용
     if result.Status == "success" && len(result.Data.Result) > 0 {
         if instance, ok := result.Data.Result[0].Metric["instance"]; ok {
-            log.Printf("첫 번째 node-exporter 인스턴스 사용: %s", instance)
             return instance
         }
     }
