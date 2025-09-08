@@ -7,7 +7,9 @@
 		"build": "next build",
 		"start": "next start",
 		"lint": "next lint",
-		"dev:all": "concurrently \"cd ../backend && go run main.go\" \"npm run dev\""
+		"check-mlflow": "node -e \"const { exec } = require('child_process'); exec('mlflow --version', (error) => { if (error) { console.log('MLflow not found. Installing via pipx...'); exec('pipx install mlflow', (err) => { if (err) { console.error('Failed to install MLflow via pipx:', err.message); console.log('Please install pipx first: sudo apt install pipx'); } else { console.log('MLflow installed successfully via pipx!'); } }); } else { console.log('MLflow is already installed.'); } });\"",
+		"dev:all": "npm run check-mlflow && concurrently \"cd ../backend && go run main.go\" \"npm run dev\" \"mlflow ui --host localhost --port 5000\"",
+		"mlflow": "mlflow ui --host localhost --port 5000"
 	},
 	"dependencies": {
 		"@hookform/resolvers": "^4.1.3",
