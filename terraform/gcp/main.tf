@@ -137,7 +137,7 @@ resource "google_compute_instance" "main" {
 
   # 메타데이터 (SSH 키는 클라우드 API를 통해 이미 설정됨)
   metadata = {
-    startup-script = var.startup_script
+    startup-script = base64decode(var.startup_script)
   }
 
   # 네트워크 태그 (방화벽 규칙 적용을 위해)

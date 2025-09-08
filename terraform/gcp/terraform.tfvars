@@ -20,4 +20,4 @@ ssh_public_key_path = "~/.ssh/id_rsa.pub"
 ssh_username        = "ubuntu"
 
 # 프로덕션 환경용 포트 설정
-custom_ports = [8080, 9000, 5000, 9092]  # 9092: Kafka
+custom_ports = [8080, 9000, 5000, 5001, 9092]  # 9092: Kafka

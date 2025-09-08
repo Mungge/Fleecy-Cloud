@@ -237,7 +237,7 @@ func (h *MLflowHandler) GetTrainingHistory(c *gin.Context) {
 	// MLflow 클라이언트를 aggregator IP로 동적 생성
 	var mlflowURL string
 	if aggregator.PublicIP != "" {
-		mlflowURL = fmt.Sprintf("http://%s:5000", aggregator.PublicIP)
+		mlflowURL = fmt.Sprintf("http://%s:5001", aggregator.PublicIP)
 	} else {
 		// TODO: 실제 aggregator IP로 변경 필요
 		// fallback으로 환경변수나 고정 IP 사용
@@ -245,7 +245,7 @@ func (h *MLflowHandler) GetTrainingHistory(c *gin.Context) {
 		if aggregatorIP == "" {
 			aggregatorIP = "YOUR_ACTUAL_AGGREGATOR_IP" // 실제 IP로 변경하세요
 		}
-		mlflowURL = fmt.Sprintf("http://%s:5000", aggregatorIP)
+		mlflowURL = fmt.Sprintf("http://%s:5001", aggregatorIP)
 		log.Printf("GetTrainingHistory - PublicIP가 없어서 환경변수/기본값 사용: %s", aggregatorIP)
 	}
 	
@@ -385,12 +385,12 @@ func (h *MLflowHandler) GetRealTimeMetrics(c *gin.Context) {
 	// MLflow 클라이언트를 aggregator IP로 동적 생성
 	var mlflowURL string
 	if aggregator.PublicIP != "" {
-		mlflowURL = fmt.Sprintf("http://%s:5000", aggregator.PublicIP)
+		mlflowURL = fmt.Sprintf("http://%s:5001", aggregator.PublicIP)
 	} else {
 		// TODO: 실제 aggregator IP로 변경 필요
 		// fallback으로 환경변수나 고정 IP 사용
 		aggregatorIP := os.Getenv("AGGREGATOR_IP")
-		mlflowURL = fmt.Sprintf("http://%s:5000", aggregatorIP)
+		mlflowURL = fmt.Sprintf("http://%s:5001", aggregatorIP)
 	}
 	
 	mlflowClient := NewMLflowClient(mlflowURL)
@@ -439,6 +439,7 @@ func (h *MLflowHandler) GetRealTimeMetrics(c *gin.Context) {
 			"f1_score":     0,
 			"precision":    0,
 			"recall":       0,
+			"timestamp":    time.Now().Format(time.RFC3339),
 			"run_id":       "", // 추가
 		})
 		return
@@ -497,7 +498,6 @@ func (h *MLflowHandler) GetRealTimeMetrics(c *gin.Context) {
 // @Failure 500 {object} map[string]string
 // @Router /api/aggregators/{id}/system-metrics [get]
 func (h *MLflowHandler) GetSystemMetrics(c *gin.Context) {
-	// 사용자 인증 확인
 	userID, err := utils.GetUserIDFromContext(c)
 	if err != nil {
 		c.JSON(http.StatusUnauthorized, gin.H{"error": "인증이 필요합니다"})
@@ -506,7 +506,6 @@ func (h *MLflowHandler) GetSystemMetrics(c *gin.Context) {
 
 	aggregatorID := c.Param("id")
 
-	// DB에서 aggregator 정보 조회
 	aggregator, err := h.aggregatorRepo.GetAggregatorByID(aggregatorID)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Aggregator 조회 실패"})
@@ -518,45 +517,67 @@ func (h *MLflowHandler) GetSystemMetrics(c *gin.Context) {
 		return
 	}
 
-	// Aggregator의 IP 주소 확인
+	// 기본 응답 구조 정의
+	baseResponse := gin.H{
+		"cpu_usage":     aggregator.CPUUsage,
+		"memory_usage":  aggregator.MemoryUsage,
+		"disk_usage":    0.0,
+		"network_in":    0,
+		"network_out":   0,
+		"network_usage": aggregator.NetworkUsage,
+		"last_updated":  time.Now().Format(time.RFC3339),
+		"source":        "database",
+	}
+
+	// PublicIP가 없으면 DB 데이터 반환
 	if aggregator.PublicIP == "" {
 		log.Printf("GetSystemMetrics - PublicIP가 없음: %s", aggregatorID)
-		c.JSON(http.StatusBadRequest, gin.H{
-			"error": "시스템 메트릭을 조회할 수 없습니다",
-			"details": "Aggregator의 Public IP가 설정되지 않았습니다",
-		})
+		c.JSON(http.StatusOK, baseResponse)
 		return
 	}
 
-	// Prometheus를 통해 실제 시스템 메트릭 조회
-	if h.prometheusService != nil {
-		vmInfo, err := h.prometheusService.GetVMMonitoringInfoWithIP(aggregator.PublicIP)
-		if err != nil {
-			log.Printf("GetSystemMetrics - Prometheus 조회 실패: %v", err)
-			// Prometheus 조회 실패 시 오류 반환
-			c.JSON(http.StatusServiceUnavailable, gin.H{
-				"error": "시스템 메트릭을 조회할 수 없습니다",
-				"details": "Prometheus 서버 연결 실패",
-			})
-			return
-		}
+	// VM의 Prometheus URL로 새로운 서비스 생성
+	prometheusURL := fmt.Sprintf("http://%s:9090", aggregator.PublicIP)
+	vmPrometheusService := services.CreatePrometheusService(prometheusURL)
+	
+	log.Printf("VM %s Prometheus에 연결 시도: %s", aggregator.PublicIP, prometheusURL)
 
-		// 실제 Prometheus 데이터 반환
-		c.JSON(http.StatusOK, gin.H{
-			"cpu_usage":     vmInfo.CPUUsage,
-			"memory_usage":  vmInfo.MemoryUsage,
-			"disk_usage":    vmInfo.DiskUsage,
-			"network_in":    vmInfo.NetworkInBytes,
-			"network_out":   vmInfo.NetworkOutBytes,
-			"last_updated":  vmInfo.LastUpdated.Format(time.RFC3339),
-		})
-	} else {
-		// Prometheus 서비스가 없으면 서비스 불가 오류 반환
-		c.JSON(http.StatusServiceUnavailable, gin.H{
-			"error": "시스템 메트릭 서비스가 사용할 수 없습니다",
-			"details": "Prometheus 서비스가 구성되지 않았습니다",
-		})
+	// 헬스체크 후 메트릭 조회
+	if !vmPrometheusService.IsHealthy() {
+		log.Printf("GetSystemMetrics - VM Prometheus 서버 연결 실패")
+		c.JSON(http.StatusOK, baseResponse)
+		return
 	}
+
+	// VM별 Prometheus에서 실제 메트릭 조회
+	vmInfo, err := vmPrometheusService.GetVMMonitoringInfoWithIP(aggregator.PublicIP)
+	if err != nil {
+		log.Printf("GetSystemMetrics - Prometheus 조회 실패: %v", err)
+		c.JSON(http.StatusOK, baseResponse)
+		return
+	}
+
+	// 네트워크 사용량 계산 (MB 단위)
+	networkUsagePercent := float64(vmInfo.NetworkInBytes+vmInfo.NetworkOutBytes) / (1024 * 1024)
+
+	// Prometheus 데이터로 응답
+	response := gin.H{
+		"cpu_usage":     vmInfo.CPUUsage,
+		"memory_usage":  vmInfo.MemoryUsage,
+		"disk_usage":    vmInfo.DiskUsage,
+		"network_in":    vmInfo.NetworkInBytes,
+		"network_out":   vmInfo.NetworkOutBytes,
+		"network_usage": networkUsagePercent,
+		"last_updated":  vmInfo.LastUpdated.Format(time.RFC3339),
+		"source":        "prometheus",
+	}
+
+	c.JSON(http.StatusOK, response)
+
+	// 백그라운드에서 DB 업데이트
+	go func() {
+		h.aggregatorRepo.UpdateAggregatorMetrics(aggregatorID, vmInfo.CPUUsage, vmInfo.MemoryUsage, networkUsagePercent)
+	}()
 }
 
 // GetMLflowInfo godoc
@@ -595,14 +616,14 @@ func (h *MLflowHandler) GetMLflowInfo(c *gin.Context) {
 	// MLflow URL 구성
 	var mlflowURL string
 	if aggregator.PublicIP != "" {
-		mlflowURL = fmt.Sprintf("http://%s:5000", aggregator.PublicIP)
+		mlflowURL = fmt.Sprintf("http://%s:5001", aggregator.PublicIP)
 	} else {
 		// fallback으로 환경변수나 고정 IP 사용
 		aggregatorIP := os.Getenv("AGGREGATOR_IP")
 		if aggregatorIP == "" {
 			aggregatorIP = "localhost" // 로컬 개발용
 		}
-		mlflowURL = fmt.Sprintf("http://%s:5000", aggregatorIP)
+		mlflowURL = fmt.Sprintf("http://%s:5001", aggregatorIP)
 	}
 
 	// 실험 이름 결정

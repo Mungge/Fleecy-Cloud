@@ -4,4 +4,4 @@ instance_type  = "t2.micro"
 # 보안 설정
 environment    = "dev"                  # dev, staging, prod
 allowed_ips    = ["0.0.0.0/0"]         # 개발용은 모든 IP, 프로덕션에서는 특정 IP만
-custom_ports   = [8080, 9000, 5000, 9092]    # 프로덕션 환경에서 추가로 열 포트들
+custom_ports   = [8080, 9000, 5000, 5001, 9092]    # 프로덕션 환경에서 추가로 열 포트들

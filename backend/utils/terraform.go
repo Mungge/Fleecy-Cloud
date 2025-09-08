@@ -2,6 +2,7 @@ package utils
 
 import (
 	"context"
+	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"os"
@@ -112,22 +113,29 @@ files := []string{"main.tf", "variables.tf", "outputs.tf", "providers.tf", "loca
 // createTerraformVars creates terraform.tfvars file with specific configuration
 func createTerraformVars(workspaceDir, aggregatorID string, config TerraformConfig) error {
     var varsContent string
-	
-	// Read startup script
-	startupScript := []byte(startup_script)
+    
+    // Base64로 인코딩해서 Terraform 변수 충돌 방지
+    cloudConfigBytes := []byte(fmt.Sprintf(`#cloud-config
+write_files:
+  - path: /tmp/monitoring_setup.sh
+    permissions: '0755'
+    content: |
+%s
+runcmd:
+  - /tmp/monitoring_setup.sh > /var/log/monitoring_setup.log 2>&1`, indentScript(startup_script, "      ")))
+    
+    encodedCloudConfig := base64.StdEncoding.EncodeToString(cloudConfigBytes)
 
-	// Common variables
-	commonVars := fmt.Sprintf(`
+    commonVars := fmt.Sprintf(`
 project_name = "%s"
 environment = "%s"
 instance_type = "%s"
 aggregator_id = "%s"
 storage_specs = "%s"
 algorithm = "%s"
-startup_script = <<-EOT
-%s
-EOT
-`, config.ProjectName, config.Environment, config.InstanceType, aggregatorID, config.StorageSpecs, config.Algorithm, string(startupScript))
+startup_script = "%s"
+`, config.ProjectName, config.Environment, config.InstanceType, aggregatorID, config.StorageSpecs, config.Algorithm, encodedCloudConfig)
+
 
     // Cloud-specific variables
     switch strings.ToLower(config.CloudProvider) {
@@ -166,6 +174,19 @@ JSON
 
     fmt.Printf("Created terraform vars file: %s\n", varsPath)
     return nil
+}
+
+func indentScript(script string, indent string) string {
+    lines := strings.Split(script, "\n")
+    var result []string
+    for _, line := range lines {
+        if line != "" {
+            result = append(result, indent+line)
+        } else {
+            result = append(result, "")
+        }
+    }
+    return strings.Join(result, "\n")
 }
 
 // DeployWithTerraform executes terraform deployment (uses terraform-exec)
