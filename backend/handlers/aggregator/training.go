@@ -439,6 +439,7 @@ func (h *MLflowHandler) GetRealTimeMetrics(c *gin.Context) {
 			"f1_score":     0,
 			"precision":    0,
 			"recall":       0,
+			"run_id":       "", // 추가
 		})
 		return
 	}
@@ -460,6 +461,7 @@ func (h *MLflowHandler) GetRealTimeMetrics(c *gin.Context) {
 			"f1_score":     0,
 			"precision":    0,
 			"recall":       0,
+			"run_id":       "", // 추가
 		})
 		return
 	}
@@ -479,6 +481,7 @@ func (h *MLflowHandler) GetRealTimeMetrics(c *gin.Context) {
 		"f1_score":     getMetricValue(latestMetrics, "f1_macro", 0.0),
 		"precision":    getMetricValue(latestMetrics, "precision_macro", 0.0),
 		"recall":       getMetricValue(latestMetrics, "recall_macro", 0.0),
+		"run_id":       latestRun.Info.RunID, // 추가된 부분
 	})
 }
 

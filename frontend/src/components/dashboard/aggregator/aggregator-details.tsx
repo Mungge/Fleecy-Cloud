@@ -23,7 +23,7 @@ import {
 import { Trash2 } from "lucide-react";
 import { toast } from "sonner";
 
-// 타입 정의 추가
+// 기존 타입 정의들...
 interface RealTimeMetricsResponse {
 	cpu_usage: number;
 	memory_usage: number;

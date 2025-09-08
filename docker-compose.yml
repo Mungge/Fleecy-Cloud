@@ -10,12 +10,14 @@ services:
     environment:
       - JAEGER_ENDPOINT=http://jaeger:4318
       - PROMETHEUS_ENDPOINT=http://prometheus:9090
+      - MLFLOW_TRACKING_URI=http://mlflow:5000  # MLflow 연결 추가
     networks:
       - monitoring
     restart: always
     depends_on:
       - jaeger
       - prometheus
+      - mlflow  # MLflow 의존성 추가
 
   # 프론트엔드 서비스
   frontend:
@@ -31,6 +33,31 @@ services:
     restart: always
     depends_on:
       - backend
+
+  # MLflow Tracking Server
+  mlflow:
+    image: python:3.9-slim
+    container_name: mlflow-server
+    ports:
+      - "5000:5000"
+    volumes:
+      - ./mlruns:/mlflow/mlruns
+      - ./mlflow-artifacts:/mlflow/artifacts
+    environment:
+      - MLFLOW_BACKEND_STORE_URI=file:///mlflow/mlruns
+      - MLFLOW_DEFAULT_ARTIFACT_ROOT=file:///mlflow/artifacts
+    command: >
+      bash -c "
+        pip install mlflow boto3 &&
+        mlflow server 
+        --backend-store-uri file:///mlflow/mlruns
+        --default-artifact-root file:///mlflow/artifacts
+        --host 0.0.0.0 
+        --port 5000
+      "
+    networks:
+      - monitoring
+    restart: always
 
   # Node Exporter (호스트 시스템 모니터링)
   node-exporter:
