@@ -201,7 +201,7 @@ resource "aws_instance" "main" {
     }
   }
 
-  user_data = var.startup_script
+  user_data = base64decode(var.startup_script)
 
   tags = {
     Name = "${var.project_name}-server"
