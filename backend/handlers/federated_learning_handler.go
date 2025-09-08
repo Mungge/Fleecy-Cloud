@@ -97,8 +97,8 @@ func (h *FederatedLearningHandler) GetFederatedLearning(c *gin.Context) {
 
 	response := gin.H{
 		"federatedLearning": fl,
-		"mlflowURL":        mlflowURL,
-		"experimentName":   fmt.Sprintf("federated-learning-%s", fl.ID),
+		"mlflowURL":         mlflowURL,
+		"experimentName":    fmt.Sprintf("federated-learning-%s", fl.ID),
 	}
 
 	c.JSON(http.StatusOK, gin.H{"data": response})
@@ -299,7 +299,12 @@ func (h *FederatedLearningHandler) CreateFederatedLearning(c *gin.Context) {
 	// 포트 9092 고정
 
 	// 참여자들과 집계자에게 연합학습 실행 요청 전송
-	go h.sendFederatedLearningExecuteRequests(federatedLearning, request.Participants)
+	fmt.Printf("🚀 고루틴 시작: 연합학습 실행 요청 전송 프로세스 시작 (ID: %s)\n", federatedLearning.ID)
+	go func() {
+		fmt.Printf("📍 고루틴 내부: sendFederatedLearningExecuteRequests 함수 호출 시작\n")
+		h.sendFederatedLearningExecuteRequests(federatedLearning, request.Participants)
+		fmt.Printf("✅ 고루틴 완료: sendFederatedLearningExecuteRequests 함수 호출 완료\n")
+	}()
 
 	c.JSON(http.StatusCreated, gin.H{"data": response})
 }
@@ -311,45 +316,55 @@ func (h *FederatedLearningHandler) sendFederatedLearningExecuteRequests(federate
 	Status            string `json:"status"`
 	OpenstackEndpoint string `json:"openstack_endpoint,omitempty"`
 }) {
+	fmt.Printf("🔄 연합학습 실행 요청 프로세스 시작 - FL ID: %s\n", federatedLearning.ID)
+	fmt.Printf("📊 전달받은 참여자 수: %d명\n", len(participants))
+
 	// 1. 먼저 집계자에게 실행 요청 전송
+	fmt.Printf("1️⃣ 단계 1: 집계자 실행 요청 전송\n")
 	if federatedLearning.AggregatorID == nil {
-		fmt.Printf("집계자 ID가 설정되지 않았습니다\n")
+		fmt.Printf("❌ 집계자 ID가 설정되지 않았습니다\n")
 		return
 	}
 
+	fmt.Printf("🔍 집계자 조회 중 - ID: %s\n", *federatedLearning.AggregatorID)
 	aggregator, err := h.aggregatorRepo.GetAggregatorByID(*federatedLearning.AggregatorID)
 	if err != nil {
-		fmt.Printf("집계자 조회 실패: %v\n", err)
+		fmt.Printf("❌ 집계자 조회 실패: %v\n", err)
 		return
 	}
 
 	if aggregator == nil {
-		fmt.Printf("집계자를 찾을 수 없습니다\n")
+		fmt.Printf("❌ 집계자를 찾을 수 없습니다\n")
 		return
 	}
 
+	fmt.Printf("✅ 집계자 조회 성공 - Name: %s, IP: %s\n", aggregator.Name, aggregator.PublicIP)
+	fmt.Printf("🚀 집계자에게 실행 요청 전송 중...\n")
 	if err := h.sendExecuteRequestToAggregator(aggregator, federatedLearning); err != nil {
-		fmt.Printf("집계자 실행 요청 실패: %v\n", err)
+		fmt.Printf("❌ 집계자 실행 요청 실패: %v\n", err)
 		return // 집계자 실행 요청이 실패하면 전체 프로세스 중단
 	}
+	fmt.Printf("✅ 집계자 실행 요청 성공\n")
 
 	// 2. 집계자 실행 요청이 성공한 후, 집계자 서버가 준비될 때까지 대기
-	fmt.Printf("집계자 서버 준비 상태 확인 중...\n")
+	fmt.Printf("2️⃣ 단계 2: 집계자 서버 준비 상태 확인 중...\n")
 	if err := h.waitForAggregatorReady(aggregator); err != nil {
-		fmt.Printf("집계자 서버 준비 대기 실패: %v\n", err)
+		fmt.Printf("❌ 집계자 서버 준비 대기 실패: %v\n", err)
 		return
 	}
 
-	fmt.Printf("집계자 서버 준비 완료! 참여자들에게 요청을 전송합니다.\n")
+	fmt.Printf("✅ 집계자 서버 준비 완료!\n")
+	fmt.Printf("3️⃣ 단계 3: 참여자들에게 요청을 전송합니다.\n")
 	// 3. 집계자가 준비된 후 참여자들에게 실행 요청 전송
 	h.sendExecuteRequestToParticipants(federatedLearning, participants)
+	fmt.Printf("🎉 연합학습 실행 요청 프로세스 완료\n")
 }
 
 // sendExecuteRequestToParticipant는 개별 참여자에게 연합학습 실행 요청을 보냅니다
 func (h *FederatedLearningHandler) sendExecuteRequestToParticipant(participant *models.Participant, federatedLearning *models.FederatedLearning) error {
 
 	requestURL := fmt.Sprintf("%s:5000/api/fl/execute-local", participant.OpenStackEndpoint)
-	
+
 	fmt.Printf("참여자 서버 URL: %s\n", requestURL)
 
 	// 집계자 주소 가져오기
@@ -361,7 +376,7 @@ func (h *FederatedLearningHandler) sendExecuteRequestToParticipant(participant *
 	// 새로운 로컬 실행 API를 위한 페이로드 구성
 	payload := map[string]interface{}{
 		"server_address": aggregatorAddress,
-		"local_epochs":   5, // 기본값 5로 설정 (COVID-19 데이터셋에 적합)
+		"local_epochs":   5,   // 기본값 5로 설정 (COVID-19 데이터셋에 적합)
 		"timeout":        600, // 10분 타임아웃
 		"files": map[string]interface{}{
 			"client_app.py": clientAppTemplate,
@@ -432,56 +447,88 @@ func (h *FederatedLearningHandler) sendExecuteRequestToParticipants(federatedLea
 	Status            string `json:"status"`
 	OpenstackEndpoint string `json:"openstack_endpoint,omitempty"`
 }) {
-	fmt.Printf("참여자 %d명에게 연합학습 실행 요청을 전송합니다\n", len(participants))
+	fmt.Printf("🎯 참여자 요청 전송 시작: %d명의 참여자에게 연합학습 실행 요청을 전송합니다\n", len(participants))
 
-	for _, participant := range participants {
+	if len(participants) == 0 {
+		fmt.Printf("⚠️ 경고: 참여자가 없습니다. 요청을 전송할 대상이 없습니다.\n")
+		return
+	}
+
+	for i, participant := range participants {
+		fmt.Printf("📋 참여자 %d/%d 처리 중 - ID: %s, Name: %s\n", i+1, len(participants), participant.ID, participant.Name)
+
 		// 참여자 정보 조회
 		participantData, err := h.participantRepo.GetByID(participant.ID)
 		if err != nil {
-			fmt.Printf("참여자 조회 실패 (ID: %s): %v\n", participant.ID, err)
+			fmt.Printf("❌ 참여자 조회 실패 (ID: %s): %v\n", participant.ID, err)
 			continue
 		}
 
+		if participantData == nil {
+			fmt.Printf("❌ 참여자 데이터가 nil입니다 (ID: %s)\n", participant.ID)
+			continue
+		}
+
+		fmt.Printf("✅ 참여자 조회 성공 - Name: %s, Endpoint: %s\n", participantData.Name, participantData.OpenStackEndpoint)
+
 		// OpenStack 엔드포인트가 없으면 스킵
 		if participantData.OpenStackEndpoint == "" {
-			fmt.Printf("참여자 %s의 엔드포인트가 설정되지 않았습니다\n", participantData.Name)
+			fmt.Printf("⚠️ 참여자 %s의 엔드포인트가 설정되지 않았습니다. 스킵합니다.\n", participantData.Name)
 			continue
 		}
 
 		// 연합학습 실행 요청 전송
+		fmt.Printf("🚀 참여자 %s에게 연합학습 실행 요청 전송 시작...\n", participantData.Name)
 		if err := h.sendExecuteRequestToParticipant(participantData, federatedLearning); err != nil {
-			fmt.Printf("참여자 %s에게 연합학습 실행 요청 전송 실패: %v\n", participantData.Name, err)
+			fmt.Printf("❌ 참여자 %s에게 연합학습 실행 요청 전송 실패: %v\n", participantData.Name, err)
 		} else {
-			fmt.Printf("참여자 %s에게 연합학습 실행 요청 전송 성공\n", participantData.Name)
+			fmt.Printf("✅ 참여자 %s에게 연합학습 실행 요청 전송 성공\n", participantData.Name)
 		}
 	}
+
+	fmt.Printf("🏁 모든 참여자에 대한 요청 전송 프로세스 완료\n")
 }
 
 // sendExecuteRequestToAggregator는 집계자에게 SSH를 통해 연합학습 실행 요청을 보냅니다
 func (h *FederatedLearningHandler) sendExecuteRequestToAggregator(aggregator *models.Aggregator, federatedLearning *models.FederatedLearning) error {
+	fmt.Printf("🔧 집계자 실행 요청 시작 - Name: %s, IP: %s\n", aggregator.Name, aggregator.PublicIP)
+
 	// 집계자 Public IP 확인
 	if aggregator.PublicIP == "" {
+		fmt.Printf("❌ 집계자 Public IP가 설정되지 않음\n")
 		return fmt.Errorf("집계자 %s의 Public IP가 설정되지 않았습니다", aggregator.Name)
 	}
+	fmt.Printf("✅ 집계자 Public IP 확인 완료: %s\n", aggregator.PublicIP)
 
 	// SSH 키페어 조회
+	fmt.Printf("🔑 SSH 키페어 조회 중...\n")
 	keypairWithPrivateKey, err := h.sshKeypairService.GetKeypairWithPrivateKey(aggregator.ID)
 	if err != nil {
+		fmt.Printf("❌ SSH 키페어 조회 실패: %v\n", err)
 		return fmt.Errorf("집계자 %s의 SSH 키페어 조회 실패: %v", aggregator.Name, err)
 	}
+	fmt.Printf("✅ SSH 키페어 조회 성공\n")
 
 	// SSH 클라이언트 생성
+	fmt.Printf("🔗 SSH 클라이언트 생성 중...\n")
 	sshClient := utils.NewSSHClient(
 		aggregator.PublicIP,
 		"22",
 		"ubuntu",
 		keypairWithPrivateKey.PrivateKey,
 	)
+	fmt.Printf("✅ SSH 클라이언트 생성 완료\n")
 
 	// SSH 연결 테스트
+	fmt.Printf("🔌 SSH 연결 테스트 중... (IP: %s, 타임아웃: 30초)\n", aggregator.PublicIP)
+	startTime := time.Now()
 	if err := sshClient.CheckConnection(); err != nil {
+		elapsed := time.Since(startTime)
+		fmt.Printf("❌ SSH 연결 실패 (소요시간: %.2f초): %v\n", elapsed.Seconds(), err)
 		return fmt.Errorf("집계자 %s SSH 연결 실패: %v", aggregator.Name, err)
 	}
+	elapsed := time.Since(startTime)
+	fmt.Printf("✅ SSH 연결 성공 (소요시간: %.2f초)\n", elapsed.Seconds())
 
 	// 작업 디렉토리 생성
 	workDir := fmt.Sprintf("/home/ubuntu/fl-aggregator-%s", federatedLearning.ID)
@@ -501,7 +548,7 @@ func (h *FederatedLearningHandler) sendExecuteRequestToAggregator(aggregator *mo
 	dynamicPyprojectContent = strings.ReplaceAll(dynamicPyprojectContent, "min-available-clients = 1", fmt.Sprintf("min-available-clients = %d", federatedLearning.ParticipantCount))
 	dynamicPyprojectContent = strings.ReplaceAll(dynamicPyprojectContent, "num-server-rounds = 10", fmt.Sprintf("num-server-rounds = %d", federatedLearning.Rounds))
 	dynamicPyprojectContent = strings.ReplaceAll(dynamicPyprojectContent, "address = \"<HOST>:<PORT>\"", fmt.Sprintf("address = \"%s\"", aggregatorAddress))
-	
+
 	err = sshClient.UploadFileContent(dynamicPyprojectContent, fmt.Sprintf("%s/pyproject.toml", workDir))
 	if err != nil {
 		return fmt.Errorf("pyproject.toml 파일 업로드 실패: %v", err)
@@ -560,7 +607,8 @@ pip install --upgrade pip
 
 # 필수 Python 패키지 설치 (MLflow 포함)
 echo "필수 Python 패키지를 설치합니다..."
-pip install flwr torch torchvision tomli scikit-learn mlflow
+pip install uv
+uv pip install flwr torch torchvision tomli scikit-learn mlflow
 
 # 설치된 패키지 확인
 echo "설치된 패키지 확인:"
@@ -644,7 +692,7 @@ create_ready_file() {
 
 	// 서버 시작을 위한 초기 대기 시간 (30초)
 	time.Sleep(30 * time.Second)
-	
+
 	return nil
 }
 
@@ -673,37 +721,54 @@ func (h *FederatedLearningHandler) getAggregatorAddress(federatedLearning *model
 
 // waitForAggregatorReady는 집계자 서버가 준비될 때까지 대기합니다
 func (h *FederatedLearningHandler) waitForAggregatorReady(aggregator *models.Aggregator) error {
-	maxRetries := 40 // 최대 40번 시도 (약 7분)
+	maxRetries := 40                  // 최대 40번 시도 (약 7분)
 	retryInterval := 10 * time.Second // 10초 간격
 
 	fmt.Printf("집계자 서버 준비 상태 확인 중... (로그 파일 기반)\n")
 	fmt.Printf("집계자 IP: %s\n", aggregator.PublicIP)
 
+	// SSH 키페어 조회
+	fmt.Printf("🔑 대기 중 SSH 키페어 조회...\n")
+	keypairWithPrivateKey, err := h.sshKeypairService.GetKeypairWithPrivateKey(aggregator.ID)
+	if err != nil {
+		return fmt.Errorf("SSH 키페어 조회 실패: %v", err)
+	}
+	fmt.Printf("✅ SSH 키페어 조회 성공\n")
+
 	for i := 0; i < maxRetries; i++ {
-		sshClient := utils.NewSSHClient(aggregator.PublicIP, "22", "ubuntu", "/home/jinhyeok/dev/Fleecy-Cloud/backend/keys/fl-keypair.pem")
+		sshClient := utils.NewSSHClient(aggregator.PublicIP, "22", "ubuntu", keypairWithPrivateKey.PrivateKey)
 		if sshClient != nil {
 			// 1. 로그 파일에서 Flower 서버 시작 확인
-			logOutput, _, logErr := sshClient.ExecuteCommand("tail -20 ~/federated_learning/flower_server.log")
-			if logErr == nil && len(strings.TrimSpace(logOutput)) > 0 {
+			fmt.Printf("📋 로그 파일 확인 중... (시도 %d/%d)\n", i+1, maxRetries)
+			logOutput, logStderr, logErr := sshClient.ExecuteCommand("tail -20 ~/federated_learning/flower_server.log")
+
+			if logErr != nil {
+				fmt.Printf("⚠️ 로그 파일 읽기 실패: %v, stderr: %s\n", logErr, logStderr)
+			} else if len(strings.TrimSpace(logOutput)) == 0 {
+				fmt.Printf("⚠️ 로그 파일이 비어있음\n")
+			} else {
+				fmt.Printf("📋 현재 로그 내용 (마지막 20줄):\n%s\n", logOutput)
+
 				// Flower 서버가 시작되었는지 확인하는 키워드들
-				if strings.Contains(logOutput, "Starting Flower server") && 
-				   strings.Contains(logOutput, "gRPC server running") {
+				if strings.Contains(logOutput, "Starting Flower server") &&
+					strings.Contains(logOutput, "gRPC server running") {
 					fmt.Printf("✅ 집계자 서버 준비 완료! Flower 서버 시작 로그 확인됨 (시도 %d/%d)\n", i+1, maxRetries)
-					fmt.Printf("📋 서버 로그 일부:\n%s\n", logOutput)
 					return nil
 				}
-				
+
 				// 준비 상태 파일 생성 메시지 확인
 				if strings.Contains(logOutput, "✅ 서버 준비 상태 파일 생성됨") {
 					fmt.Printf("✅ 집계자 서버 준비 완료! 준비 상태 메시지 확인됨 (시도 %d/%d)\n", i+1, maxRetries)
 					return nil
 				}
-				
+
 				// ROUND 1 시작 확인 (더 확실한 준비 상태)
 				if strings.Contains(logOutput, "[ROUND 1]") {
 					fmt.Printf("✅ 집계자 서버 준비 완료! Round 1 시작 확인됨 (시도 %d/%d)\n", i+1, maxRetries)
 					return nil
 				}
+
+				fmt.Printf("⏳ 아직 준비되지 않음. 다음 시도를 기다립니다...\n")
 			}
 
 			// 2. 상태 파일 존재 확인 (백업 방법)
@@ -721,13 +786,13 @@ func (h *FederatedLearningHandler) waitForAggregatorReady(aggregator *models.Agg
 			}
 
 			// 현재 로그 상태 출력 (디버깅용)
-			if i % 3 == 0 && len(strings.TrimSpace(logOutput)) > 0 { // 3번에 한 번만 출력
+			if i%3 == 0 && len(strings.TrimSpace(logOutput)) > 0 { // 3번에 한 번만 출력
 				fmt.Printf("📋 현재 로그 상태:\n%s\n", logOutput)
 			}
 		}
 
 		fmt.Printf("⏳ 집계자 서버 준비 중... (시도 %d/%d)\n", i+1, maxRetries)
-		
+
 		if i < maxRetries-1 {
 			time.Sleep(retryInterval)
 		}
@@ -739,10 +804,10 @@ func (h *FederatedLearningHandler) waitForAggregatorReady(aggregator *models.Agg
 // GetMLflowDashboardURL은 연합학습의 MLflow 대시보드 URL을 반환합니다
 func (h *FederatedLearningHandler) GetMLflowDashboardURL(c *gin.Context) {
 	userID := utils.GetUserIDFromMiddleware(c)
-	
+
 	// 경로 매개변수에서 연합학습 ID 추출
 	id := c.Param("id")
-	
+
 	// DB에서 연합학습 조회
 	fl, err := h.repo.GetByID(id)
 	if err != nil {
@@ -753,51 +818,51 @@ func (h *FederatedLearningHandler) GetMLflowDashboardURL(c *gin.Context) {
 		c.JSON(http.StatusNotFound, gin.H{"error": "연합학습 작업을 찾을 수 없습니다"})
 		return
 	}
-	
+
 	// 작업 소유자 확인
 	if fl.UserID != userID {
 		c.JSON(http.StatusForbidden, gin.H{"error": "해당 연합학습 작업에 접근할 권한이 없습니다"})
 		return
 	}
-	
+
 	// 집계자 정보 조회
 	if fl.AggregatorID == nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "집계자가 설정되지 않았습니다"})
 		return
 	}
-	
+
 	aggregator, err := h.aggregatorRepo.GetAggregatorByID(*fl.AggregatorID)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "집계자 조회에 실패했습니다"})
 		return
 	}
-	
+
 	if aggregator == nil {
 		c.JSON(http.StatusNotFound, gin.H{"error": "집계자를 찾을 수 없습니다"})
 		return
 	}
-	
+
 	// MLflow 대시보드 URL 생성 (포트 5000)
 	mlflowURL := fmt.Sprintf("http://%s:5000", aggregator.PublicIP)
-	
+
 	response := gin.H{
 		"federatedLearningId": fl.ID,
-		"aggregatorId": aggregator.ID,
-		"mlflowURL": mlflowURL,
-		"experimentName": fmt.Sprintf("federated-learning-%s", fl.ID),
-		"status": fl.Status,
+		"aggregatorId":        aggregator.ID,
+		"mlflowURL":           mlflowURL,
+		"experimentName":      fmt.Sprintf("federated-learning-%s", fl.ID),
+		"status":              fl.Status,
 	}
-	
+
 	c.JSON(http.StatusOK, gin.H{"data": response})
 }
 
 // GetMLflowMetrics는 연합학습의 MLflow 메트릭을 조회합니다
 func (h *FederatedLearningHandler) GetMLflowMetrics(c *gin.Context) {
 	userID := utils.GetUserIDFromMiddleware(c)
-	
+
 	// 경로 매개변수에서 연합학습 ID 추출
 	id := c.Param("id")
-	
+
 	// DB에서 연합학습 조회
 	fl, err := h.repo.GetByID(id)
 	if err != nil {
@@ -808,48 +873,48 @@ func (h *FederatedLearningHandler) GetMLflowMetrics(c *gin.Context) {
 		c.JSON(http.StatusNotFound, gin.H{"error": "연합학습 작업을 찾을 수 없습니다"})
 		return
 	}
-	
+
 	// 작업 소유자 확인
 	if fl.UserID != userID {
 		c.JSON(http.StatusForbidden, gin.H{"error": "해당 연합학습 작업에 접근할 권한이 없습니다"})
 		return
 	}
-	
+
 	// 집계자 정보 조회
 	if fl.AggregatorID == nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "집계자가 설정되지 않았습니다"})
 		return
 	}
-	
+
 	aggregator, err := h.aggregatorRepo.GetAggregatorByID(*fl.AggregatorID)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "집계자 조회에 실패했습니다"})
 		return
 	}
-	
+
 	if aggregator == nil {
 		c.JSON(http.StatusNotFound, gin.H{"error": "집계자를 찾을 수 없습니다"})
 		return
 	}
-	
+
 	// MLflow API를 통해 메트릭 조회
 	mlflowBaseURL := fmt.Sprintf("http://%s:5000", aggregator.PublicIP)
 	experimentName := fmt.Sprintf("federated-learning-%s", fl.ID)
-	
+
 	metrics, err := h.fetchMLflowMetrics(mlflowBaseURL, experimentName)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": fmt.Sprintf("메트릭 조회 실패: %v", err)})
 		return
 	}
-	
+
 	response := gin.H{
 		"federatedLearningId": fl.ID,
-		"experimentName": experimentName,
-		"mlflowURL": mlflowBaseURL,
-		"metrics": metrics,
-		"lastUpdated": time.Now().Format(time.RFC3339),
+		"experimentName":      experimentName,
+		"mlflowURL":           mlflowBaseURL,
+		"metrics":             metrics,
+		"lastUpdated":         time.Now().Format(time.RFC3339),
 	}
-	
+
 	c.JSON(http.StatusOK, gin.H{"data": response})
 }
 
@@ -858,52 +923,52 @@ func (h *FederatedLearningHandler) fetchMLflowMetrics(mlflowURL, experimentName 
 	client := &http.Client{
 		Timeout: 30 * time.Second,
 	}
-	
+
 	// 1. 실험 조회
 	experimentURL := fmt.Sprintf("%s/api/2.0/mlflow/experiments/get-by-name?experiment_name=%s", mlflowURL, experimentName)
-	
+
 	resp, err := client.Get(experimentURL)
 	if err != nil {
 		return nil, fmt.Errorf("실험 조회 요청 실패: %v", err)
 	}
 	defer resp.Body.Close()
-	
+
 	if resp.StatusCode != http.StatusOK {
 		return nil, fmt.Errorf("실험 조회 실패: 상태 코드 %d", resp.StatusCode)
 	}
-	
+
 	var experimentResp struct {
 		Experiment struct {
 			ExperimentID string `json:"experiment_id"`
 		} `json:"experiment"`
 	}
-	
+
 	if err := json.NewDecoder(resp.Body).Decode(&experimentResp); err != nil {
 		return nil, fmt.Errorf("실험 응답 파싱 실패: %v", err)
 	}
-	
+
 	// 2. 실험의 런 조회
 	runsURL := fmt.Sprintf("%s/api/2.0/mlflow/runs/search", mlflowURL)
 	searchPayload := map[string]interface{}{
 		"experiment_ids": []string{experimentResp.Experiment.ExperimentID},
 		"max_results":    1,
 	}
-	
+
 	searchData, err := json.Marshal(searchPayload)
 	if err != nil {
 		return nil, fmt.Errorf("검색 요청 생성 실패: %v", err)
 	}
-	
+
 	resp, err = client.Post(runsURL, "application/json", bytes.NewBuffer(searchData))
 	if err != nil {
 		return nil, fmt.Errorf("런 조회 요청 실패: %v", err)
 	}
 	defer resp.Body.Close()
-	
+
 	if resp.StatusCode != http.StatusOK {
 		return nil, fmt.Errorf("런 조회 실패: 상태 코드 %d", resp.StatusCode)
 	}
-	
+
 	var runsResp struct {
 		Runs []struct {
 			Info struct {
@@ -923,11 +988,11 @@ func (h *FederatedLearningHandler) fetchMLflowMetrics(mlflowURL, experimentName 
 			} `json:"data"`
 		} `json:"runs"`
 	}
-	
+
 	if err := json.NewDecoder(resp.Body).Decode(&runsResp); err != nil {
 		return nil, fmt.Errorf("런 응답 파싱 실패: %v", err)
 	}
-	
+
 	if len(runsResp.Runs) == 0 {
 		return map[string]interface{}{
 			"metrics": []interface{}{},
@@ -935,9 +1000,9 @@ func (h *FederatedLearningHandler) fetchMLflowMetrics(mlflowURL, experimentName 
 			"status":  "no_runs_found",
 		}, nil
 	}
-	
+
 	run := runsResp.Runs[0]
-	
+
 	// 메트릭을 스텝별로 그룹화
 	metricsMap := make(map[string][]map[string]interface{})
 	for _, metric := range run.Data.Metrics {
@@ -950,28 +1015,28 @@ func (h *FederatedLearningHandler) fetchMLflowMetrics(mlflowURL, experimentName 
 			"timestamp": metric.Timestamp,
 		})
 	}
-	
+
 	// 파라미터를 맵으로 변환
 	paramsMap := make(map[string]interface{})
 	for _, param := range run.Data.Params {
 		paramsMap[param.Key] = param.Value
 	}
-	
+
 	// 3. 런의 전체 메트릭 히스토리 조회 (더 상세한 데이터를 위해)
 	runID := run.Info.RunID
 	metricsHistoryURL := fmt.Sprintf("%s/api/2.0/mlflow/metrics/get-history?run_id=%s&metric_key=", mlflowURL, runID)
-	
+
 	// 주요 메트릭들에 대한 히스토리 조회
 	keyMetrics := []string{"train_loss", "val_loss", "accuracy", "f1_macro"}
 	detailedMetrics := make(map[string][]map[string]interface{})
-	
+
 	for _, metricKey := range keyMetrics {
 		historyURL := metricsHistoryURL + metricKey
 		resp, err := client.Get(historyURL)
 		if err != nil {
 			continue // 에러가 있어도 다른 메트릭은 계속 조회
 		}
-		
+
 		if resp.StatusCode == http.StatusOK {
 			var historyResp struct {
 				Metrics []struct {
@@ -981,7 +1046,7 @@ func (h *FederatedLearningHandler) fetchMLflowMetrics(mlflowURL, experimentName 
 					Step      int     `json:"step"`
 				} `json:"metrics"`
 			}
-			
+
 			if json.NewDecoder(resp.Body).Decode(&historyResp) == nil {
 				for _, metric := range historyResp.Metrics {
 					if detailedMetrics[metricKey] == nil {
@@ -997,7 +1062,7 @@ func (h *FederatedLearningHandler) fetchMLflowMetrics(mlflowURL, experimentName 
 		}
 		resp.Body.Close()
 	}
-	
+
 	result := map[string]interface{}{
 		"runId":           runID,
 		"metrics":         metricsMap,
@@ -1005,53 +1070,53 @@ func (h *FederatedLearningHandler) fetchMLflowMetrics(mlflowURL, experimentName 
 		"params":          paramsMap,
 		"status":          "success",
 	}
-	
+
 	return result, nil
 }
 
 // GetLatestMetrics는 최신 메트릭만 간단히 조회합니다 (폴링용)
 func (h *FederatedLearningHandler) GetLatestMetrics(c *gin.Context) {
 	userID := utils.GetUserIDFromMiddleware(c)
-	
+
 	// 경로 매개변수에서 연합학습 ID 추출
 	id := c.Param("id")
-	
+
 	// DB에서 연합학습 조회
 	fl, err := h.repo.GetByID(id)
 	if err != nil || fl == nil || fl.UserID != userID {
 		c.JSON(http.StatusNotFound, gin.H{"error": "연합학습 작업을 찾을 수 없습니다"})
 		return
 	}
-	
+
 	// 집계자 정보 조회
 	if fl.AggregatorID == nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "집계자가 설정되지 않았습니다"})
 		return
 	}
-	
+
 	aggregator, err := h.aggregatorRepo.GetAggregatorByID(*fl.AggregatorID)
 	if err != nil || aggregator == nil {
 		c.JSON(http.StatusNotFound, gin.H{"error": "집계자를 찾을 수 없습니다"})
 		return
 	}
-	
+
 	// MLflow API를 통해 최신 메트릭만 조회
 	mlflowBaseURL := fmt.Sprintf("http://%s:5000", aggregator.PublicIP)
 	experimentName := fmt.Sprintf("federated-learning-%s", fl.ID)
-	
+
 	latestMetrics, err := h.fetchLatestMLflowMetrics(mlflowBaseURL, experimentName)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": fmt.Sprintf("메트릭 조회 실패: %v", err)})
 		return
 	}
-	
+
 	response := gin.H{
 		"federatedLearningId": fl.ID,
-		"status": fl.Status,
-		"metrics": latestMetrics,
-		"timestamp": time.Now().Unix(),
+		"status":              fl.Status,
+		"metrics":             latestMetrics,
+		"timestamp":           time.Now().Unix(),
 	}
-	
+
 	c.JSON(http.StatusOK, gin.H{"data": response})
 }
 
@@ -1060,30 +1125,30 @@ func (h *FederatedLearningHandler) fetchLatestMLflowMetrics(mlflowURL, experimen
 	client := &http.Client{
 		Timeout: 10 * time.Second, // 빠른 응답을 위해 타임아웃 단축
 	}
-	
+
 	// 실험 조회
 	experimentURL := fmt.Sprintf("%s/api/2.0/mlflow/experiments/get-by-name?experiment_name=%s", mlflowURL, experimentName)
-	
+
 	resp, err := client.Get(experimentURL)
 	if err != nil {
 		return map[string]interface{}{"status": "mlflow_unavailable"}, nil
 	}
 	defer resp.Body.Close()
-	
+
 	if resp.StatusCode != http.StatusOK {
 		return map[string]interface{}{"status": "experiment_not_found"}, nil
 	}
-	
+
 	var experimentResp struct {
 		Experiment struct {
 			ExperimentID string `json:"experiment_id"`
 		} `json:"experiment"`
 	}
-	
+
 	if err := json.NewDecoder(resp.Body).Decode(&experimentResp); err != nil {
 		return map[string]interface{}{"status": "parse_error"}, nil
 	}
-	
+
 	// 최신 런의 메트릭 조회
 	runsURL := fmt.Sprintf("%s/api/2.0/mlflow/runs/search", mlflowURL)
 	searchPayload := map[string]interface{}{
@@ -1091,19 +1156,19 @@ func (h *FederatedLearningHandler) fetchLatestMLflowMetrics(mlflowURL, experimen
 		"max_results":    1,
 		"order_by":       []string{"attribute.start_time DESC"},
 	}
-	
+
 	searchData, _ := json.Marshal(searchPayload)
-	
+
 	resp, err = client.Post(runsURL, "application/json", bytes.NewBuffer(searchData))
 	if err != nil {
 		return map[string]interface{}{"status": "runs_unavailable"}, nil
 	}
 	defer resp.Body.Close()
-	
+
 	if resp.StatusCode != http.StatusOK {
 		return map[string]interface{}{"status": "runs_not_found"}, nil
 	}
-	
+
 	var runsResp struct {
 		Runs []struct {
 			Data struct {
@@ -1115,15 +1180,15 @@ func (h *FederatedLearningHandler) fetchLatestMLflowMetrics(mlflowURL, experimen
 			} `json:"data"`
 		} `json:"runs"`
 	}
-	
+
 	if err := json.NewDecoder(resp.Body).Decode(&runsResp); err != nil || len(runsResp.Runs) == 0 {
 		return map[string]interface{}{"status": "no_data"}, nil
 	}
-	
+
 	// 각 메트릭의 최신값 추출
 	latestMetrics := make(map[string]interface{})
 	maxSteps := make(map[string]int)
-	
+
 	for _, metric := range runsResp.Runs[0].Data.Metrics {
 		if metric.Step >= maxSteps[metric.Key] {
 			maxSteps[metric.Key] = metric.Step
@@ -1133,7 +1198,7 @@ func (h *FederatedLearningHandler) fetchLatestMLflowMetrics(mlflowURL, experimen
 			}
 		}
 	}
-	
+
 	// 진행률 계산 (현재 스텝 기준)
 	maxStep := 0
 	for _, step := range maxSteps {
@@ -1141,14 +1206,14 @@ func (h *FederatedLearningHandler) fetchLatestMLflowMetrics(mlflowURL, experimen
 			maxStep = step
 		}
 	}
-	
+
 	// 예상 총 라운드 (DB에서 가져온 값 사용 가능)
 	// 여기서는 간단히 10으로 가정, 실제로는 fl.Rounds 사용
 	progress := float64(maxStep) / float64(10) * 100
 	if progress > 100 {
 		progress = 100
 	}
-	
+
 	result := map[string]interface{}{
 		"status":          "success",
 		"latestMetrics":   latestMetrics,
@@ -1156,7 +1221,7 @@ func (h *FederatedLearningHandler) fetchLatestMLflowMetrics(mlflowURL, experimen
 		"totalRounds":     10, // 실제로는 fl.Rounds 사용
 		"progressPercent": progress,
 	}
-	
+
 	return result, nil
 }
 
@@ -1181,11 +1246,11 @@ type CreateFederatedLearningRequest struct {
 // GetFederatedLearningLogs는 연합학습 실행 로그를 조회하는 핸들러입니다
 func (h *FederatedLearningHandler) GetFederatedLearningLogs(c *gin.Context) {
 	fmt.Printf("=== 로그 조회 요청 시작 ===\n")
-	
+
 	// Authorization 헤더 확인
 	authHeader := c.GetHeader("Authorization")
 	fmt.Printf("Authorization 헤더: %s\n", authHeader)
-	
+
 	// Context에서 userID 확인
 	userIDInterface, exists := c.Get("userID")
 	if !exists {
@@ -1193,14 +1258,14 @@ func (h *FederatedLearningHandler) GetFederatedLearningLogs(c *gin.Context) {
 		c.JSON(http.StatusUnauthorized, gin.H{"error": "인증이 필요합니다. 미들웨어 오류"})
 		return
 	}
-	
+
 	userID, ok := userIDInterface.(int64)
 	if !ok {
 		fmt.Printf("userID 타입 변환 실패: %T\n", userIDInterface)
 		c.JSON(http.StatusUnauthorized, gin.H{"error": "인증 정보가 올바르지 않습니다"})
 		return
 	}
-	
+
 	fmt.Printf("사용자 ID: %d\n", userID)
 
 	// 경로 매개변수에서 연합학습 ID 추출
@@ -1239,8 +1304,8 @@ func (h *FederatedLearningHandler) GetFederatedLearningLogs(c *gin.Context) {
 
 	response := map[string]interface{}{
 		"federatedLearningId": fl.ID,
-		"status":             fl.Status,
-		"aggregatorLogs":     aggregatorLogs,
+		"status":              fl.Status,
+		"aggregatorLogs":      aggregatorLogs,
 	}
 
 	fmt.Printf("로그 조회 성공\n")
@@ -1359,10 +1424,10 @@ func (h *FederatedLearningHandler) getAggregatorLogs(fl *models.FederatedLearnin
 // SyncMLflowMetricsToDatabase는 MLflow 메트릭을 데이터베이스에 동기화합니다
 func (h *FederatedLearningHandler) SyncMLflowMetricsToDatabase(c *gin.Context) {
 	userID := utils.GetUserIDFromMiddleware(c)
-	
+
 	// 경로 매개변수에서 연합학습 ID 추출
 	id := c.Param("id")
-	
+
 	// DB에서 연합학습 조회
 	fl, err := h.repo.GetByID(id)
 	if err != nil {
@@ -1373,58 +1438,58 @@ func (h *FederatedLearningHandler) SyncMLflowMetricsToDatabase(c *gin.Context) {
 		c.JSON(http.StatusNotFound, gin.H{"error": "연합학습 작업을 찾을 수 없습니다"})
 		return
 	}
-	
+
 	// 작업 소유자 확인
 	if fl.UserID != userID {
 		c.JSON(http.StatusForbidden, gin.H{"error": "해당 연합학습 작업에 접근할 권한이 없습니다"})
 		return
 	}
-	
+
 	// 집계자 정보 조회
 	if fl.AggregatorID == nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "집계자가 설정되지 않았습니다"})
 		return
 	}
-	
+
 	aggregator, err := h.aggregatorRepo.GetAggregatorByID(*fl.AggregatorID)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "집계자 조회에 실패했습니다"})
 		return
 	}
-	
+
 	if aggregator == nil {
 		c.JSON(http.StatusNotFound, gin.H{"error": "집계자를 찾을 수 없습니다"})
 		return
 	}
-	
+
 	// MLflow에서 메트릭 조회 및 데이터베이스 동기화
 	mlflowBaseURL := fmt.Sprintf("http://%s:5000", aggregator.PublicIP)
 	experimentName := fmt.Sprintf("federated-learning-%s", fl.ID)
-	
+
 	syncResult, err := h.syncMetricsFromMLflowToDB(mlflowBaseURL, experimentName, *fl.AggregatorID)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": fmt.Sprintf("메트릭 동기화 실패: %v", err)})
 		return
 	}
-	
+
 	response := gin.H{
 		"federatedLearningId": fl.ID,
-		"aggregatorId": *fl.AggregatorID,
-		"experimentName": experimentName,
-		"syncResult": syncResult,
-		"timestamp": time.Now().Format(time.RFC3339),
+		"aggregatorId":        *fl.AggregatorID,
+		"experimentName":      experimentName,
+		"syncResult":          syncResult,
+		"timestamp":           time.Now().Format(time.RFC3339),
 	}
-	
+
 	c.JSON(http.StatusOK, gin.H{"data": response})
 }
 
 // GetStoredTrainingHistory는 데이터베이스에 저장된 라운드별 학습 히스토리를 조회합니다
 func (h *FederatedLearningHandler) GetStoredTrainingHistory(c *gin.Context) {
 	userID := utils.GetUserIDFromMiddleware(c)
-	
+
 	// 경로 매개변수에서 연합학습 ID 추출
 	id := c.Param("id")
-	
+
 	// DB에서 연합학습 조회
 	fl, err := h.repo.GetByID(id)
 	if err != nil {
@@ -1435,35 +1500,35 @@ func (h *FederatedLearningHandler) GetStoredTrainingHistory(c *gin.Context) {
 		c.JSON(http.StatusNotFound, gin.H{"error": "연합학습 작업을 찾을 수 없습니다"})
 		return
 	}
-	
+
 	// 작업 소유자 확인
 	if fl.UserID != userID {
 		c.JSON(http.StatusForbidden, gin.H{"error": "해당 연합학습 작업에 접근할 권한이 없습니다"})
 		return
 	}
-	
+
 	// 집계자 정보 조회
 	if fl.AggregatorID == nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "집계자가 설정되지 않았습니다"})
 		return
 	}
-	
+
 	// 데이터베이스에서 저장된 학습 라운드 조회
 	trainingRounds, err := h.aggregatorRepo.GetTrainingRoundsByAggregatorID(*fl.AggregatorID)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "학습 히스토리 조회에 실패했습니다"})
 		return
 	}
-	
+
 	// 응답 데이터 구성
 	response := gin.H{
 		"federatedLearningId": fl.ID,
-		"aggregatorId": *fl.AggregatorID,
-		"totalRounds": len(trainingRounds),
-		"trainingHistory": trainingRounds,
-		"lastUpdated": time.Now().Format(time.RFC3339),
+		"aggregatorId":        *fl.AggregatorID,
+		"totalRounds":         len(trainingRounds),
+		"trainingHistory":     trainingRounds,
+		"lastUpdated":         time.Now().Format(time.RFC3339),
 	}
-	
+
 	c.JSON(http.StatusOK, gin.H{"data": response})
 }
 
@@ -1472,30 +1537,30 @@ func (h *FederatedLearningHandler) syncMetricsFromMLflowToDB(mlflowURL, experime
 	client := &http.Client{
 		Timeout: 30 * time.Second,
 	}
-	
+
 	// 1. 실험 조회
 	experimentURL := fmt.Sprintf("%s/api/2.0/mlflow/experiments/get-by-name?experiment_name=%s", mlflowURL, experimentName)
-	
+
 	resp, err := client.Get(experimentURL)
 	if err != nil {
 		return nil, fmt.Errorf("실험 조회 요청 실패: %v", err)
 	}
 	defer resp.Body.Close()
-	
+
 	if resp.StatusCode != http.StatusOK {
 		return nil, fmt.Errorf("실험 조회 실패: 상태 코드 %d", resp.StatusCode)
 	}
-	
+
 	var experimentResp struct {
 		Experiment struct {
 			ExperimentID string `json:"experiment_id"`
 		} `json:"experiment"`
 	}
-	
+
 	if err := json.NewDecoder(resp.Body).Decode(&experimentResp); err != nil {
 		return nil, fmt.Errorf("실험 응답 파싱 실패: %v", err)
 	}
-	
+
 	// 2. 실험의 모든 런 조회
 	runsURL := fmt.Sprintf("%s/api/2.0/mlflow/runs/search", mlflowURL)
 	searchPayload := map[string]interface{}{
@@ -1503,22 +1568,22 @@ func (h *FederatedLearningHandler) syncMetricsFromMLflowToDB(mlflowURL, experime
 		"max_results":    100, // 충분한 수의 런을 가져오기
 		"order_by":       []string{"attribute.start_time DESC"},
 	}
-	
+
 	searchData, err := json.Marshal(searchPayload)
 	if err != nil {
 		return nil, fmt.Errorf("검색 요청 생성 실패: %v", err)
 	}
-	
+
 	resp, err = client.Post(runsURL, "application/json", bytes.NewBuffer(searchData))
 	if err != nil {
 		return nil, fmt.Errorf("런 조회 요청 실패: %v", err)
 	}
 	defer resp.Body.Close()
-	
+
 	if resp.StatusCode != http.StatusOK {
 		return nil, fmt.Errorf("런 조회 실패: 상태 코드 %d", resp.StatusCode)
 	}
-	
+
 	var runsResp struct {
 		Runs []struct {
 			Info struct {
@@ -1536,21 +1601,21 @@ func (h *FederatedLearningHandler) syncMetricsFromMLflowToDB(mlflowURL, experime
 			} `json:"data"`
 		} `json:"runs"`
 	}
-	
+
 	if err := json.NewDecoder(resp.Body).Decode(&runsResp); err != nil {
 		return nil, fmt.Errorf("런 응답 파싱 실패: %v", err)
 	}
-	
+
 	if len(runsResp.Runs) == 0 {
 		return map[string]interface{}{
-			"status": "no_runs_found",
+			"status":      "no_runs_found",
 			"savedRounds": 0,
 		}, nil
 	}
-	
+
 	// 3. 가장 최신 런의 메트릭을 라운드별로 그룹화하여 저장
 	latestRun := runsResp.Runs[0]
-	
+
 	// 스텝별 메트릭 그룹화
 	stepMetrics := make(map[int]map[string]float64)
 	for _, metric := range latestRun.Data.Metrics {
@@ -1559,22 +1624,22 @@ func (h *FederatedLearningHandler) syncMetricsFromMLflowToDB(mlflowURL, experime
 		}
 		stepMetrics[metric.Step][metric.Key] = metric.Value
 	}
-	
+
 	// 기존 라운드 조회하여 중복 방지
 	existingRounds, err := h.aggregatorRepo.GetTrainingRoundsByAggregatorID(aggregatorID)
 	if err != nil {
 		return nil, fmt.Errorf("기존 라운드 조회 실패: %v", err)
 	}
-	
+
 	existingRoundMap := make(map[int]bool)
 	for _, round := range existingRounds {
 		existingRoundMap[round.Round] = true
 	}
-	
+
 	// 4. 각 스텝을 TrainingRound로 변환하여 저장
 	savedRounds := 0
 	updatedRounds := 0
-	
+
 	for step, metrics := range stepMetrics {
 		// 기존 라운드가 있는지 확인
 		if existingRoundMap[step] {
@@ -1582,7 +1647,7 @@ func (h *FederatedLearningHandler) syncMetricsFromMLflowToDB(mlflowURL, experime
 			updatedRounds++
 			continue
 		}
-		
+
 		// 새로운 TrainingRound 생성
 		trainingRound := &models.TrainingRound{
 			ID:           uuid.New().String(),
@@ -1599,31 +1664,31 @@ func (h *FederatedLearningHandler) syncMetricsFromMLflowToDB(mlflowURL, experime
 			ParticipantsCount: 3,   // 기본값, 실제 참가자 수로 업데이트 가능
 			StartedAt:         time.Unix(latestRun.Info.StartTime/1000, 0),
 		}
-		
+
 		// 완료 시간 설정 (EndTime이 있는 경우)
 		if latestRun.Info.EndTime > 0 {
 			completedAt := time.Unix(latestRun.Info.EndTime/1000, 0)
 			trainingRound.CompletedAt = &completedAt
 		}
-		
+
 		// 데이터베이스에 저장
 		if err := h.aggregatorRepo.CreateTrainingRound(trainingRound); err != nil {
 			return nil, fmt.Errorf("라운드 %d 저장 실패: %v", step, err)
 		}
-		
+
 		savedRounds++
 	}
-	
+
 	result := map[string]interface{}{
-		"status":           "success",
-		"totalSteps":       len(stepMetrics),
-		"savedRounds":      savedRounds,
-		"updatedRounds":    updatedRounds,
-		"existingRounds":   len(existingRounds),
-		"runId":           latestRun.Info.RunID,
-		"experimentName":  experimentName,
+		"status":         "success",
+		"totalSteps":     len(stepMetrics),
+		"savedRounds":    savedRounds,
+		"updatedRounds":  updatedRounds,
+		"existingRounds": len(existingRounds),
+		"runId":          latestRun.Info.RunID,
+		"experimentName": experimentName,
 	}
-	
+
 	return result, nil
 }
 
