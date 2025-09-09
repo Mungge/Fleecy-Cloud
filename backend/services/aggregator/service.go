@@ -9,6 +9,7 @@ import (
 	"log"
 	"net/http"
 	"os"
+	"strconv"
 	"strings"
 	"time"
 
@@ -18,7 +19,6 @@ import (
 	"github.com/Mungge/Fleecy-Cloud/repository"
 	"github.com/Mungge/Fleecy-Cloud/services"
 	"github.com/Mungge/Fleecy-Cloud/utils"
-	
 )
 
 // AggregatorService는 Aggregator 관련 비즈니스 로직을 처리합니다
@@ -67,6 +67,7 @@ type CreateAggregatorInput struct {
 	Region       string `json:"region" validate:"required"`
 	Zone         string `json:"zone" validate:"required"`
 	InstanceType string `json:"instance_type" validate:"required"`
+	EstimatedCost string `json:"estimated_cost" validate:"required,gte=0"`
 }
 
 // CreateAggregatorResult Aggregator 생성 결과
@@ -144,6 +145,11 @@ func (s *AggregatorService) CreateAggregatorWithContext(ctx context.Context, inp
 	// MLflow 실험 이름 생성 (고유성 보장)
 	experimentName := fmt.Sprintf("%s-exp-%s", input.Name, time.Now().Format("20060102-150405"))
 
+	cost, err := strconv.ParseFloat(input.EstimatedCost, 64)
+	if err != nil {
+    	return nil, fmt.Errorf("가격 정보 형변환 실패")
+	}
+	
 	// Aggregator 생성
 	aggregator := &models.Aggregator{
 		ID:            uuid.New().String(),
@@ -158,6 +164,7 @@ func (s *AggregatorService) CreateAggregatorWithContext(ctx context.Context, inp
 		InstanceType:  input.InstanceType,
 		StorageSpecs:  input.Storage + "GB",
 		MLflowExperimentName: &experimentName,
+		EstimatedCost: cost,
 	}
 
 	// DB에 저장 (creating 상태로)

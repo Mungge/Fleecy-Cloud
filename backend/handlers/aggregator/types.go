@@ -22,6 +22,7 @@ type CreateAggregatorRequest struct {
 	Storage       string  `json:"storage" binding:"required"`
 	InstanceType  string  `json:"instanceType" binding:"required"`
 	CloudProvider string  `json:"cloudProvider" binding:"required,oneof=aws gcp"`
+	EstimatedCost string  `json:"estimatedCost" binding:"required"`
 }
 
 // CreateAggregatorResponse Aggregator 생성 응답

@@ -8,7 +8,7 @@ import (
 )
 
 // ValidateCreateAggregatorRequest는 Aggregator 생성 요청을 검증합니다
-func ValidateCreateAggregatorRequest(name, algorithm, region, storage, instanceType string) error {
+func ValidateCreateAggregatorRequest(name, algorithm, region, storage, instanceType, estimatedCost string) error {
 	if strings.TrimSpace(name) == "" {
 		return fmt.Errorf("aggregator 이름이 필요합니다")
 	}
@@ -36,6 +36,10 @@ func ValidateCreateAggregatorRequest(name, algorithm, region, storage, instanceT
 
 	if strings.TrimSpace(instanceType) == "" {
 		return fmt.Errorf("인스턴스 타입이 필요합니다")
+	}
+
+	if strings.TrimSpace(estimatedCost) == "" {
+		return fmt.Errorf("예상 비용 정보가 필요합니다")
 	}
 
 	return nil

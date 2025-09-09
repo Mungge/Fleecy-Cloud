@@ -127,6 +127,7 @@ func (h *AggregatorHandler) CreateAggregator(c *gin.Context) {
 		request.Region,
 		request.Storage,
 		request.InstanceType,
+		request.EstimatedCost,
 	); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
@@ -142,6 +143,7 @@ func (h *AggregatorHandler) CreateAggregator(c *gin.Context) {
 		CloudProvider: request.CloudProvider,
 		ProjectName:   request.Name + "-project",
 		Zone:          request.Region + "a",
+		EstimatedCost: request.EstimatedCost,
 	}
 
 	// 타임아웃 설정 (최대 10분)
