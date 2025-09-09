@@ -6,6 +6,7 @@ from __future__ import annotations
 import os
 import sys
 import argparse
+import time
 from pathlib import Path
 
 import flwr as fl
@@ -45,6 +46,8 @@ class SaveFedAvg(FedAvg):
         super().__init__(**kwargs)
         self.mlflow_enabled = mlflow is not None
         self._mlflow_run = None
+        self.round_start_time = None
+        self.round_times = {}  # 라운드별 실행시간 저장
 
         if self.mlflow_enabled:
             conf = mlflow_conf or {}
@@ -59,7 +62,24 @@ class SaveFedAvg(FedAvg):
         if self.mlflow_enabled and self._mlflow_run and metrics:
             mlflow.log_metrics({k: float(v) for k, v in metrics.items()}, step=step)
     
+    def configure_fit(self, server_round, parameters, client_manager):
+        """라운드 시작 시 시간 측정 시작"""
+        self.round_start_time = time.time()
+        print(f"[Server] Round {server_round} started at {time.strftime('%Y-%m-%d %H:%M:%S')}")
+        return super().configure_fit(server_round, parameters, client_manager)
+    
     def aggregate_fit(self, server_round, results, failures):
+        # 라운드 실행시간 계산
+        round_end_time = time.time()
+        if self.round_start_time is not None:
+            round_duration = round_end_time - self.round_start_time
+            self.round_times[server_round] = round_duration
+            print(f"[Server] Round {server_round} completed in {round_duration:.2f} seconds")
+            
+            # MLflow에 라운드 시간 로깅
+            if self.mlflow_enabled and self._mlflow_run:
+                mlflow.log_metric(f"round_duration_seconds", round_duration, step=server_round)
+        
         # 표준 FedAvg 집계
         aggregated_params, aggregated_metrics = super().aggregate_fit(server_round, results, failures)
 
@@ -102,9 +122,41 @@ class SaveFedAvg(FedAvg):
 
         return aggregated_loss, aggregated_metrics
 
+    def get_round_times(self):
+        """라운드별 실행시간을 반환하는 메서드"""
+        return self.round_times.copy()
+
+    def print_round_times_summary(self):
+        """라운드별 실행시간 요약 출력"""
+        if not self.round_times:
+            print("[Server] No round times recorded.")
+            return
+        
+        print("\n=== Round Execution Times Summary ===")
+        total_time = 0
+        for round_num, duration in sorted(self.round_times.items()):
+            print(f"Round {round_num:2d}: {duration:7.2f} seconds")
+            total_time += duration
+        
+        avg_time = total_time / len(self.round_times)
+        print(f"{'='*38}")
+        print(f"Total time: {total_time:7.2f} seconds")
+        print(f"Average:    {avg_time:7.2f} seconds/round")
+        print(f"Rounds:     {len(self.round_times)} rounds")
+        print("="*38)
+
     def __del__(self):
+        # 종료 전 라운드 시간 요약 출력
+        self.print_round_times_summary()
+        
         if self.mlflow_enabled and self._mlflow_run:
             try:
+                # MLflow에 총 시간과 평균 시간 로깅
+                if self.round_times:
+                    total_time = sum(self.round_times.values())
+                    avg_time = total_time / len(self.round_times)
+                    mlflow.log_metric("total_training_time_seconds", total_time)
+                    mlflow.log_metric("average_round_time_seconds", avg_time)
                 mlflow.end_run()
             except Exception:
                 pass       
@@ -245,11 +297,24 @@ def main():
     
     # 서버 시작
     print("Starting Flower server...")
-    fl.server.start_server(
-        server_address=args.server_address,
-        config=fl.server.ServerConfig(num_rounds=num_rounds),
-        strategy=strategy,
-    )
+    
+    # 서버 시작 시간 기록
+    server_start_time = time.time()
+    
+    try:
+        fl.server.start_server(
+            server_address=args.server_address,
+            config=fl.server.ServerConfig(num_rounds=num_rounds),
+            strategy=strategy,
+        )
+    finally:
+        # 서버 종료 시간 기록 및 요약 출력
+        server_end_time = time.time()
+        total_server_time = server_end_time - server_start_time
+        print(f"\n[Server] Total server runtime: {total_server_time:.2f} seconds")
+        
+        # 라운드별 실행시간 요약 출력
+        strategy.print_round_times_summary()
 
 
 if __name__ == "__main__":
