@@ -118,9 +118,9 @@ export const AggregatorSettings = ({
             className="w-full"
           />
           <div className="flex justify-between text-xs text-muted-foreground">
-            <span>비용 우선 (10% : 90%)</span>
+            <span>지연시간 우선 (10% : 90%)</span>
             <span>균형 (50% : 50%)</span>
-            <span>지연시간 우선 (90% : 10%)</span>
+            <span>비용 우선 (90% : 10%)</span>
           </div>
         </div>
 
