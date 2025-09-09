@@ -245,7 +245,7 @@ const AggregatorDetails: React.FC<AggregatorDetailsProps> = ({
 		}
 
 		const points = (currentData?.metrics ?? []).map((m: MetricData) => ({
-			step: m.step,
+			round: m.step,
 			value: m.value,
 		}));
 
@@ -869,9 +869,9 @@ const AggregatorDetails: React.FC<AggregatorDetailsProps> = ({
 			{aggregator.mlflowExperimentName && (
 				<Card>
 					<CardHeader>
-						<CardTitle>MLflow 실험 및 메트릭</CardTitle>
+						<CardTitle>연합학습 모델 메트릭</CardTitle>
 						<CardDescription>
-							MLflow에서 추적되는 실험 정보 및 실시간 메트릭 차트
+							MLflow에서 추적되는 연합학습 모델 메트릭 차트
 						</CardDescription>
 					</CardHeader>
 					<CardContent>
@@ -902,21 +902,14 @@ const AggregatorDetails: React.FC<AggregatorDetailsProps> = ({
 									{/* 추가 메트릭들 */}
 									<div className="grid grid-cols-1 lg:grid-cols-2 gap-4 mt-4">
 										<div className="border rounded-lg p-4">
-											<h5 className="text-md font-medium mb-2">정확도 변화</h5>
+											<h5 className="text-md font-medium mb-2">Accuracy</h5>
 											<MLflowMetricChart
 												runId={learningMetrics.runId}
 												metricKey="accuracy"
 											/>
 										</div>
 										<div className="border rounded-lg p-4">
-											<h5 className="text-md font-medium mb-2">손실 변화</h5>
-											<MLflowMetricChart
-												runId={learningMetrics.runId}
-												metricKey="train_loss"
-											/>
-										</div>
-										<div className="border rounded-lg p-4">
-											<h5 className="text-md font-medium mb-2">F1 Score</h5>
+											<h5 className="text-md font-medium mb-2">F1-Score</h5>
 											<MLflowMetricChart
 												runId={learningMetrics.runId}
 												metricKey="f1_macro"
@@ -927,6 +920,13 @@ const AggregatorDetails: React.FC<AggregatorDetailsProps> = ({
 											<MLflowMetricChart
 												runId={learningMetrics.runId}
 												metricKey="precision_macro"
+											/>
+										</div>
+										<div className="border rounded-lg p-4">
+											<h5 className="text-md font-medium mb-2">Recall</h5>
+											<MLflowMetricChart
+												runId={learningMetrics.runId}
+												metricKey="recall_macro"
 											/>
 										</div>
 									</div>
@@ -1003,12 +1003,20 @@ const AggregatorDetails: React.FC<AggregatorDetailsProps> = ({
 									</div>
 									<div className="flex space-x-4 text-sm">
 										<div>
-											<span className="font-medium">정확도:</span>{" "}
-											{(history.accuracy * 100).toFixed(2)}%
+											<span className="font-medium">accuracy:</span>{" "}
+											{history.accuracy.toFixed(2)}
 										</div>
 										<div>
-											<span className="font-medium">손실:</span>{" "}
-											{history.loss.toFixed(4)}
+											<span className="font-medium">precision:</span>{" "}
+											{history.precision.toFixed(2)}
+										</div>
+										<div>
+											<span className="font-medium">recall:</span>{" "}
+											{history.recall.toFixed(2)}
+										</div>
+										<div>
+											<span className="font-medium">f1_score:</span>{" "}
+											{history.f1_score.toFixed(2)}
 										</div>
 										<div>
 											<span className="font-medium">참여자:</span>{" "}
