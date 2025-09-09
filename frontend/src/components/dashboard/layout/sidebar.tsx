@@ -52,11 +52,6 @@ export default function Sidebar({
       icon: Network,
       href: "/dashboard/federated-learning",
     },
-    {
-      label: "글로벌 모델",
-      icon: Globe,
-      href: "/dashboard/global-models",
-    },
   ];
 
   return (
