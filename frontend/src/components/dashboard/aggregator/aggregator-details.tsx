@@ -1019,6 +1019,12 @@ const AggregatorDetails: React.FC<AggregatorDetailsProps> = ({
 											{history.f1_score.toFixed(2)}
 										</div>
 										<div>
+											<span className="font-medium">소요시간:</span>{" "}
+											{history.duration
+												? `${history.duration.toFixed(1)}초`
+												: "N/A"}
+										</div>
+										<div>
 											<span className="font-medium">참여자:</span>{" "}
 											{history.participantsCount}
 										</div>
