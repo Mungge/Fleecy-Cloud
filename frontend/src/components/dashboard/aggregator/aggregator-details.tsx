@@ -20,7 +20,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import { Trash2 } from "lucide-react";
+import { Trash2, RotateCw } from "lucide-react";
 import { toast } from "sonner";
 import {
   LineChart,
@@ -143,6 +143,9 @@ const AggregatorDetails: React.FC<AggregatorDetailsProps> = ({
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+
+  // 시스템 메트릭 로딩 상태 추가
+  const [isSystemMetricsLoading, setIsSystemMetricsLoading] = useState(false);
 
   // MLflow 정보 조회
   const [mlflowInfo, setMlflowInfo] = useState<{
@@ -410,6 +413,7 @@ const AggregatorDetails: React.FC<AggregatorDetailsProps> = ({
 
   // 시스템 메트릭 조회 (Prometheus 기반)
   const fetchSystemMetrics = useCallback(async () => {
+    setIsSystemMetricsLoading(true);
     try {
       const response = await fetchWithAuth(
         `http://localhost:8080/api/aggregators/${aggregator.id}/system-metrics`
@@ -437,6 +441,8 @@ const AggregatorDetails: React.FC<AggregatorDetailsProps> = ({
       });
     } catch (error) {
       console.error("시스템 메트릭 조회 실패:", error);
+    } finally {
+      setIsSystemMetricsLoading(false);
     }
   }, [aggregator.id, fetchWithAuth]);
 
@@ -797,74 +803,99 @@ const AggregatorDetails: React.FC<AggregatorDetailsProps> = ({
         </CardContent>
       </Card>
 
-      {/* 실시간 시스템 메트릭 */}
-      <Card>
-        <CardHeader>
-          <CardTitle>시스템 메트릭</CardTitle>
-          <CardDescription>
-            실시간 시스템 리소스 사용량 (
-            {systemMetrics.source === "prometheus" ? "Prometheus" : "Database"}{" "}
-            기반)
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          <div className="space-y-6">
-            <div className="space-y-2">
-              <div className="flex justify-between">
-                <span className="text-sm font-medium">CPU 사용률</span>
-                <span className="text-sm text-muted-foreground">
-                  {systemMetrics.cpuUsage.toFixed(1)}%
-                </span>
+      {/* 시스템 메트릭과 비용 정보를 한 줄에 배치 */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        {/* 실시간 시스템 메트릭 */}
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center justify-between">
+              <span>시스템 메트릭</span>
+              <RotateCw
+                className={`h-4 w-4 text-muted-foreground ${
+                  isSystemMetricsLoading ? "animate-spin" : ""
+                }`}
+              />
+            </CardTitle>
+            <CardDescription>실시간 시스템 리소스 사용량</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-6">
+              <div className="space-y-2">
+                <div className="flex justify-between">
+                  <span className="text-sm font-medium">CPU 사용률</span>
+                  <span className="text-sm text-muted-foreground">
+                    {systemMetrics.cpuUsage.toFixed(1)}%
+                  </span>
+                </div>
+                <Progress value={systemMetrics.cpuUsage} className="h-2" />
               </div>
-              <Progress value={systemMetrics.cpuUsage} className="h-2" />
-            </div>
 
-            <div className="space-y-2">
-              <div className="flex justify-between">
-                <span className="text-sm font-medium">메모리 사용률</span>
-                <span className="text-sm text-muted-foreground">
-                  {systemMetrics.memoryUsage.toFixed(1)}%
-                </span>
+              <div className="space-y-2">
+                <div className="flex justify-between">
+                  <span className="text-sm font-medium">메모리 사용률</span>
+                  <span className="text-sm text-muted-foreground">
+                    {systemMetrics.memoryUsage.toFixed(1)}%
+                  </span>
+                </div>
+                <Progress value={systemMetrics.memoryUsage} className="h-2" />
               </div>
-              <Progress value={systemMetrics.memoryUsage} className="h-2" />
-            </div>
 
-            <div className="space-y-2">
-              <div className="flex justify-between">
-                <span className="text-sm font-medium">디스크 사용률</span>
-                <span className="text-sm text-muted-foreground">
-                  {systemMetrics.diskUsage.toFixed(1)}%
-                </span>
+              <div className="space-y-2">
+                <div className="flex justify-between">
+                  <span className="text-sm font-medium">디스크 사용률</span>
+                  <span className="text-sm text-muted-foreground">
+                    {systemMetrics.diskUsage.toFixed(1)}%
+                  </span>
+                </div>
+                <Progress value={systemMetrics.diskUsage} className="h-2" />
               </div>
-              <Progress value={systemMetrics.diskUsage} className="h-2" />
-            </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div className="text-center p-3 bg-muted rounded-lg">
-                <div className="text-lg font-bold text-green-600">
-                  {(systemMetrics.networkIn / (1024 * 1024)).toFixed(2)} MB
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="text-center p-3 bg-muted rounded-lg">
+                  <div className="text-lg font-bold text-green-600">
+                    {(systemMetrics.networkIn / (1024 * 1024)).toFixed(2)} MB
+                  </div>
+                  <div className="text-sm text-muted-foreground">
+                    네트워크 수신
+                  </div>
+                </div>
+                <div className="text-center p-3 bg-muted rounded-lg">
+                  <div className="text-lg font-bold text-blue-600">
+                    {(systemMetrics.networkOut / (1024 * 1024)).toFixed(2)} MB
+                  </div>
+                  <div className="text-sm text-muted-foreground">
+                    네트워크 송신
+                  </div>
+                </div>
+              </div>
+
+              <div className="text-xs text-muted-foreground text-center">
+                마지막 업데이트:{" "}
+                {new Date(systemMetrics.lastUpdated).toLocaleString("ko-KR")}
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* 비용 정보 */}
+        {aggregator.cost && (
+          <Card>
+            <CardHeader>
+              <CardTitle>비용 정보</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="text-center py-8">
+                <div className="text-4xl font-bold text-foreground mb-2">
+                  {formatCurrency(aggregator.cost.estimated)}
                 </div>
                 <div className="text-sm text-muted-foreground">
-                  네트워크 수신
+                  월 예상 비용
                 </div>
               </div>
-              <div className="text-center p-3 bg-muted rounded-lg">
-                <div className="text-lg font-bold text-blue-600">
-                  {(systemMetrics.networkOut / (1024 * 1024)).toFixed(2)} MB
-                </div>
-                <div className="text-sm text-muted-foreground">
-                  네트워크 송신
-                </div>
-              </div>
-            </div>
-
-            <div className="text-xs text-muted-foreground text-center">
-              마지막 업데이트:{" "}
-              {new Date(systemMetrics.lastUpdated).toLocaleString("ko-KR")}
-            </div>
-          </div>
-        </CardContent>
-      </Card>
+            </CardContent>
+          </Card>
+        )}
+      </div>
 
       {/* MLflow 정보 및 차트 */}
       {aggregator.mlflowExperimentName && (
@@ -940,27 +971,6 @@ const AggregatorDetails: React.FC<AggregatorDetailsProps> = ({
                   </p>
                 </div>
               )}
-            </div>
-          </CardContent>
-        </Card>
-      )}
-
-      {/* 비용 정보 */}
-      {aggregator.cost && (
-        <Card>
-          <CardHeader>
-            <CardTitle>비용 정보</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div className="p-4 bg-muted rounded-lg">
-                <div className="text-2xl font-bold text-blue-600">
-                  {formatCurrency(aggregator.cost.estimated)}
-                </div>
-                <div className="text-sm text-muted-foreground">
-                  예상 비용 (월)
-                </div>
-              </div>
             </div>
           </CardContent>
         </Card>
