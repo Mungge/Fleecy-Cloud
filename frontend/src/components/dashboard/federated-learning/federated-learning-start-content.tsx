@@ -117,9 +117,9 @@ const FederatedLearningStartContent = () => {
   // payload가 없으면 이전 페이지로 리다이렉트
   // 원치 않는다면 주석처리 => mock data가 보일 것임
   useEffect(() => {
-    // if (!storePayload) {
-    //   router.replace("/dashboard/federated-learning");
-    // }
+    if (!storePayload) {
+      router.replace("/dashboard/federated-learning");
+    }
   }, [storePayload, router]);
 
   const selectedOption = payload?.selectedOption;
