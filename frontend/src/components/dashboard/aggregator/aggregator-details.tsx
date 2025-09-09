@@ -589,7 +589,9 @@ const AggregatorDetails: React.FC<AggregatorDetailsProps> = ({
   const formatCurrency = (amount: number) => {
     return new Intl.NumberFormat("ko-KR", {
       style: "currency",
-      currency: "USD",
+      currency: "KRW",
+      minimumFractionDigits: 0,
+      maximumFractionDigits: 0,
     }).format(amount);
   };
 
@@ -952,19 +954,11 @@ const AggregatorDetails: React.FC<AggregatorDetailsProps> = ({
           <CardContent>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div className="p-4 bg-muted rounded-lg">
-                <div className="text-2xl font-bold text-green-600">
-                  {formatCurrency(aggregator.cost.current)}
-                </div>
-                <div className="text-sm text-muted-foreground">
-                  현재 사용 비용
-                </div>
-              </div>
-              <div className="p-4 bg-muted rounded-lg">
                 <div className="text-2xl font-bold text-blue-600">
                   {formatCurrency(aggregator.cost.estimated)}
                 </div>
                 <div className="text-sm text-muted-foreground">
-                  예상 총 비용
+                  예상 비용 (월)
                 </div>
               </div>
             </div>
