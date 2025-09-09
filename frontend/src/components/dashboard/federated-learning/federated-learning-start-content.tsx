@@ -102,8 +102,6 @@ const FederatedLearningStartContent = () => {
     isOptimalVMLoading,
     handleViewVMs,
     handleGetOptimalVM,
-    handleViewVMMonitoring,
-    closeVMListDialog,
     setVmListDialogOpen,
   } = useVirtualMachines();
 
@@ -190,14 +188,34 @@ const FederatedLearningStartContent = () => {
     router.back();
   };
 
-  const handleParticipantVMClick = async (participant: any) => {
-    setSelectedParticipant(participant);
+  const handleParticipantVMClick = async (participant: {
+    id: string;
+    name: string;
+    status: string;
+    openstack_endpoint?: string;
+  }) => {
+    // Participant 타입으로 변환 (기존 훅들과의 호환성을 위해)
+    const participantForHooks: Participant = {
+      id: participant.id,
+      name: participant.name,
+      status: participant.status as
+        | "active"
+        | "inactive"
+        | "busy"
+        | "error"
+        | "pending",
+      user_id: 1, // 기본값
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
+    };
+
+    setSelectedParticipant(participantForHooks);
 
     // VM 목록 조회
-    await handleViewVMs(participant);
+    await handleViewVMs(participantForHooks);
 
     // 최적 VM 조회
-    await handleGetOptimalVM(participant);
+    await handleGetOptimalVM(participantForHooks);
   };
 
   const handleVMClick = (vm: OpenStackVMInstance) => {
