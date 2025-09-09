@@ -258,17 +258,17 @@ func (s *VMSelectionService) selectOptimalVMCore(participant *models.Participant
         criteria.MinDisk = 5
     }
 
-    dataType := "실제 데이터"
-    if isMock {
-        dataType = "Mock 데이터"
-    }
+    // dataType := "실제 데이터"
+    // if isMock {
+    //     dataType = "Mock 데이터"
+    // }
 
-    fmt.Printf("=== VM 선택 시작 (%s) ===\n", dataType)
+    fmt.Printf("=== VM 선택 시작 ===\n")
     fmt.Printf("모델 크기: %dMB\n", criteria.ModelSizeMB)
     fmt.Printf("조건: vCPU>=%d, RAM>=%d, Disk>=%d, 상태=%s, MaxCPU=%.1f%%\n", 
         criteria.MinVCPUs, criteria.MinRAM, criteria.MinDisk, criteria.RequiredStatus, criteria.MaxCPUUsage)
 
-    fmt.Printf("전체 VM 개수: %d (%s)\n", len(vms), dataType)
+    fmt.Printf("전체 VM 개수: %d\n", len(vms))
 
     // 1. 기본 필터링 및 모델 크기 기반 동적 체크
     var candidateVMs []VirtualMachine
@@ -317,7 +317,7 @@ func (s *VMSelectionService) selectOptimalVMCore(participant *models.Participant
         fmt.Printf("기본 필터링 후 후보: 0개 - 조건을 만족하는 VM이 없음\n")
         return &VMSelectionResult{
             SelectedVM:      nil,
-            SelectionReason: fmt.Sprintf("조건을 만족하는 VM을 찾을 수 없습니다 (%s)", dataType),
+            SelectionReason: fmt.Sprintf("조건을 만족하는 VM을 찾을 수 없습니다."),
             CandidateCount:  0,
         }, nil
     }
@@ -385,7 +385,7 @@ func (s *VMSelectionService) selectOptimalVMCore(participant *models.Participant
         fmt.Printf("사용률 필터링 후 후보: 0개 - 사용률 조건을 만족하는 VM이 없음\n")
         return &VMSelectionResult{
             SelectedVM:      nil,
-            SelectionReason: fmt.Sprintf("사용률 조건을 만족하는 VM을 찾을 수 없습니다 (%s)", dataType),
+            SelectionReason: fmt.Sprintf("사용률 조건을 만족하는 VM을 찾을 수 없습니다"),
             CandidateCount:  len(candidateVMs),
         }, nil
     }
@@ -397,7 +397,7 @@ func (s *VMSelectionService) selectOptimalVMCore(participant *models.Participant
 
     finalReason := reason
     if isMock {
-        finalReason = reason + " (Mock 데이터)"
+        finalReason = reason
     }
 
     fmt.Printf("최종 선택: %s\n", selectedUtilization.VM.Name)
