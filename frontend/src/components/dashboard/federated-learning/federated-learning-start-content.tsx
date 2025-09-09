@@ -119,9 +119,9 @@ const FederatedLearningStartContent = () => {
   // payload가 없으면 이전 페이지로 리다이렉트
   // 원치 않는다면 주석처리 => mock data가 보일 것임
   useEffect(() => {
-    if (!storePayload) {
-      router.replace("/dashboard/federated-learning");
-    }
+    // if (!storePayload) {
+    //   router.replace("/dashboard/federated-learning");
+    // }
   }, [storePayload, router]);
 
   const selectedOption = payload?.selectedOption;
@@ -488,41 +488,6 @@ const FederatedLearningStartContent = () => {
                     </div>
                   )
                 )}
-              </div>
-
-              {/* VM 통계 요약 */}
-              <div className="mt-6 p-4 bg-slate-50 rounded-lg border">
-                <h4 className="text-sm font-medium mb-3 flex items-center gap-2">
-                  <Server className="h-4 w-4 text-slate-600" />
-                  VM 리소스 요약
-                </h4>
-                <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
-                  <div className="text-center">
-                    <div className="text-lg font-semibold text-blue-600">
-                      {federatedLearningData?.participants?.length || 0}
-                    </div>
-                    <div className="text-muted-foreground">활성 VM</div>
-                  </div>
-                  <div className="text-center">
-                    <div className="text-lg font-semibold text-green-600">
-                      {(federatedLearningData?.participants?.length || 0) * 4}
-                    </div>
-                    <div className="text-muted-foreground">총 vCPU</div>
-                  </div>
-                  <div className="text-center">
-                    <div className="text-lg font-semibold text-orange-600">
-                      {(federatedLearningData?.participants?.length || 0) * 8}GB
-                    </div>
-                    <div className="text-muted-foreground">총 RAM</div>
-                  </div>
-                  <div className="text-center">
-                    <div className="text-lg font-semibold text-purple-600">
-                      {(federatedLearningData?.participants?.length || 0) * 40}
-                      GB
-                    </div>
-                    <div className="text-muted-foreground">총 디스크</div>
-                  </div>
-                </div>
               </div>
             </CardContent>
           </CollapsibleContent>
