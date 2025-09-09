@@ -22,6 +22,7 @@ export const useCreateJobForm = (participants: Participant[]) => {
         algorithm: FORM_DEFAULTS.ALGORITHM,
         rounds: FORM_DEFAULTS.ROUNDS,
         participants: [],
+        modelEvaluation: "",
       },
     });
   
@@ -45,6 +46,7 @@ export const useCreateJobForm = (participants: Participant[]) => {
           name: values.name,
           description: values.description || "",
           modelType: values.modelType,
+          modelEvaluation: values.modelEvaluation,
           algorithm: values.algorithm,
           rounds: values.rounds,
           participants: selectedParticipants,
@@ -56,6 +58,8 @@ export const useCreateJobForm = (participants: Participant[]) => {
           "federatedLearningData",
           JSON.stringify(federatedLearningData)
         );
+
+        sessionStorage.setItem(federatedLearningData.name, values.modelEvaluation);
   
         // 모델 파일이 있는 경우 별도 저장
         if (modelFile) {
