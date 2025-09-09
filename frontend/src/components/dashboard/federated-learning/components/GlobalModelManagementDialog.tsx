@@ -13,7 +13,7 @@ import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Settings, RefreshCw, Download, CheckCircle, Clock, XCircle, AlertTriangle, LetterText } from "lucide-react";
+import { Settings, RefreshCw, Download, CheckCircle, AlertTriangle } from "lucide-react";
 import { FederatedLearningJob } from "@/types/federated-learning";
 import { toast } from "sonner";
 
@@ -170,15 +170,15 @@ export const GlobalModelManagementDialog = ({
 		return `${process.env.NEXT_PUBLIC_API_URL}/api/federated-learning/${job.id}/models/round/${roundNumber}/download/${filename}`;
 	};
 
-	const getStatusIcon = (status: string) => {
+	const getStatusIcon = () => {
 		return <CheckCircle className="h-4 w-4 text-green-600" />;
 	};
 
-	const getStatusText = (status: string) => {
+	const getStatusText = () => {
 		return "완료";
 	};
 
-	const getStatusColor = (status: string) => {
+	const getStatusColor = () => {
 		return "bg-green-100 text-green-800";
 	};
 
@@ -381,10 +381,10 @@ export const GlobalModelManagementDialog = ({
 													<div className="flex items-center justify-between mb-3">
 														<div className="flex items-center gap-3">
 															<div className="font-semibold text-lg">라운드 {round.round}</div>
-															<Badge className={getStatusColor("completed")}>
+															<Badge className={getStatusColor()}>
 																<div className="flex items-center gap-1">
-																	{getStatusIcon("completed")}
-																	{getStatusText("completed")}
+																	{getStatusIcon()}
+																	{getStatusText()}
 																</div>
 															</Badge>
 														</div>
