@@ -164,19 +164,18 @@ const AggregatorDetails: React.FC<AggregatorDetailsProps> = ({
   };
 
   // SWR용 fetcher 함수
-  const fetcher = (url: string) => {
+  const fetcher = async (url: string) => {
     const token = getAuthToken();
-    return fetch(url, {
+    const r = await fetch(url, {
       headers: {
         "Content-Type": "application/json",
         Authorization: `Bearer ${token}`,
       },
-    }).then((r) => {
-      if (!r.ok) {
-        throw new Error(`HTTP error! status: ${r.status}`);
-      }
-      return r.json();
     });
+    if (!r.ok) {
+      throw new Error(`HTTP error! status: ${r.status}`);
+    }
+    return await r.json();
   };
 
   // MLflow 메트릭 차트 컴포넌트 (useSWR 사용)
