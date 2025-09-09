@@ -340,7 +340,7 @@ const AggregatorManagementContent: React.FC = () => {
       <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">총 Aggregator</CardTitle>
+            <CardTitle className="text-sm font-medium">총 집계자</CardTitle>
             <span className="h-4 w-4 text-muted-foreground">
               <Monitor className="h-4 w-4 text-muted-foreground" />
             </span>
@@ -406,7 +406,7 @@ const AggregatorManagementContent: React.FC = () => {
       {/* Aggregator 목록 */}
       <Card>
         <CardHeader>
-          <CardTitle>연합학습 집계자가 인스턴스</CardTitle>
+          <CardTitle>연합학습 집계자 인스턴스</CardTitle>
           <CardDescription>
             활성화된 연합학습 집계자 인스턴스 목록
           </CardDescription>
