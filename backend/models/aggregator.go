@@ -73,7 +73,7 @@ type TrainingRound struct {
 	CreatedAt         time.Time   `json:"created_at" gorm:"autoCreateTime"` // 삭제?
 
 	// Relationships
-	Aggregator *Aggregator `json:"aggregator,omitempty" gorm:"foreignKey:AggregatorID"`
+	Aggregator *Aggregator `json:"aggregator,omitempty" gorm:"foreignKey:AggregatorID;constraint:OnUpdate:CASCADE,OnDelete:CASCADE"`
 }
 
 type ModelMetric struct {
