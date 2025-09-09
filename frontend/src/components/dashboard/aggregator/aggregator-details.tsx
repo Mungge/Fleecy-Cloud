@@ -22,7 +22,14 @@ import {
 } from "@/components/ui/alert-dialog";
 import { Trash2 } from "lucide-react";
 import { toast } from "sonner";
-import { LineChart, Line, XAxis, YAxis, Tooltip, CartesianGrid } from "recharts";
+import {
+  LineChart,
+  Line,
+  XAxis,
+  YAxis,
+  Tooltip,
+  CartesianGrid,
+} from "recharts";
 import useSWR from "swr";
 
 // 시스템 메트릭 응답
@@ -127,7 +134,7 @@ const AggregatorDetails: React.FC<AggregatorDetailsProps> = ({
     precision: 0,
     recall: 0,
     participantsConnected: aggregator.participants,
-	runId: "",
+    runId: "",
   });
 
   const [trainingHistory, setTrainingHistory] = useState<
@@ -173,7 +180,10 @@ const AggregatorDetails: React.FC<AggregatorDetailsProps> = ({
   };
 
   // MLflow 메트릭 차트 컴포넌트 (useSWR 사용)
-  const MLflowMetricChart: React.FC<{ runId: string; metricKey: string }> = ({ runId, metricKey }) => {
+  const MLflowMetricChart: React.FC<{ runId: string; metricKey: string }> = ({
+    runId,
+    metricKey,
+  }) => {
     interface MetricData {
       step: number;
       value: number;
@@ -185,9 +195,11 @@ const AggregatorDetails: React.FC<AggregatorDetailsProps> = ({
 
     const [stableData, setStableData] = useState<StableData | null>(null);
     const { data, error, isLoading } = useSWR<StableData>(
-      runId ? `http://localhost:8080/api/aggregators/${aggregator.id}/metric-history?key=${metricKey}` : null,
+      runId
+        ? `http://localhost:8080/api/aggregators/${aggregator.id}/metric-history?key=${metricKey}`
+        : null,
       fetcher,
-      { 
+      {
         refreshInterval: 10000, // 10초로 늘림
         revalidateOnFocus: false,
         dedupingInterval: 5000, // 5초로 늘림
@@ -216,7 +228,9 @@ const AggregatorDetails: React.FC<AggregatorDetailsProps> = ({
     if (error && !stableData) {
       return (
         <div className="flex justify-center items-center h-64">
-          <div className="text-red-500 text-sm">차트 로드 실패: {error.message}</div>
+          <div className="text-red-500 text-sm">
+            차트 로드 실패: {error.message}
+          </div>
         </div>
       );
     }
@@ -250,7 +264,13 @@ const AggregatorDetails: React.FC<AggregatorDetailsProps> = ({
           <XAxis dataKey="step" />
           <YAxis />
           <Tooltip />
-          <Line type="monotone" dataKey="value" dot={false} stroke="#8884d8" strokeWidth={2} />
+          <Line
+            type="monotone"
+            dataKey="value"
+            dot={false}
+            stroke="#8884d8"
+            strokeWidth={2}
+          />
         </LineChart>
       </div>
     );
@@ -368,7 +388,7 @@ const AggregatorDetails: React.FC<AggregatorDetailsProps> = ({
         f1Score: data.f1_score || 0,
         precision: data.precision || 0,
         recall: data.recall || 0,
-		    runId: data.run_id,
+        runId: data.run_id,
       }));
     } catch (error) {
       console.error("학습 메트릭 조회 실패:", error);
@@ -699,11 +719,7 @@ const AggregatorDetails: React.FC<AggregatorDetailsProps> = ({
       <Card>
         <CardHeader>
           <CardTitle>시스템 메트릭</CardTitle>
-          <CardDescription>
-            실시간 시스템 리소스 사용량 (
-            {systemMetrics.source === "prometheus" ? "Prometheus" : "Database"}{" "}
-            기반)
-          </CardDescription>
+          <CardDescription>실시간 시스템 리소스 사용량</CardDescription>
         </CardHeader>
         <CardContent>
           <div className="space-y-6">
@@ -764,77 +780,84 @@ const AggregatorDetails: React.FC<AggregatorDetailsProps> = ({
         </CardContent>
       </Card>
 
-	  {/* MLflow 정보 및 차트 */}
-		{aggregator.mlflowExperimentName && (
-		<Card>
-			<CardHeader>
-				<CardTitle>MLflow 실험 및 메트릭</CardTitle>
-				<CardDescription>MLflow에서 추적되는 실험 정보 및 실시간 메트릭 차트</CardDescription>
-			</CardHeader>
-			<CardContent>
-				<div className="space-y-6">
-				{/* 기본 MLflow 정보 */}
-				<div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-					<div>
-					<p className="text-sm font-medium text-muted-foreground">실험 이름</p>
-					<p className="font-mono">{aggregator.mlflowExperimentName}</p>
-					</div>
-					{aggregator.mlflowExperimentId && (
-					<div>
-						<p className="text-sm font-medium text-muted-foreground">실험 ID</p>
-						<p className="font-mono">{aggregator.mlflowExperimentId}</p>
-					</div>
-					)}
-				</div>
+      {/* MLflow 정보 및 차트 */}
+      {aggregator.mlflowExperimentName && (
+        <Card>
+          <CardHeader>
+            <CardTitle>MLflow 실험 및 메트릭</CardTitle>
+            <CardDescription>
+              MLflow에서 추적되는 실험 정보 및 실시간 메트릭 차트
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-6">
+              {/* 기본 MLflow 정보 */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                  <p className="text-sm font-medium text-muted-foreground">
+                    실험 이름
+                  </p>
+                  <p className="font-mono">{aggregator.mlflowExperimentName}</p>
+                </div>
+                {aggregator.mlflowExperimentId && (
+                  <div>
+                    <p className="text-sm font-medium text-muted-foreground">
+                      실험 ID
+                    </p>
+                    <p className="font-mono">{aggregator.mlflowExperimentId}</p>
+                  </div>
+                )}
+              </div>
 
-				{/* MLflow 메트릭 차트 */}
-				{learningMetrics.runId ? (
-					<div className="space-y-4">
-					<h4 className="text-lg font-semibold">실시간 메트릭 차트</h4>
+              {/* MLflow 메트릭 차트 */}
+              {learningMetrics.runId ? (
+                <div className="space-y-4">
+                  <h4 className="text-lg font-semibold">실시간 메트릭 차트</h4>
 
-					{/* 추가 메트릭들 */}
-					<div className="grid grid-cols-1 lg:grid-cols-2 gap-4 mt-4">
-						<div className="border rounded-lg p-4">
-							<h5 className="text-md font-medium mb-2">정확도 변화</h5>
-							<MLflowMetricChart 
-							runId={learningMetrics.runId} 
-							metricKey="accuracy" 
-							/>
-						</div>
-						<div className="border rounded-lg p-4">
-							<h5 className="text-md font-medium mb-2">손실 변화</h5>
-							<MLflowMetricChart 
-							runId={learningMetrics.runId} 
-							metricKey="train_loss" 
-							/>
-						</div>
-						<div className="border rounded-lg p-4">
-						<h5 className="text-md font-medium mb-2">F1 Score</h5>
-						<MLflowMetricChart 
-							runId={learningMetrics.runId} 
-							metricKey="f1_macro" 
-						/>
-						</div>
-						<div className="border rounded-lg p-4">
-						<h5 className="text-md font-medium mb-2">Precision</h5>
-						<MLflowMetricChart 
-							runId={learningMetrics.runId} 
-							metricKey="precision_macro" 
-						/>
-						</div>
-					</div>
-					</div>
-				) : (
-					<div className="text-center py-8 text-muted-foreground">
-					<p>MLflow Run ID가 없어서 차트를 표시할 수 없습니다.</p>
-					<p className="text-sm mt-2">학습이 시작되면 차트가 표시됩니다.</p>
-					</div>
-				)}
-				</div>
-			</CardContent>
-			</Card>
-		)}
-
+                  {/* 추가 메트릭들 */}
+                  <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 mt-4">
+                    <div className="border rounded-lg p-4">
+                      <h5 className="text-md font-medium mb-2">정확도 변화</h5>
+                      <MLflowMetricChart
+                        runId={learningMetrics.runId}
+                        metricKey="accuracy"
+                      />
+                    </div>
+                    <div className="border rounded-lg p-4">
+                      <h5 className="text-md font-medium mb-2">손실 변화</h5>
+                      <MLflowMetricChart
+                        runId={learningMetrics.runId}
+                        metricKey="train_loss"
+                      />
+                    </div>
+                    <div className="border rounded-lg p-4">
+                      <h5 className="text-md font-medium mb-2">F1 Score</h5>
+                      <MLflowMetricChart
+                        runId={learningMetrics.runId}
+                        metricKey="f1_macro"
+                      />
+                    </div>
+                    <div className="border rounded-lg p-4">
+                      <h5 className="text-md font-medium mb-2">Precision</h5>
+                      <MLflowMetricChart
+                        runId={learningMetrics.runId}
+                        metricKey="precision_macro"
+                      />
+                    </div>
+                  </div>
+                </div>
+              ) : (
+                <div className="text-center py-8 text-muted-foreground">
+                  <p>MLflow Run ID가 없어서 차트를 표시할 수 없습니다.</p>
+                  <p className="text-sm mt-2">
+                    학습이 시작되면 차트가 표시됩니다.
+                  </p>
+                </div>
+              )}
+            </div>
+          </CardContent>
+        </Card>
+      )}
 
       {/* 비용 정보 */}
       {aggregator.cost && (
