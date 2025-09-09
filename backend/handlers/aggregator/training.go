@@ -348,6 +348,16 @@ func (h *MLflowHandler) GetTrainingHistory(c *gin.Context) {
 		}
 	}
 
+	if len(stepData) > 0 {
+		err = h.saveMetricsToDatabase(aggregatorID, latestRun.Info.RunID, stepData)
+		if err != nil {
+			log.Printf("GetTrainingHistory - 데이터베이스 저장 실패: %v", err)
+			// 저장 실패해도 조회는 계속 진행
+		} else {
+			log.Printf("GetTrainingHistory - 데이터베이스 저장 성공")
+		}
+	}
+
 	// 7. buildTrainingHistory 헬퍼 함수를 호출하여 최종 결과를 생성합니다.
 	trainingHistory := h.buildTrainingHistory(stepData, latestRun, aggregator)
 
@@ -357,6 +367,68 @@ func (h *MLflowHandler) GetTrainingHistory(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, trainingHistory)
+}
+
+// 4. GetTrainingHistory에서 데이터베이스 저장 로직
+func (h *MLflowHandler) saveMetricsToDatabase(aggregatorID, runID string, stepData map[int]map[string]interface{}) error {
+	log.Printf("데이터베이스에 메트릭 저장 시작 - Aggregator: %s, Run: %s", aggregatorID, runID)
+	
+	// 각 step(round)별로 데이터 저장
+	for step, metrics := range stepData {
+		// 시간 정보 추출
+		var startedAt time.Time
+		var completedAt *time.Time
+		if timestamp, ok := metrics["timestamp"].(int64); ok {
+			// MLflow timestamp를 time.Time으로 변환 (milliseconds)
+			t := time.Unix(timestamp/1000, (timestamp%1000)*1000000)
+			startedAt = t
+			completedAt = &t // 실제로는 다른 로직으로 계산할 수 있음
+		}
+		
+		// TrainingRound 구조체 생성
+		trainingRound := &models.TrainingRound{
+			AggregatorID:  aggregatorID,
+			Round:         step,  // MLflow의 step이 round에 해당
+			CreatedAt:     time.Now(),
+			StartedAt:     startedAt,
+			CompletedAt:   completedAt,
+		}
+		
+		// 메트릭 값들 설정
+		if accuracy, ok := metrics["accuracy"].(float64); ok {
+			trainingRound.ModelMetrics.Accuracy = &accuracy  // 동일한 값 또는 다른 로직
+		}
+		
+		if valLoss, ok := metrics["val_loss"].(float64); ok {
+			trainingRound.ModelMetrics.Loss = &valLoss
+		} else if trainLoss, ok := metrics["train_loss"].(float64); ok {
+			trainingRound.ModelMetrics.Loss = &trainLoss
+		}
+		
+		if precision, ok := metrics["precision_macro"].(float64); ok {
+			trainingRound.ModelMetrics.Precision = &precision
+		}
+		
+		if recall, ok := metrics["recall_macro"].(float64); ok {
+			trainingRound.ModelMetrics.Recall = &recall
+		}
+		
+		if f1, ok := metrics["f1_macro"].(float64); ok {
+			trainingRound.ModelMetrics.F1Score = &f1
+		}
+		
+		// 데이터베이스에 저장
+		err := h.aggregatorRepo.CreateTrainingRound(trainingRound)
+		if err != nil {
+			log.Printf("Round %d 저장 실패: %v", step, err)
+			continue
+		}
+		
+		log.Printf("Round %d 저장 성공 - Accuracy: %v, Loss: %v", step, trainingRound.ModelMetrics.Accuracy, trainingRound.ModelMetrics.Loss)
+	}
+	
+	log.Printf("전체 라운드 저장 완료 - 총 %d개 라운드", len(stepData))
+	return nil
 }
 
 // 실시간 메트릭 조회
@@ -576,6 +648,145 @@ func (h *MLflowHandler) GetSystemMetrics(c *gin.Context) {
 	go func() {
 		h.aggregatorRepo.UpdateAggregatorMetrics(aggregatorID, vmInfo.CPUUsage, vmInfo.MemoryUsage, networkUsagePercent)
 	}()
+}
+
+// GetSingleMetricHistory godoc
+// @Summary 특정 메트릭의 히스토리 조회
+// @Description MLflow에서 특정 메트릭의 시계열 데이터를 조회합니다.
+// @Tags aggregators
+// @Accept json
+// @Produce json
+// @Param id path string true "Aggregator ID"
+// @Param key query string true "Metric Key (예: accuracy, val_loss)"
+// @Success 200 {object} map[string]interface{}
+// @Failure 404 {object} map[string]string
+// @Failure 500 {object} map[string]string
+// @Router /api/aggregators/{id}/metric-history [get]
+func (h *MLflowHandler) GetSingleMetricHistory(c *gin.Context) {
+	// 사용자 인증 확인
+	userID, err := utils.GetUserIDFromContext(c)
+	if err != nil {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "인증이 필요합니다"})
+		return
+	}
+
+	aggregatorID := c.Param("id")
+	metricKey := c.Query("key")
+
+	if metricKey == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "메트릭 키가 필요합니다"})
+		return
+	}
+
+	// aggregator 조회 및 권한 확인
+	aggregator, err := h.aggregatorRepo.GetAggregatorByIDWithFederatedLearning(aggregatorID)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"error":   "Aggregator 조회 실패",
+			"details": err.Error(),
+		})
+		return
+	}
+
+	if aggregator == nil || aggregator.UserID != userID {
+		c.JSON(http.StatusNotFound, gin.H{"error": "Aggregator를 찾을 수 없습니다"})
+		return
+	}
+
+	// MLflow 클라이언트를 aggregator IP로 동적 생성 (기존 함수들과 동일한 방식)
+	var mlflowURL string
+	if aggregator.PublicIP != "" {
+		mlflowURL = fmt.Sprintf("http://%s:5000", aggregator.PublicIP)
+	} else {
+		aggregatorIP := os.Getenv("AGGREGATOR_IP")
+		if aggregatorIP == "" {
+			aggregatorIP = "localhost" // 개발용 기본값
+		}
+		mlflowURL = fmt.Sprintf("http://%s:5000", aggregatorIP)
+		log.Printf("GetMetricHistory - PublicIP가 없어서 환경변수/기본값 사용: %s", aggregatorIP)
+	}
+	
+	mlflowClient := NewMLflowClient(mlflowURL)
+	log.Printf("GetMetricHistory - Using MLflow URL: %s for aggregator: %s (PublicIP: %s)", mlflowURL, aggregatorID, aggregator.PublicIP)
+
+	// MLflow에서 실험 조회
+	experiments, err := mlflowClient.GetExperiments()
+	if err != nil {
+		log.Printf("MLflow 연결 실패: %v", err)
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"error":   "MLflow 실험 조회 실패",
+			"details": err.Error(),
+		})
+		return
+	}
+
+	// aggregator의 federated learning ID를 통해 실험 찾기
+	var experimentID string
+	var expectedExperimentName string
+	
+	if aggregator.FederatedLearning != nil {
+		expectedExperimentName = fmt.Sprintf("federated-learning-%s", aggregator.FederatedLearning.ID)
+		log.Printf("연결된 FederatedLearning ID: %s", aggregator.FederatedLearning.ID)
+	} else {
+		expectedExperimentName = fmt.Sprintf("federated-learning-%s", aggregatorID)
+		log.Printf("FederatedLearning 관계 없음, aggregator ID 사용: %s", aggregatorID)
+	}
+	
+	log.Printf("찾고 있는 실험명: %s", expectedExperimentName)
+	
+	for _, exp := range experiments {
+		if exp.Name == expectedExperimentName {
+			experimentID = exp.ExperimentID
+			log.Printf("GetMetricHistory - 매칭되는 연합학습 실험 '%s' 사용: %s", exp.Name, experimentID)
+			break
+		}
+	}
+
+	if experimentID == "" {
+		log.Printf("GetMetricHistory - 실험을 찾을 수 없음. 빈 배열 반환")
+		c.JSON(http.StatusOK, gin.H{"metrics": []interface{}{}})
+		return
+	}
+
+	// runs 조회
+	runs, err := mlflowClient.GetRuns(experimentID)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"error":   "MLflow runs 조회 실패",
+			"details": err.Error(),
+		})
+		return
+	}
+
+	if len(runs) == 0 {
+		c.JSON(http.StatusOK, gin.H{"metrics": []interface{}{}})
+		return
+	}
+
+	// 가장 최신 run을 찾습니다. (시작 시간 기준)
+	sort.Slice(runs, func(i, j int) bool {
+		return runs[i].Info.StartTime > runs[j].Info.StartTime
+	})
+	latestRun := &runs[0]
+
+	// 메트릭 히스토리 조회
+	history, err := mlflowClient.GetMetricHistory(latestRun.Info.RunID, metricKey)
+	if err != nil {
+		log.Printf("메트릭 '%s' 조회 실패: %v", metricKey, err)
+		// 에러가 발생해도 빈 배열 반환 (차트에서 "데이터 없음" 표시)
+		c.JSON(http.StatusOK, gin.H{
+			"metrics":    []interface{}{},
+			"run_id":     latestRun.Info.RunID,
+			"metric_key": metricKey,
+		})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"metrics":    history,
+		"run_id":     latestRun.Info.RunID,
+		"metric_key": metricKey,
+	})
 }
 
 // GetMLflowInfo godoc

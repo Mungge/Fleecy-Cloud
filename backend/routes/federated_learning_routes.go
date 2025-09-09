@@ -43,5 +43,8 @@ func SetupFederatedLearningRoutes(authorized *gin.RouterGroup, federatedLearning
 
 		// 특정 연합학습 작업 삭제
 		federated.DELETE("/:id", federatedLearningHandler.DeleteFederatedLearning)
+
+		// 최적의 글로벌 모델 다운로드
+		federated.GET("/:id/models/round/:round/download/:filename", federatedLearningHandler.DownloadGlobalModel)
 	}
 }

@@ -4,11 +4,17 @@ import (
 	"bytes"
 	_ "embed"
 	"encoding/json"
+	"encoding/base64"
 	"fmt"
 	"io"
 	"net/http"
 	"strings"
 	"time"
+
+	"regexp"
+    "strconv"
+    "path/filepath"
+    "os"
 
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
@@ -224,6 +230,576 @@ func (h *FederatedLearningHandler) DeleteFederatedLearning(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, gin.H{"message": "연합학습 작업이 삭제되었습니다"})
+}
+
+// GetGlobalModels는 연합학습의 글로벌 모델 정보를 조회합니다
+func (h *FederatedLearningHandler) GetGlobalModels(c *gin.Context) {
+	userID := utils.GetUserIDFromMiddleware(c)
+	id := c.Param("id")
+
+	fmt.Printf("=== 글로벌 모델 조회 요청 시작 ===\n")
+	fmt.Printf("사용자 ID: %d, 연합학습 ID: %s\n", userID, id)
+
+	// 연합학습 조회
+	fl, err := h.repo.GetByID(id)
+	if err != nil {
+		fmt.Printf("연합학습 조회 실패: %v\n", err)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "연합학습 작업 조회에 실패했습니다"})
+		return
+	}
+	if fl == nil {
+		fmt.Printf("연합학습을 찾을 수 없음: %s\n", id)
+		c.JSON(http.StatusNotFound, gin.H{"error": "연합학습 작업을 찾을 수 없습니다"})
+		return
+	}
+
+	// 권한 확인
+	if fl.UserID != userID {
+		fmt.Printf("권한 없음 - 요청자: %d, 소유자: %d\n", userID, fl.UserID)
+		c.JSON(http.StatusForbidden, gin.H{"error": "해당 연합학습 작업에 접근할 권한이 없습니다"})
+		return
+	}
+
+	// 집계자 정보 확인
+	if fl.AggregatorID == nil {
+		fmt.Printf("집계자가 설정되지 않음\n")
+		c.JSON(http.StatusBadRequest, gin.H{"error": "집계자가 설정되지 않았습니다"})
+		return
+	}
+
+	fmt.Printf("글로벌 모델 데이터 조회 시작 - FL ID: %s, Aggregator ID: %s\n", fl.ID, *fl.AggregatorID)
+
+	// 글로벌 모델 데이터 조회
+	globalModelData, err := h.getGlobalModelData(fl)
+	if err != nil {
+		fmt.Printf("글로벌 모델 데이터 조회 실패: %v\n", err)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": fmt.Sprintf("글로벌 모델 데이터 조회 실패: %v", err)})
+		return
+	}
+
+	fmt.Printf("글로벌 모델 데이터 조회 성공\n")
+	c.JSON(http.StatusOK, gin.H{"data": globalModelData})
+}
+
+// getGlobalModelData는 연합학습의 글로벌 모델 데이터를 조회합니다
+func (h *FederatedLearningHandler) getGlobalModelData(fl *models.FederatedLearning) (map[string]interface{}, error) {
+	fmt.Printf("📊 글로벌 모델 데이터 조회 시작\n")
+
+	// 1. 집계자 정보 조회
+	aggregator, err := h.aggregatorRepo.GetAggregatorByID(*fl.AggregatorID)
+	if err != nil {
+		return nil, fmt.Errorf("집계자 조회 실패: %v", err)
+	}
+	if aggregator == nil {
+		return nil, fmt.Errorf("집계자를 찾을 수 없습니다")
+	}
+
+	fmt.Printf("✅ 집계자 조회 성공 - Name: %s, IP: %s\n", aggregator.Name, aggregator.PublicIP)
+
+	// 2. 저장된 학습 라운드 조회 (DB에서)
+	trainingRounds, err := h.aggregatorRepo.GetTrainingRoundsByAggregatorID(*fl.AggregatorID)
+	if err != nil {
+		return nil, fmt.Errorf("학습 라운드 조회 실패: %v", err)
+	}
+
+	fmt.Printf("📈 저장된 학습 라운드 수: %d개\n", len(trainingRounds))
+
+	// 3. SSH를 통해 모델 파일 정보 조회
+	modelFileInfo, err := h.getModelFileInfoFromAggregator(aggregator, fl)
+	if err != nil {
+		fmt.Printf("⚠️ 모델 파일 정보 조회 실패 (계속 진행): %v\n", err)
+		// 모델 파일 정보가 없어도 계속 진행
+		modelFileInfo = make(map[int]map[string]interface{})
+	}
+
+	// 4. 라운드별 글로벌 모델 정보 구성
+	var rounds []map[string]interface{}
+	var bestModel map[string]interface{}
+	bestAccuracy := 0.0
+
+	for _, round := range trainingRounds {
+		roundData := map[string]interface{}{
+			"round":            round.Round,
+			"status":           getModelRoundStatus(*round),
+			"participantCount": round.ParticipantsCount,
+			"metrics": map[string]interface{}{
+				"accuracy":  getFloatValue(round.ModelMetrics.Accuracy),
+				"loss":      getFloatValue(round.ModelMetrics.Loss),
+				"f1Score":   getFloatValue(round.ModelMetrics.F1Score),
+				"precision": getFloatValue(round.ModelMetrics.Precision),
+				"recall":    getFloatValue(round.ModelMetrics.Recall),
+			},
+			"aggregationAlgorithm": fl.Algorithm,
+		}
+
+		// 완료 시간 설정
+		if round.CompletedAt != nil {
+			roundData["completedAt"] = round.CompletedAt.Format(time.RFC3339)
+		}
+
+		// 집계 시간 계산
+		if round.CompletedAt != nil {
+			duration := round.CompletedAt.Sub(round.StartedAt)
+			aggregationTime := int(duration.Seconds())
+			roundData["aggregationTime"] = aggregationTime
+		}
+
+		// 모델 파일 정보 추가
+		if fileInfo, exists := modelFileInfo[round.Round]; exists {
+			roundData["modelInfo"] = fileInfo
+		} else {
+			roundData["modelInfo"] = map[string]interface{}{
+				"filePath":    nil,
+				"fileSize":    nil,
+				"checksum":    nil,
+				"downloadUrl": nil,
+			}
+		}
+
+		rounds = append(rounds, roundData)
+
+		// 최고 성능 모델 추적
+		if round.ModelMetrics.Accuracy != nil && *round.ModelMetrics.Accuracy > bestAccuracy {
+			bestAccuracy = *round.ModelMetrics.Accuracy
+			bestModel = map[string]interface{}{
+				"round":    round.Round,
+				"accuracy": *round.ModelMetrics.Accuracy,
+			}
+			if fileInfo, exists := modelFileInfo[round.Round]; exists {
+				if downloadUrl, ok := fileInfo["downloadUrl"]; ok && downloadUrl != nil {
+					bestModel["downloadUrl"] = downloadUrl
+				}
+			}
+		}
+	}
+
+	// 5. MLflow에서 추가 메트릭 조회 (선택사항)
+	mlflowMetrics, err := h.getMLflowGlobalModelMetrics(aggregator, fl)
+	if err != nil {
+		fmt.Printf("⚠️ MLflow 메트릭 조회 실패 (계속 진행): %v\n", err)
+		mlflowMetrics = nil
+	}
+
+	// 6. 응답 데이터 구성
+	response := map[string]interface{}{
+		"federatedLearningId": fl.ID,
+		"totalRounds":         fl.Rounds,
+		"completedRounds":     len(trainingRounds),
+		"currentStatus":       fl.Status,
+		"rounds":              rounds,
+	}
+
+	if bestModel != nil {
+		response["bestModel"] = bestModel
+	}
+
+	if mlflowMetrics != nil {
+		response["mlflowMetrics"] = mlflowMetrics
+	}
+
+	fmt.Printf("🎉 글로벌 모델 데이터 구성 완료 - 총 %d개 라운드\n", len(rounds))
+	return response, nil
+}
+
+// getModelFileInfoFromAggregator는 SSH를 통해 집계자에서 모델 파일 정보를 조회합니다
+func (h *FederatedLearningHandler) getModelFileInfoFromAggregator(aggregator *models.Aggregator, fl *models.FederatedLearning) (map[int]map[string]interface{}, error) {
+	fmt.Printf("📁 모델 파일 정보 조회 시작\n")
+
+	// SSH 키페어 조회
+	keypairWithPrivateKey, err := h.sshKeypairService.GetKeypairWithPrivateKey(aggregator.ID)
+	if err != nil {
+		return nil, fmt.Errorf("SSH 키페어 조회 실패: %v", err)
+	}
+
+	// SSH 클라이언트 생성
+	sshClient := utils.NewSSHClient(
+		aggregator.PublicIP,
+		"22",
+		"ubuntu",
+		keypairWithPrivateKey.PrivateKey,
+	)
+
+	// SSH 연결 테스트
+	if err := sshClient.CheckConnection(); err != nil {
+		return nil, fmt.Errorf("SSH 연결 실패: %v", err)
+	}
+
+	// 작업 디렉토리 경로
+	workDir := fmt.Sprintf("/home/ubuntu/fl-aggregator-%s", fl.ID)
+
+	// 모델 파일이 저장되는 디렉토리 확인 (mlruns 등)
+	modelDirs := []string{
+		fmt.Sprintf("%s/mlruns", workDir),
+		fmt.Sprintf("%s/models", workDir),
+		fmt.Sprintf("%s/checkpoints", workDir),
+	}
+
+	modelFileInfo := make(map[int]map[string]interface{})
+
+	for _, modelDir := range modelDirs {
+		// 디렉토리 존재 확인
+		_, _, err := sshClient.ExecuteCommand(fmt.Sprintf("ls -la %s", modelDir))
+		if err != nil {
+			continue // 디렉토리가 없으면 다음으로
+		}
+
+		// 모델 파일 검색 (일반적인 모델 파일 확장자들)
+		findCmd := fmt.Sprintf("find %s -name '*.pkl' -o -name '*.pth' -o -name '*.h5' -o -name '*.model' | head -20", modelDir)
+		output, _, err := sshClient.ExecuteCommand(findCmd)
+		if err != nil {
+			continue
+		}
+
+		if len(strings.TrimSpace(output)) == 0 {
+			continue
+		}
+
+		// 파일 목록 파싱
+		files := strings.Split(strings.TrimSpace(output), "\n")
+		for _, filePath := range files {
+			if len(strings.TrimSpace(filePath)) == 0 {
+				continue
+			}
+
+			// 파일 정보 조회
+			fileInfo, round := h.parseModelFileInfo(sshClient, strings.TrimSpace(filePath), fl.ID)
+			if fileInfo != nil && round > 0 {
+				modelFileInfo[round] = fileInfo
+			}
+		}
+	}
+
+	fmt.Printf("📁 모델 파일 정보 조회 완료 - %d개 라운드의 파일 발견\n", len(modelFileInfo))
+	return modelFileInfo, nil
+}
+
+// parseModelFileInfo는 개별 모델 파일의 정보를 파싱합니다
+func (h *FederatedLearningHandler) parseModelFileInfo(sshClient *utils.SSHClient, filePath, flID string) (map[string]interface{}, int) {
+	// 파일 크기 조회
+	sizeCmd := fmt.Sprintf("stat -c%%s %s", filePath)
+	sizeOutput, _, err := sshClient.ExecuteCommand(sizeCmd)
+	if err != nil {
+		return nil, 0
+	}
+
+	fileSize := int64(0)
+	if size := strings.TrimSpace(sizeOutput); size != "" {
+		if parsedSize, err := strconv.ParseInt(size, 10, 64); err == nil {
+			fileSize = parsedSize
+		}
+	}
+
+	// 체크섬 계산 (md5sum)
+	checksumCmd := fmt.Sprintf("md5sum %s | cut -d' ' -f1", filePath)
+	checksumOutput, _, err := sshClient.ExecuteCommand(checksumCmd)
+	checksum := ""
+	if err == nil {
+		checksum = strings.TrimSpace(checksumOutput)
+	}
+
+	// 파일명에서 라운드 번호 추출 시도
+	round := extractRoundFromFilePath(filePath)
+	if round == 0 {
+		// 파일명에서 라운드를 추출할 수 없으면 스킵
+		return nil, 0
+	}
+
+	// 다운로드 URL 생성 (실제 구현에서는 파일 서버나 서명된 URL 사용)
+	downloadURL := h.generateModelDownloadURL(flID, round, filepath.Base(filePath))
+
+	fileInfo := map[string]interface{}{
+		"filePath":    filePath,
+		"fileSize":    fileSize,
+		"checksum":    checksum,
+		"downloadUrl": downloadURL,
+	}
+
+	return fileInfo, round
+}
+
+// extractRoundFromFilePath는 파일 경로에서 라운드 번호를 추출합니다
+func extractRoundFromFilePath(filePath string) int {
+	// 일반적인 패턴들: round_1.pkl, model_round_5.pth, checkpoint_round_10.model 등
+	patterns := []string{
+		`round[_-](\d+)`,
+		`(\d+)[_-]round`,
+		`checkpoint[_-](\d+)`,
+		`model[_-](\d+)`,
+	}
+
+	for _, pattern := range patterns {
+		re := regexp.MustCompile(pattern)
+		matches := re.FindStringSubmatch(strings.ToLower(filePath))
+		if len(matches) > 1 {
+			if round, err := strconv.Atoi(matches[1]); err == nil {
+				return round
+			}
+		}
+	}
+
+	return 0
+}
+
+// generateModelDownloadURL은 모델 다운로드 URL을 생성합니다
+func (h *FederatedLearningHandler) generateModelDownloadURL(flID string, round int, fileName string) string {
+	// 실제 구현에서는 보안이 적용된 다운로드 URL을 생성해야 합니다
+	// 예: 서명된 URL, 임시 토큰 등
+	baseURL := os.Getenv("API_BASE_URL")
+	if baseURL == "" {
+		baseURL = "http://localhost:8080"
+	}
+	return fmt.Sprintf("%s/api/federated-learning/%s/models/round/%d/download/%s", baseURL, flID, round, fileName)
+}
+
+// getMLflowGlobalModelMetrics는 MLflow에서 글로벌 모델 관련 추가 메트릭을 조회합니다
+func (h *FederatedLearningHandler) getMLflowGlobalModelMetrics(aggregator *models.Aggregator, fl *models.FederatedLearning) (map[string]interface{}, error) {
+	mlflowBaseURL := fmt.Sprintf("http://%s:5000", aggregator.PublicIP)
+	experimentName := fmt.Sprintf("federated-learning-%s", fl.ID)
+
+	// 간단한 MLflow 연결 테스트
+	client := &http.Client{Timeout: 10 * time.Second}
+	testURL := fmt.Sprintf("%s/health", mlflowBaseURL)
+	
+	resp, err := client.Get(testURL)
+	if err != nil {
+		return nil, fmt.Errorf("MLflow 서버에 연결할 수 없습니다: %v", err)
+	}
+	resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("MLflow 서버가 정상적으로 응답하지 않습니다")
+	}
+
+	// 기본적인 실험 정보 반환
+	return map[string]interface{}{
+		"mlflowURL":      mlflowBaseURL,
+		"experimentName": experimentName,
+		"accessible":     true,
+		"lastChecked":    time.Now().Format(time.RFC3339),
+	}, nil
+}
+
+// getModelRoundStatus는 TrainingRound의 상태를 판단합니다
+func getModelRoundStatus(round models.TrainingRound) string {
+	if round.CompletedAt != nil {
+		return "completed"
+	}
+	// 시작 시간이 있지만 완료 시간이 없으면 진행중 또는 실패로 판단
+	if time.Since(round.StartedAt) > 30*time.Minute {
+		return "failed" // 30분 이상 지났는데 완료되지 않으면 실패로 간주
+	}
+	return "in_progress"
+}
+
+// getFloatValue는 float64 포인터에서 안전하게 값을 추출합니다
+func getFloatValue(ptr *float64) float64 {
+	if ptr != nil {
+		return *ptr
+	}
+	return 0.0
+}
+
+// DownloadGlobalModel은 특정 라운드의 글로벌 모델 파일을 다운로드합니다
+func (h *FederatedLearningHandler) DownloadGlobalModel(c *gin.Context) {
+	userID := utils.GetUserIDFromMiddleware(c)
+	
+	// 경로 매개변수 추출
+	flID := c.Param("id")
+	roundStr := c.Param("round")
+	filename := c.Param("filename")
+
+	fmt.Printf("=== 글로벌 모델 다운로드 요청 ===\n")
+	fmt.Printf("FL ID: %s, Round: %s, Filename: %s\n", flID, roundStr, filename)
+
+	// 라운드 번호 파싱
+	round, err := strconv.Atoi(roundStr)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "잘못된 라운드 번호입니다"})
+		return
+	}
+
+	// 연합학습 조회 및 권한 확인
+	fl, err := h.repo.GetByID(flID)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "연합학습 작업 조회에 실패했습니다"})
+		return
+	}
+	if fl == nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "연합학습 작업을 찾을 수 없습니다"})
+		return
+	}
+	if fl.UserID != userID {
+		c.JSON(http.StatusForbidden, gin.H{"error": "해당 연합학습 작업에 접근할 권한이 없습니다"})
+		return
+	}
+
+	// 집계자 정보 확인
+	if fl.AggregatorID == nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "집계자가 설정되지 않았습니다"})
+		return
+	}
+
+	aggregator, err := h.aggregatorRepo.GetAggregatorByID(*fl.AggregatorID)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "집계자 조회에 실패했습니다"})
+		return
+	}
+	if aggregator == nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "집계자를 찾을 수 없습니다"})
+		return
+	}
+
+	// 모델 파일 다운로드
+	err = h.downloadModelFileFromAggregator(c, aggregator, fl, round, filename)
+	if err != nil {
+		fmt.Printf("모델 파일 다운로드 실패: %v\n", err)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": fmt.Sprintf("모델 파일 다운로드 실패: %v", err)})
+		return
+	}
+}
+
+// downloadModelFileFromAggregator는 SSH를 통해 집계자에서 모델 파일을 다운로드합니다
+func (h *FederatedLearningHandler) downloadModelFileFromAggregator(c *gin.Context, aggregator *models.Aggregator, fl *models.FederatedLearning, round int, filename string) error {
+	fmt.Printf("📁 모델 파일 다운로드 시작 - Round: %d, File: %s\n", round, filename)
+
+	// SSH 키페어 조회
+	keypairWithPrivateKey, err := h.sshKeypairService.GetKeypairWithPrivateKey(aggregator.ID)
+	if err != nil {
+		return fmt.Errorf("SSH 키페어 조회 실패: %v", err)
+	}
+
+	// SSH 클라이언트 생성
+	sshClient := utils.NewSSHClient(
+		aggregator.PublicIP,
+		"22",
+		"ubuntu",
+		keypairWithPrivateKey.PrivateKey,
+	)
+
+	// SSH 연결 테스트
+	if err := sshClient.CheckConnection(); err != nil {
+		return fmt.Errorf("SSH 연결 실패: %v", err)
+	}
+
+	// 모델 파일 경로 찾기
+	workDir := fmt.Sprintf("/home/ubuntu/fl-aggregator-%s", fl.ID)
+	modelFilePath, err := h.findModelFilePath(sshClient, workDir, round, filename)
+	if err != nil {
+		return fmt.Errorf("모델 파일을 찾을 수 없습니다: %v", err)
+	}
+
+	fmt.Printf("✅ 모델 파일 경로 발견: %s\n", modelFilePath)
+
+	// 파일 존재 여부 확인
+	_, _, err = sshClient.ExecuteCommand(fmt.Sprintf("test -f %s", modelFilePath))
+	if err != nil {
+		return fmt.Errorf("모델 파일이 존재하지 않습니다: %s", modelFilePath)
+	}
+
+	// 파일 크기 조회
+	sizeOutput, _, err := sshClient.ExecuteCommand(fmt.Sprintf("stat -c%%s %s", modelFilePath))
+	if err != nil {
+		return fmt.Errorf("파일 크기 조회 실패: %v", err)
+	}
+	
+	fileSize, err := strconv.ParseInt(strings.TrimSpace(sizeOutput), 10, 64)
+	if err != nil {
+		fileSize = 0
+	}
+
+	// 파일 다운로드를 위한 임시 파일 생성
+	tempFile, err := h.downloadFileViaSSH(sshClient, modelFilePath)
+	if err != nil {
+		return fmt.Errorf("파일 다운로드 실패: %v", err)
+	}
+	defer func() {
+		tempFile.Close()
+		os.Remove(tempFile.Name())
+	}()
+
+	// HTTP 응답 헤더 설정
+	c.Header("Content-Disposition", fmt.Sprintf("attachment; filename=\"%s\"", filename))
+	c.Header("Content-Type", "application/octet-stream")
+	c.Header("Content-Length", fmt.Sprintf("%d", fileSize))
+	c.Header("Cache-Control", "no-cache")
+
+	// 파일 내용을 HTTP 응답으로 스트리밍
+	tempFile.Seek(0, 0) // 파일 포인터를 처음으로 이동
+	_, err = io.Copy(c.Writer, tempFile)
+	if err != nil {
+		return fmt.Errorf("파일 전송 실패: %v", err)
+	}
+
+	fmt.Printf("✅ 모델 파일 다운로드 완료: %s (%d bytes)\n", filename, fileSize)
+	return nil
+}
+
+// findModelFilePath는 지정된 라운드와 파일명에 해당하는 모델 파일 경로를 찾습니다
+func (h *FederatedLearningHandler) findModelFilePath(sshClient *utils.SSHClient, workDir string, round int, filename string) (string, error) {
+	// 가능한 디렉토리들
+	searchDirs := []string{
+		fmt.Sprintf("%s/mlruns", workDir),
+		fmt.Sprintf("%s/models", workDir),
+		fmt.Sprintf("%s/checkpoints", workDir),
+		workDir,
+	}
+
+	// 각 디렉토리에서 파일 검색
+	for _, dir := range searchDirs {
+		// 정확한 파일명 매치
+		exactPath := fmt.Sprintf("%s/%s", dir, filename)
+		_, _, err := sshClient.ExecuteCommand(fmt.Sprintf("test -f %s", exactPath))
+		if err == nil {
+			return exactPath, nil
+		}
+
+		// 라운드 번호가 포함된 패턴으로 검색
+		patterns := []string{
+			fmt.Sprintf("*round*%d*%s*", round, filename),
+			fmt.Sprintf("*%d*%s*", round, filename),
+			fmt.Sprintf("*round_%d*", round),
+			fmt.Sprintf("*round-%d*", round),
+		}
+
+		for _, pattern := range patterns {
+			findCmd := fmt.Sprintf("find %s -name '%s' -type f | head -1", dir, pattern)
+			output, _, err := sshClient.ExecuteCommand(findCmd)
+			if err == nil && len(strings.TrimSpace(output)) > 0 {
+				return strings.TrimSpace(output), nil
+			}
+		}
+	}
+
+	return "", fmt.Errorf("파일을 찾을 수 없습니다: %s (라운드 %d)", filename, round)
+}
+
+// downloadFileViaSSH는 SSH를 통해 원격 파일을 로컬 임시 파일로 다운로드합니다
+func (h *FederatedLearningHandler) downloadFileViaSSH(sshClient *utils.SSHClient, remotePath string) (*os.File, error) {
+	// 임시 파일 생성
+	tempFile, err := os.CreateTemp("", "model_download_*")
+	if err != nil {
+		return nil, fmt.Errorf("임시 파일 생성 실패: %v", err)
+	}
+
+	// base64로 인코딩하여 안전하게 바이너리 파일 전송
+	base64Cmd := fmt.Sprintf("base64 %s", remotePath)
+	base64Content, _, err := sshClient.ExecuteCommand(base64Cmd)
+	if err != nil {
+		tempFile.Close()
+		os.Remove(tempFile.Name())
+		return nil, fmt.Errorf("파일 인코딩 실패: %v", err)
+	}
+
+	// base64 디코딩
+	decoder := base64.NewDecoder(base64.StdEncoding, strings.NewReader(base64Content))
+	_, err = io.Copy(tempFile, decoder)
+	if err != nil {
+		tempFile.Close()
+		os.Remove(tempFile.Name())
+		return nil, fmt.Errorf("파일 디코딩 실패: %v", err)
+	}
+
+	return tempFile, nil
 }
 
 // CreateFederatedLearning godoc

@@ -4,6 +4,7 @@ import (
 	"github.com/Mungge/Fleecy-Cloud/models"
 	"github.com/google/uuid"
 	"gorm.io/gorm"
+	"errors"
 )
 
 type AggregatorRepository struct {
@@ -108,8 +109,21 @@ func (r *AggregatorRepository) DeleteAggregator(id string) error {
 
 // Training Round 관련 메서드들
 func (r *AggregatorRepository) CreateTrainingRound(round *models.TrainingRound) error {
-	round.ID = uuid.New().String()
-	return r.db.Create(round).Error
+	var existing models.TrainingRound
+    err := r.db.Where("aggregator_id = ? AND round = ?", round.AggregatorID, round.Round).
+        First(&existing).Error
+
+	if errors.Is(err, gorm.ErrRecordNotFound) {
+		// 새로 생성
+		round.ID = uuid.New().String()
+		return r.db.Create(round).Error
+	} else if err != nil {
+		return err
+	}
+	
+	// 기존 데이터 업데이트
+	round.ID = existing.ID
+	return r.db.Save(round).Error
 }
 
 func (r *AggregatorRepository) GetTrainingRoundsByAggregatorID(aggregatorID string) ([]*models.TrainingRound, error) {
