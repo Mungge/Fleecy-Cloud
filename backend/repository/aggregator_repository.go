@@ -1,10 +1,11 @@
 package repository
 
 import (
+	"errors"
+
 	"github.com/Mungge/Fleecy-Cloud/models"
 	"github.com/google/uuid"
 	"gorm.io/gorm"
-	"errors"
 )
 
 type AggregatorRepository struct {
@@ -104,7 +105,31 @@ func (r *AggregatorRepository) UpdateAggregatorProgress(id string, currentRound 
 }
 
 func (r *AggregatorRepository) DeleteAggregator(id string) error {
-	return r.db.Delete(&models.Aggregator{}, "id = ?", id).Error
+	// 트랜잭션 시작
+	tx := r.db.Begin()
+	if tx.Error != nil {
+		return tx.Error
+	}
+	defer func() {
+		if r := recover(); r != nil {
+			tx.Rollback()
+		}
+	}()
+
+	// 1. 먼저 관련된 training_rounds 삭제
+	if err := tx.Where("aggregator_id = ?", id).Delete(&models.TrainingRound{}).Error; err != nil {
+		tx.Rollback()
+		return err
+	}
+
+	// 2. 그 다음 aggregator 삭제
+	if err := tx.Delete(&models.Aggregator{}, "id = ?", id).Error; err != nil {
+		tx.Rollback()
+		return err
+	}
+
+	// 트랜잭션 커밋
+	return tx.Commit().Error
 }
 
 // Training Round 관련 메서드들
