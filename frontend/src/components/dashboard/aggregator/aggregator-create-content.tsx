@@ -113,6 +113,7 @@ const AggregatorCreateContent = () => {
         region: option.region,
         instanceType: option.instanceType,
         memory: option.memory,
+        estimatedCost: option.estimatedMonthlyCost,
       },
       selectedOption: option,
     });
