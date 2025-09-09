@@ -78,6 +78,7 @@ export interface AggregatorConfig {
   instanceType: string;
   memory: number;
   projectId?: string; // GCP용 프로젝트 ID (선택적)
+  estimatedCost: number;
 }
 
 // 연합학습 데이터 타입 정의 (실제 API 구조에 맞게 수정)
@@ -116,6 +117,7 @@ export interface CreateAggregatorRequest {
   instanceType: string;
   cloudProvider: string; // "aws" | "gcp"
   projectId?: string; // GCP용 프로젝트 ID (선택적)
+  estimatedCost: string;
 }
 
 // Aggregator 생성 응답 타입
@@ -185,6 +187,7 @@ export const createAggregator = async (
       instanceType: aggregatorConfig.instanceType,
       cloudProvider: aggregatorConfig.cloudProvider || "aws", // 기본값 AWS
       projectId: aggregatorConfig.projectId, // GCP용
+      estimatedCost: String(aggregatorConfig.estimatedCost),
     };
 
     const response = await fetch(`${API_URL}/api/aggregators`, {
