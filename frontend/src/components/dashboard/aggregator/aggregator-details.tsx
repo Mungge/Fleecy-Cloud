@@ -174,8 +174,17 @@ const AggregatorDetails: React.FC<AggregatorDetailsProps> = ({
 
   // MLflow 메트릭 차트 컴포넌트 (useSWR 사용)
   const MLflowMetricChart: React.FC<{ runId: string; metricKey: string }> = ({ runId, metricKey }) => {
-    const [stableData, setStableData] = useState<any>(null);
-    const { data, error, isLoading } = useSWR(
+    interface MetricData {
+      step: number;
+      value: number;
+    }
+
+    interface StableData {
+      metrics: MetricData[];
+    }
+
+    const [stableData, setStableData] = useState<StableData | null>(null);
+    const { data, error, isLoading } = useSWR<StableData>(
       runId ? `http://localhost:8080/api/aggregators/${aggregator.id}/metric-history?key=${metricKey}` : null,
       fetcher,
       { 
@@ -213,7 +222,6 @@ const AggregatorDetails: React.FC<AggregatorDetailsProps> = ({
     }
 
     const currentData = stableData || data;
-
     if (!currentData) {
       return (
         <div className="flex justify-center items-center h-64">
@@ -222,7 +230,7 @@ const AggregatorDetails: React.FC<AggregatorDetailsProps> = ({
       );
     }
 
-    const points = (currentData?.metrics ?? []).map((m: any) => ({
+    const points = (currentData?.metrics ?? []).map((m: MetricData) => ({
       step: m.step,
       value: m.value,
     }));
