@@ -10,7 +10,6 @@ import {
   Network,
   Menu,
   Merge,
-  Globe,
   Users,
 } from "lucide-react";
 
@@ -51,11 +50,6 @@ export default function Sidebar({
       label: "연합학습",
       icon: Network,
       href: "/dashboard/federated-learning",
-    },
-    {
-      label: "글로벌 모델",
-      icon: Globe,
-      href: "/dashboard/global-models",
     },
   ];
 
