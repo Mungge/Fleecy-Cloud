@@ -10,7 +10,6 @@ import {
   Network,
   Menu,
   Merge,
-  Globe,
   Users,
 } from "lucide-react";
 
