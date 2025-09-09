@@ -7,11 +7,13 @@ import {
 	CardTitle,
 } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { FileText } from "lucide-react";
+import { FileText, Settings } from "lucide-react";
 import { StatusBadge } from "./StatusBadge";
 import { FederatedLearningLogsDialog } from "./FederatedLearningLogsDialog";
+import { GlobalModelManagementDialog } from "./GlobalModelManagementDialog";
 import { FederatedLearningJob } from "@/types/federated-learning";
 import { AGGREGATION_ALGORITHMS, MODEL_TYPES } from "../constants";
+
 
 interface FederatedLearningDetailProps {
 	selectedJob: FederatedLearningJob | null;
@@ -139,6 +141,13 @@ export const FederatedLearningDetail = ({
 								로그 확인
 							</Button>
 						</FederatedLearningLogsDialog>
+
+						<GlobalModelManagementDialog job={selectedJob}>
+							<Button className="w-full" variant="outline">
+								<Settings className="h-4 w-4 mr-2" />
+								글로벌 모델 관리
+							</Button>
+						</GlobalModelManagementDialog>
 					</div>
 				)}
 			</CardContent>
