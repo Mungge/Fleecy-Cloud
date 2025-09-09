@@ -116,12 +116,12 @@ const FederatedLearningStartContent = () => {
   const [selectedParticipant, setSelectedParticipant] =
     useState<Participant | null>(null);
 
-  // payload가 없으면 이전 페이지로 리다이렉트 (mock data로 인해 실행되지 않음)
+  // payload가 없으면 이전 페이지로 리다이렉트
+  // 원치 않는다면 주석처리 => mock data가 보일 것임
   useEffect(() => {
-    // mock 데이터가 있으므로 리다이렉트 하지 않음
-    // if (!storePayload) {
-    // 	router.replace("/dashboard/federated-learning");
-    // }
+    if (!storePayload) {
+      router.replace("/dashboard/federated-learning");
+    }
   }, [storePayload, router]);
 
   const selectedOption = payload?.selectedOption;
@@ -216,15 +216,15 @@ const FederatedLearningStartContent = () => {
     }
   };
 
-  // mock 데이터로 인해 항상 payload가 존재하므로 로딩 화면이 표시되지 않음
-  // if (!payload || !selectedOption || !federatedLearningData) {
-  // 	return (
-  // 		<div className="flex justify-center items-center min-h-screen">
-  // 			<div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-primary"></div>
-  // 			<span className="ml-3">데이터를 불러오는 중...</span>
-  // 		</div>
-  // 	);
-  // }
+  //mock 데이터로 인해 항상 payload가 존재하므로 로딩 화면이 표시되지 않음
+  if (!payload || !selectedOption || !federatedLearningData) {
+    return (
+      <div className="flex justify-center items-center min-h-screen">
+        <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-primary"></div>
+        <span className="ml-3">데이터를 불러오는 중...</span>
+      </div>
+    );
+  }
 
   return (
     <div className="container mx-auto p-6 space-y-6">
