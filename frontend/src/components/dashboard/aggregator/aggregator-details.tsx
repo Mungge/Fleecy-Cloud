@@ -22,6 +22,8 @@ import {
 } from "@/components/ui/alert-dialog";
 import { Trash2 } from "lucide-react";
 import { toast } from "sonner";
+import { LineChart, Line, XAxis, YAxis, Tooltip, CartesianGrid } from "recharts";
+import useSWR from "swr";
 
 // 시스템 메트릭 응답
 interface SystemMetricsResponse {
@@ -45,6 +47,7 @@ interface LearningMetricsResponse {
   precision: number;
   recall: number;
   timestamp?: string;
+  run_id: string;
 }
 
 interface TrainingHistoryResponse {
@@ -124,6 +127,7 @@ const AggregatorDetails: React.FC<AggregatorDetailsProps> = ({
     precision: 0,
     recall: 0,
     participantsConnected: aggregator.participants,
+	runId: "",
   });
 
   const [trainingHistory, setTrainingHistory] = useState<
@@ -150,6 +154,98 @@ const AggregatorDetails: React.FC<AggregatorDetailsProps> = ({
       }
     }
     return "";
+  };
+
+  // SWR용 fetcher 함수
+  const fetcher = (url: string) => {
+    const token = getAuthToken();
+    return fetch(url, {
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${token}`,
+      },
+    }).then((r) => {
+      if (!r.ok) {
+        throw new Error(`HTTP error! status: ${r.status}`);
+      }
+      return r.json();
+    });
+  };
+
+  // MLflow 메트릭 차트 컴포넌트 (useSWR 사용)
+  const MLflowMetricChart: React.FC<{ runId: string; metricKey: string }> = ({ runId, metricKey }) => {
+    const [stableData, setStableData] = useState<any>(null);
+    const { data, error, isLoading } = useSWR(
+      runId ? `http://localhost:8080/api/aggregators/${aggregator.id}/metric-history?key=${metricKey}` : null,
+      fetcher,
+      { 
+        refreshInterval: 10000, // 10초로 늘림
+        revalidateOnFocus: false,
+        dedupingInterval: 5000, // 5초로 늘림
+        errorRetryInterval: 15000, // 에러 시 15초 후 재시도
+        errorRetryCount: 3, // 최대 3번 재시도
+        shouldRetryOnError: true,
+        keepPreviousData: true, // 이전 데이터 유지
+      }
+    );
+
+    // 데이터가 성공적으로 로드되었을 때만 stableData 업데이트
+    useEffect(() => {
+      if (data && data.metrics && data.metrics.length > 0) {
+        setStableData(data);
+      }
+    }, [data]);
+
+    if (isLoading && !stableData) {
+      return (
+        <div className="flex justify-center items-center h-64">
+          <div className="animate-spin rounded-full h-8 w-8 border-t-2 border-b-2 border-primary"></div>
+        </div>
+      );
+    }
+
+    if (error && !stableData) {
+      return (
+        <div className="flex justify-center items-center h-64">
+          <div className="text-red-500 text-sm">차트 로드 실패: {error.message}</div>
+        </div>
+      );
+    }
+
+    const currentData = stableData || data;
+
+    if (!currentData) {
+      return (
+        <div className="flex justify-center items-center h-64">
+          <div className="text-gray-500 text-sm">데이터가 없습니다</div>
+        </div>
+      );
+    }
+
+    const points = (currentData?.metrics ?? []).map((m: any) => ({
+      step: m.step,
+      value: m.value,
+    }));
+
+    if (points.length === 0) {
+      return (
+        <div className="flex justify-center items-center h-64">
+          <div className="text-gray-500 text-sm">메트릭 데이터가 없습니다</div>
+        </div>
+      );
+    }
+
+    return (
+      <div className="w-full">
+        <LineChart width={600} height={300} data={points}>
+          <CartesianGrid strokeDasharray="3 3" />
+          <XAxis dataKey="step" />
+          <YAxis />
+          <Tooltip />
+          <Line type="monotone" dataKey="value" dot={false} stroke="#8884d8" strokeWidth={2} />
+        </LineChart>
+      </div>
+    );
   };
 
   // API 호출을 위한 공통 함수
@@ -264,6 +360,7 @@ const AggregatorDetails: React.FC<AggregatorDetailsProps> = ({
         f1Score: data.f1_score || 0,
         precision: data.precision || 0,
         recall: data.recall || 0,
+		    runId: data.run_id,
       }));
     } catch (error) {
       console.error("학습 메트릭 조회 실패:", error);
@@ -658,6 +755,78 @@ const AggregatorDetails: React.FC<AggregatorDetailsProps> = ({
           </div>
         </CardContent>
       </Card>
+
+	  {/* MLflow 정보 및 차트 */}
+		{aggregator.mlflowExperimentName && (
+		<Card>
+			<CardHeader>
+				<CardTitle>MLflow 실험 및 메트릭</CardTitle>
+				<CardDescription>MLflow에서 추적되는 실험 정보 및 실시간 메트릭 차트</CardDescription>
+			</CardHeader>
+			<CardContent>
+				<div className="space-y-6">
+				{/* 기본 MLflow 정보 */}
+				<div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+					<div>
+					<p className="text-sm font-medium text-muted-foreground">실험 이름</p>
+					<p className="font-mono">{aggregator.mlflowExperimentName}</p>
+					</div>
+					{aggregator.mlflowExperimentId && (
+					<div>
+						<p className="text-sm font-medium text-muted-foreground">실험 ID</p>
+						<p className="font-mono">{aggregator.mlflowExperimentId}</p>
+					</div>
+					)}
+				</div>
+
+				{/* MLflow 메트릭 차트 */}
+				{learningMetrics.runId ? (
+					<div className="space-y-4">
+					<h4 className="text-lg font-semibold">실시간 메트릭 차트</h4>
+
+					{/* 추가 메트릭들 */}
+					<div className="grid grid-cols-1 lg:grid-cols-2 gap-4 mt-4">
+						<div className="border rounded-lg p-4">
+							<h5 className="text-md font-medium mb-2">정확도 변화</h5>
+							<MLflowMetricChart 
+							runId={learningMetrics.runId} 
+							metricKey="accuracy" 
+							/>
+						</div>
+						<div className="border rounded-lg p-4">
+							<h5 className="text-md font-medium mb-2">손실 변화</h5>
+							<MLflowMetricChart 
+							runId={learningMetrics.runId} 
+							metricKey="train_loss" 
+							/>
+						</div>
+						<div className="border rounded-lg p-4">
+						<h5 className="text-md font-medium mb-2">F1 Score</h5>
+						<MLflowMetricChart 
+							runId={learningMetrics.runId} 
+							metricKey="f1_macro" 
+						/>
+						</div>
+						<div className="border rounded-lg p-4">
+						<h5 className="text-md font-medium mb-2">Precision</h5>
+						<MLflowMetricChart 
+							runId={learningMetrics.runId} 
+							metricKey="precision_macro" 
+						/>
+						</div>
+					</div>
+					</div>
+				) : (
+					<div className="text-center py-8 text-muted-foreground">
+					<p>MLflow Run ID가 없어서 차트를 표시할 수 없습니다.</p>
+					<p className="text-sm mt-2">학습이 시작되면 차트가 표시됩니다.</p>
+					</div>
+				)}
+				</div>
+			</CardContent>
+			</Card>
+		)}
+
 
       {/* 비용 정보 */}
       {aggregator.cost && (
