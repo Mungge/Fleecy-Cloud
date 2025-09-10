@@ -36,6 +36,7 @@ import {
 	AGGREGATION_ALGORITHMS,
 	MODEL_TYPES,
 	SUPPORTED_FILE_FORMATS,
+	SELECTION_STRATEGIES,
 } from "../constants";
 import { CreateJobFormHookReturn } from "../types";
 import { toast } from "sonner";
@@ -303,6 +304,37 @@ export const CreateJobDialog = ({
 											</Select>
 											<FormDescription>
 												연합학습에 사용될 모델의 유형을 선택하세요.
+											</FormDescription>
+											<FormMessage />
+										</FormItem>
+									)}
+								/>
+
+								<FormField
+									control={form.control}
+									name="modelEvaluation"
+									render={({ field }) => (
+										<FormItem>
+											<FormLabel>모델 평가지표</FormLabel>
+											<Select
+												onValueChange={field.onChange}
+												defaultValue={field.value}
+											>
+												<FormControl>
+													<SelectTrigger>
+														<SelectValue placeholder="모델 평가지표 선택" />
+													</SelectTrigger>
+												</FormControl>
+												<SelectContent>
+													{SELECTION_STRATEGIES.map((type) => (
+														<SelectItem key={type.id} value={type.id}>
+															{type.name}
+														</SelectItem>
+													))}
+												</SelectContent>
+											</Select>
+											<FormDescription>
+												모델 평가에 사용될 지표를 선택하세요.
 											</FormDescription>
 											<FormMessage />
 										</FormItem>

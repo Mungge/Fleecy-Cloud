@@ -42,6 +42,7 @@ type ApiRound = {
 
 type ApiResponse = {
 	data?: {
+		name?: string;
 		aggregatorId?: string;
 		federatedLearningId?: string;
 		lastUpdated?: string;
@@ -66,6 +67,7 @@ type Round = {
 };
 
 type GlobalModelData = {
+	name: string;
 	aggregatorId: string;
 	federatedLearningId: string;
 	lastUpdated: string;
@@ -122,6 +124,7 @@ export const GlobalModelManagementDialog = ({
 			// API 응답을 GlobalModelData로 변환
 			if (apiResponse.data?.trainingHistory && apiResponse.data.trainingHistory.length > 0) {
 				const transformedData: GlobalModelData = {
+					name: apiResponse.data.name || job.name,
 					aggregatorId: apiResponse.data.aggregatorId || "",
 					federatedLearningId: apiResponse.data.federatedLearningId || job.id,
 					lastUpdated: apiResponse.data.lastUpdated || new Date().toISOString(),
@@ -189,14 +192,24 @@ export const GlobalModelManagementDialog = ({
 
 	const getBestRound = (rounds: Round[]) => {
 		if (!rounds.length) return null;
-		
-		// loss가 가장 낮은 라운드 찾기
-		let bestRound = rounds[0];
-		for (const round of rounds) {
-			if (round.loss && bestRound.loss && round.loss < bestRound.loss) {
-				bestRound = round;
+		const evaluation = modelData && modelData.name ? sessionStorage.getItem(modelData.name) || "accuracy" : "accuracy";
+		const bestRound = rounds.reduce((best, current) => {
+			const bestValue = best[evaluation as keyof Round];
+			const currentValue = current[evaluation as keyof Round];
+	
+			// 현재 라운드의 평가 지표 값이 유효하지 않다면, 이전의 best를 그대로 반환
+			if (currentValue === null || currentValue === undefined) {
+				return best;
 			}
-		}
+
+			// bestValue가 undefined인 경우를 처리
+			if (bestValue === undefined) {
+				return current;
+			}
+			
+			// '더 좋은' 라운드를 결정합니다.
+			return currentValue > bestValue ? current : best;
+		});
 		
 		return bestRound;
 	};
@@ -235,7 +248,7 @@ export const GlobalModelManagementDialog = ({
 			const a = document.createElement("a");
 			a.style.display = "none";
 			a.href = url;
-			a.download = `global_model_${modelData?.aggregatorId}_round-${round.toString().padStart(3, '0')}.pt`;
+			a.download = `global_model_${modelData?.name}_round-${round.toString().padStart(3, '0')}.pt`;
 			document.body.appendChild(a);
 			a.click();
 			window.URL.revokeObjectURL(url);
@@ -256,6 +269,23 @@ export const GlobalModelManagementDialog = ({
             setError(errorMessage);
 		}
 	};
+
+	const bestRound = getBestRound(modelData?.rounds || []);
+	const evaluationMetric = modelData?.name ? sessionStorage.getItem(modelData.name) || "accuracy" : "accuracy";
+	const displayValue = () => {
+		// bestRound가 없거나 round가 1이면 "N/A"
+		if (!bestRound) {
+		  return "N/A";
+		}
+		// bestRound가 있으면, 대괄호[]를 사용해 동적으로 평가 지표 값을 가져옵니다.
+		// toFixed(4)를 사용해 소수점 4자리까지만 표시하도록 했습니다 (필요에 따라 조절).
+		const value = bestRound[evaluationMetric as keyof Round];
+		if (typeof value === 'number') {
+			return value.toFixed(4);
+		}
+
+		return value || "N/A";
+	  };
 
 	return (
 		<Dialog open={isOpen} onOpenChange={setIsOpen}>
@@ -335,15 +365,15 @@ export const GlobalModelManagementDialog = ({
 										</div>
 										<div className="text-center p-3 bg-muted rounded-lg">
 											<div className="text-lg font-bold text-blue-600">
-												{getBestRound(modelData.rounds)?.loss ? getBestRound(modelData.rounds)!.loss.toFixed(4) : "N/A"}
+												{displayValue()}
 											</div>
-											<div className="text-muted-foreground">최저 손실값</div>
+											<div className="text-muted-foreground">최대 {evaluationMetric}</div>
 										</div>
 										<div className="text-center p-3 bg-muted rounded-lg">
 											<div className="text-lg font-bold text-purple-600">
 												{getBestRound(modelData.rounds) ? `라운드 ${getBestRound(modelData.rounds)!.round}` : "N/A"}
 											</div>
-											<div className="text-muted-foreground">최고 성능 라운드</div>
+											<div className="text-muted-foreground">사용자 설정 최고 성능 라운드</div>
                                             {getBestRound(modelData.rounds) && (
                                             <div className="mt-4">
                                                 <Button

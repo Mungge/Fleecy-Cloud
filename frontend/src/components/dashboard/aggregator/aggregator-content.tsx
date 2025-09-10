@@ -299,10 +299,11 @@ const AggregatorManagementContent: React.FC = () => {
   const formatCurrency = (amount: number) => {
     return new Intl.NumberFormat("ko-KR", {
       style: "currency",
-      currency: "USD",
+      currency: "KRW",
+      minimumFractionDigits: 0,
+      maximumFractionDigits: 0,
     }).format(amount);
   };
-
   // 상세보기 모드
   if (showDetails && selectedAggregator) {
     const aggregatorWithAccuracy = {
@@ -339,7 +340,7 @@ const AggregatorManagementContent: React.FC = () => {
       <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">총 Aggregator</CardTitle>
+            <CardTitle className="text-sm font-medium">총 집계자</CardTitle>
             <span className="h-4 w-4 text-muted-foreground">
               <Monitor className="h-4 w-4 text-muted-foreground" />
             </span>
@@ -372,14 +373,16 @@ const AggregatorManagementContent: React.FC = () => {
         </Card>
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">총 비용</CardTitle>
+            <CardTitle className="text-sm font-medium">
+              총 예상 비용 (월)
+            </CardTitle>
             <Wallet className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">
               {formatCurrency(
                 aggregators.reduce(
-                  (total, agg) => total + (agg.cost?.current || 0),
+                  (total, agg) => total + (agg.cost?.estimated || 0),
                   0
                 )
               )}
@@ -403,7 +406,7 @@ const AggregatorManagementContent: React.FC = () => {
       {/* Aggregator 목록 */}
       <Card>
         <CardHeader>
-          <CardTitle>연합학습 집계자가 인스턴스</CardTitle>
+          <CardTitle>연합학습 집계자 인스턴스</CardTitle>
           <CardDescription>
             활성화된 연합학습 집계자 인스턴스 목록
           </CardDescription>
@@ -496,7 +499,8 @@ const AggregatorManagementContent: React.FC = () => {
                         </div>
                         {aggregator.cost && (
                           <div className="font-medium text-foreground">
-                            비용: {formatCurrency(aggregator.cost.current)}
+                            예상 비용 (월):{" "}
+                            {formatCurrency(aggregator.cost.estimated)}
                           </div>
                         )}
                       </div>

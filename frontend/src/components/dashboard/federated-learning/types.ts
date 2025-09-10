@@ -16,6 +16,7 @@ export const formSchema = z.object({
     participants: z
       .array(z.string())
       .min(1, "최소 1개 이상의 참여자가 필요합니다"),
+    modelEvaluation: z.string().min(1, "모델 평가 기준을 선택해주세요"),
   });
   
   export type FormValues = z.infer<typeof formSchema>;

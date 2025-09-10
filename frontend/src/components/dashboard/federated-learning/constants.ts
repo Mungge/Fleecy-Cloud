@@ -15,6 +15,12 @@ export const AGGREGATION_ALGORITHMS = [
     { id: "tabular", name: "테이블 형식 데이터" },
   ];
   
+ export const SELECTION_STRATEGIES = [
+    { id: "accuracy", name: "정확도" },
+    { id: "f1-score", name: "F1-score" },
+    { id: "precision", name: "정밀도" },
+    { id: "recall", name: "재현율" },
+  ]; 
   // 파일 형식
   export const SUPPORTED_FILE_FORMATS = ".py";
   

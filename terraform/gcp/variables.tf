@@ -9,6 +9,11 @@ variable "project_name" {
   type        = string
 }
 
+variable "service_account_id" {
+  description = "Service Account ID (GCP 규칙에 맞게 변환된 값)"
+  type        = string
+}
+
 variable "region" {
   description = "GCP 리전"
   type        = string

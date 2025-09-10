@@ -55,21 +55,32 @@ class DatabaseManager:
                 for row in cursor.fetchall()
             ]
     
-    def get_latency_matrix(self) -> Dict[str, Dict[str, float]]:
-        """지연시간 매트릭스 조회"""
+    def get_latency_matrix(self) -> Dict[str, Dict[str, Dict[str, float]]]:
+        """지연시간 매트릭스 조회 (avg, min, max 포함)"""
         with self.conn.cursor() as cursor:
             cursor.execute("""
-                SELECT sr.name as source_region, tr.name as target_region, cl.avg_latency
+                SELECT sr.name as source_region, tr.name as target_region, 
+                       cl.avg_latency, cl.min_latency, cl.max_latency
                 FROM cloud_latency cl
                 JOIN regions sr ON cl.source_region_id = sr.id
                 JOIN regions tr ON cl.target_region_id = tr.id
             """)
             
             matrix = {}
-            for source, target, latency in cursor.fetchall():
+            for source, target, avg_latency, min_latency, max_latency in cursor.fetchall():
                 if source not in matrix:
                     matrix[source] = {}
-                matrix[source][target] = float(latency)
+                
+                # NULL 값 처리 - avg_latency가 있으면 min/max도 같은 값으로 설정
+                avg_val = float(avg_latency) if avg_latency is not None else 0.0
+                min_val = float(min_latency) if min_latency is not None else avg_val
+                max_val = float(max_latency) if max_latency is not None else avg_val
+                
+                matrix[source][target] = {
+                    'avg': avg_val,
+                    'min': min_val,
+                    'max': max_val
+                }
             
             return matrix
     
@@ -113,21 +124,26 @@ class AggregatorOptimizer:
         for price in self.price_data:
             region = price['region_name']
             
-            # 지연시간 계산 - 데이터가 없어도 기본값 사용
+            # 지연시간 계산 - 합계값과 최대값 사용
+            # 방향: aggregator_region → participant_region
             latencies = []
+            max_latencies = []
             for participant in self.participants:
                 participant_region = participant.get('region', 'unknown')
                 
-                if (participant_region in self.latency_matrix and 
-                    region in self.latency_matrix[participant_region]):
-                    latencies.append(self.latency_matrix[participant_region][region])
+                # aggregator_region → participant_region 방향으로 조회
+                if (region in self.latency_matrix and 
+                    participant_region in self.latency_matrix[region]):
+                    latency_data = self.latency_matrix[region][participant_region]
+                    latencies.append(latency_data['avg'])
+                    max_latencies.append(latency_data['max'])
             
             if not latencies:
-                avg_latency = 3  # 기본값 1초
-                max_latency = 5
+                avg_latency = 3  # 기본값 3ms
+                max_latency = 5  # 기본값 5ms
             else:    
-                avg_latency = sum(latencies) / len(latencies)
-                max_latency = max(latencies)
+                avg_latency = sum(latencies)  # 평균값이 아닌 합계값 사용
+                max_latency = sum(max_latencies)  # 최대값들의 합계 사용
                 
             monthly_cost = price['hourly_price'] * 24 * 30 * USD_TO_KRW
             

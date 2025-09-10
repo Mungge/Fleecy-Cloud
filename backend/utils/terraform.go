@@ -8,10 +8,75 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"regexp"
 	"strings"
 
 	tfexec "github.com/hashicorp/terraform-exec/tfexec"
 )
+
+// sanitizeGCPServiceAccountID는 GCP Service Account ID 규칙에 맞게 이름을 변환합니다
+// GCP 규칙: ^[a-z](?:[-a-z0-9]{4,28}[a-z0-9])$ (6-30자, 시작과 끝이 문자)
+func sanitizeGCPServiceAccountID(name string) string {
+	// 소문자로 변환
+	name = strings.ToLower(name)
+	
+	// 허용되지 않는 문자를 하이픈으로 변환
+	reg := regexp.MustCompile(`[^a-z0-9-]`)
+	name = reg.ReplaceAllString(name, "-")
+	
+	// 연속된 하이픈을 하나로 변환
+	reg = regexp.MustCompile(`-+`)
+	name = reg.ReplaceAllString(name, "-")
+	
+	// 시작과 끝의 하이픈 제거
+	name = strings.Trim(name, "-")
+	
+	// 길이 제한 (30자)
+	if len(name) > 30 {
+		name = name[:30]
+		name = strings.Trim(name, "-")
+	}
+	
+	// 최소 길이 보장 (6자)
+	if len(name) < 6 {
+		name = name + "sa"
+	}
+	
+	// 시작이 문자인지 확인
+	if len(name) > 0 && !regexp.MustCompile(`^[a-z]`).MatchString(name) {
+		name = "f" + name
+	}
+	
+	// 끝이 문자나 숫자인지 확인
+	if len(name) > 0 && !regexp.MustCompile(`[a-z0-9]$`).MatchString(name) {
+		name = name + "1"
+	}
+	
+	// 빈 문자열이면 기본값 사용
+	if name == "" {
+		name = "fleecy-sa"
+	}
+	
+	return name
+}
+
+// CleanupTerraformState는 Terraform 상태 파일들을 정리합니다
+func CleanupTerraformState(workspaceDir string) {
+	stateFiles := []string{
+		"terraform.tfstate",
+		"terraform.tfstate.backup",
+		".terraform.lock.hcl",
+		".terraform/",
+	}
+	
+	for _, file := range stateFiles {
+		filePath := filepath.Join(workspaceDir, file)
+		if err := os.RemoveAll(filePath); err != nil {
+			// 정리 실패는 로그만 남기고 계속 진행
+			fmt.Printf("Warning: Failed to cleanup %s: %v\n", filePath, err)
+		}
+	}
+}
 
 type TerraformConfig struct {
 	WorkingDir    string
@@ -34,6 +99,10 @@ type TerraformConfig struct {
 
 	// gcp 전용 자격 증명
 	ProjectID     string
+	
+	// SSH 키 정보
+	SSHPublicKey  string
+	SSHUsername   string
 }
 
 type TerraformResult struct {
@@ -154,14 +223,22 @@ aws_secret_key = "%s"
             return fmt.Errorf("GCP project_id is required for GCP deployment")
         }
 
+        // Service Account ID를 GCP 규칙에 맞게 변환 (고유성 보장을 위해 aggregator ID 일부 포함)
+        serviceAccountID := sanitizeGCPServiceAccountID(config.ProjectName + "-" + aggregatorID[:8] + "-sa")
+        
         varsContent = fmt.Sprintf(`project_id = "%s"
 region = "%s"
 zone = "%s"
+service_account_id = "%s"
+ssh_public_key_content = <<SSHKEY
+%s
+SSHKEY
+ssh_username = "%s"
 gcp_credentials_json = <<JSON
 %s
 JSON
 %s
-`, config.ProjectID, config.Region, config.Zone, config.GCPServiceAccountKey, commonVars)
+`, config.ProjectID, config.Region, config.Zone, serviceAccountID, config.SSHPublicKey, config.SSHUsername, config.GCPServiceAccountKey, commonVars)
     default:
         return fmt.Errorf("unsupported cloud provider: %s", config.CloudProvider)
     }

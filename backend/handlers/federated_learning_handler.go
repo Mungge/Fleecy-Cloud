@@ -2098,6 +2098,7 @@ func (h *FederatedLearningHandler) GetStoredTrainingHistory(c *gin.Context) {
 
 	// 응답 데이터 구성
 	response := gin.H{
+		"name" :               fl.Name,
 		"federatedLearningId": fl.ID,
 		"aggregatorId":        *fl.AggregatorID,
 		"totalRounds":         len(trainingRounds),
