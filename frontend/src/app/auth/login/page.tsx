@@ -112,47 +112,56 @@ export default function LoginPage() {
 				text: "회원가입",
 			}}
 		>
-			<form onSubmit={handleSubmit} className="space-y-4">
+			<form onSubmit={handleSubmit} className="space-y-6">
 				{error && (
-					<div className="p-3 text-sm text-red-500 bg-red-50 rounded-md">
+					<div className="p-4 text-sm text-red-600 bg-red-50 border border-red-200 rounded-lg">
 						{error}
 					</div>
 				)}
-				<div className="space-y-2">
-					<Input
-						type="email"
-						placeholder="name@example.com"
-						value={email}
-						onChange={(e) => setEmail(e.target.value)}
-						className="w-full p-2 h-12"
-						required
-					/>
-				</div>
-				<div className="space-y-2">
-					<Input
-						type="password"
-						placeholder="비밀번호"
-						value={password}
-						onChange={(e) => setPassword(e.target.value)}
-						className="w-full p-2 h-12"
-						required
-					/>
+				<div className="space-y-4">
+					<div className="space-y-2">
+						<Input
+							type="email"
+							placeholder="이메일 주소"
+							value={email}
+							onChange={(e) => setEmail(e.target.value)}
+							className="w-full h-12 px-4 border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all"
+							required
+						/>
+					</div>
+					<div className="space-y-2">
+						<Input
+							type="password"
+							placeholder="비밀번호"
+							value={password}
+							onChange={(e) => setPassword(e.target.value)}
+							className="w-full h-12 px-4 border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all"
+							required
+						/>
+					</div>
 				</div>
 
 				<Button
 					type="submit"
-					className="w-full h-12 bg-black text-white hover:bg-gray-800"
+					className="w-full h-12 bg-black text-white hover:bg-gray-800 rounded-lg font-medium transition-all duration-200"
 					disabled={isLoading}
 				>
-					{isLoading ? "로그인 중..." : "이메일로 로그인"}
+					{isLoading ? (
+						<div className="flex items-center space-x-2">
+							<div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+							<span>로그인 중...</span>
+						</div>
+					) : (
+						"이메일로 로그인"
+					)}
 				</Button>
 
-				<div className="relative">
+				<div className="relative my-6">
 					<div className="absolute inset-0 flex items-center">
 						<span className="w-full border-t border-gray-200" />
 					</div>
-					<div className="relative flex justify-center text-xs uppercase">
-						<span className="bg-white px-2 text-gray-500">
+					<div className="relative flex justify-center text-sm uppercase">
+						<span className="bg-white px-4 text-gray-500 font-medium">
 							또는 다음으로 계속
 						</span>
 					</div>
@@ -161,11 +170,11 @@ export default function LoginPage() {
 				<Button
 					type="button"
 					variant="outline"
-					className="w-full h-12 border-gray-300 flex items-center justify-center gap-2"
+					className="w-full h-12 border-2 border-gray-200 hover:border-gray-300 rounded-lg flex items-center justify-center gap-3 text-gray-700 hover:bg-gray-50 transition-all duration-200"
 					onClick={handleGitHubLogin}
 				>
 					<Github size={20} />
-					<span>GitHub</span>
+					<span className="font-medium">GitHub으로 계속하기</span>
 				</Button>
 			</form>
 		</AuthLayout>
