@@ -7,7 +7,9 @@ type CloudLatency struct {
 	SourceRegionID   int     `json:"source_region_id" gorm:"not null;index;uniqueIndex:idx_latency_unique"`
 	TargetProviderID int     `json:"target_provider_id" gorm:"not null;index;uniqueIndex:idx_latency_unique"`
 	TargetRegionID   int     `json:"target_region_id" gorm:"not null;index;uniqueIndex:idx_latency_unique"`
-	AvgLatency       float64 `json:"avg_latency" gorm:"type:decimal(8,2);index"`
+	AvgLatency       float64  `json:"avg_latency" gorm:"type:decimal(8,2);index"`
+	MinLatency       *float64 `json:"min_latency" gorm:"type:decimal(8,2);index"`
+	MaxLatency       *float64 `json:"max_latency" gorm:"type:decimal(8,2);index"`
 
 	// 관계 설정
 	SourceProvider Provider `json:"source_provider" gorm:"foreignKey:SourceProviderID"`

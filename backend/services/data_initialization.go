@@ -311,6 +311,22 @@ func initializeCloudLatencies(db *gorm.DB) error {
 			continue
 		}
 
+		// min_latency 파싱 (record[9])
+		var minLatency *float64
+		if len(record) > 9 && strings.TrimSpace(record[9]) != "" {
+			if val, err := strconv.ParseFloat(record[9], 64); err == nil {
+				minLatency = &val
+			}
+		}
+
+		// max_latency 파싱 (record[10])
+		var maxLatency *float64
+		if len(record) > 10 && strings.TrimSpace(record[10]) != "" {
+			if val, err := strconv.ParseFloat(record[10], 64); err == nil {
+				maxLatency = &val
+			}
+		}
+
 		sourceProviderName := strings.TrimSpace(record[1])
 		var sourceProviderName2 string
 		switch strings.ToUpper(sourceProviderName) {
@@ -369,6 +385,8 @@ func initializeCloudLatencies(db *gorm.DB) error {
 		if idx, exists := processedIdx[pairKey]; exists {
 			if avgLatency < cloudLatencies[idx].AvgLatency {
 				cloudLatencies[idx].AvgLatency = avgLatency
+				cloudLatencies[idx].MinLatency = minLatency
+				cloudLatencies[idx].MaxLatency = maxLatency
 			}
 			continue
 		}
@@ -379,6 +397,8 @@ func initializeCloudLatencies(db *gorm.DB) error {
 			TargetProviderID: targetProvider.ID,
 			TargetRegionID:   targetRegion.ID,
 			AvgLatency:       avgLatency,
+			MinLatency:       minLatency,
+			MaxLatency:       maxLatency,
 		}
 
 		cloudLatencies = append(cloudLatencies, cloudLatency)
