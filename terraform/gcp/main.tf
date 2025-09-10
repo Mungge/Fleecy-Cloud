@@ -135,9 +135,10 @@ resource "google_compute_instance" "main" {
     }
   }
 
-  # 메타데이터 (SSH 키는 클라우드 API를 통해 이미 설정됨)
+  # 메타데이터 (SSH 키와 시작 스크립트)
   metadata = {
     startup-script = base64decode(var.startup_script)
+    ssh-keys = "${var.ssh_username}:${var.ssh_public_key_content}"
   }
 
   # 네트워크 태그 (방화벽 규칙 적용을 위해)
@@ -157,7 +158,12 @@ resource "google_compute_instance" "main" {
 
 # VM용 서비스 계정 생성
 resource "google_service_account" "vm_service_account" {
-  account_id   = "${var.project_name}-vm-sa"
+  account_id   = var.service_account_id
   display_name = "${var.project_name} VM Service Account"
   description  = "Service account for ${var.project_name} VM instances"
+  
+  lifecycle {
+    create_before_destroy = true
+    prevent_destroy = false
+  }
 }

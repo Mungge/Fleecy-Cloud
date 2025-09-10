@@ -344,7 +344,7 @@ func (s *AggregatorService) deployWithTerraformContext(ctx context.Context, aggr
 	// 클라우드별 키페어 생성/조회
 	keyName := fmt.Sprintf("%s-%s-keypair", aggregator.ProjectName, aggregator.ID)
 
-	var privateKey string
+	var privateKey, publicKey string
 
 	switch strings.ToLower(aggregator.CloudProvider) {
 	case "aws":
@@ -354,6 +354,7 @@ func (s *AggregatorService) deployWithTerraformContext(ctx context.Context, aggr
 			return fmt.Errorf("failed to get or create AWS keypair: %v", err)
 		}
 		privateKey = keypairInfo.PrivateKey
+		publicKey = keypairInfo.PublicKey
 		log.Printf("AWS keypair created successfully: %s", keypairInfo.KeyName)
 	case "gcp":
 		log.Printf("Creating GCP keypair for aggregator %s", aggregator.ID)
@@ -368,6 +369,7 @@ func (s *AggregatorService) deployWithTerraformContext(ctx context.Context, aggr
 			return fmt.Errorf("failed to get or create GCP keypair: %v", err)
 		}
 		privateKey = keyPair.PrivateKey
+		publicKey = keyPair.PublicKey
 		log.Printf("GCP keypair created successfully: %s", keyName)
 	default:
 		return fmt.Errorf("unsupported cloud provider: %s", aggregator.CloudProvider)
@@ -376,7 +378,6 @@ func (s *AggregatorService) deployWithTerraformContext(ctx context.Context, aggr
 	// SSH 키페어를 DB에 암호화 저장 (Private Key가 있는 경우만)
 	if privateKey != "" {
 		sshKeypairService := services.NewSSHKeypairService(s.sshKeypairRepo)
-		publicKey := "" // TODO: 공개키도 저장하려면 keypairInfo에서 가져오기
 
 		_, err := sshKeypairService.SaveKeypair(
 			aggregator.ID,
@@ -429,6 +430,8 @@ func (s *AggregatorService) deployWithTerraformContext(ctx context.Context, aggr
 		AWSSecretKey:  awsSecretKey,
 		ProjectID:     projectID,
 		GCPServiceAccountKey: string(cloudConn.CredentialFile), // JSON을 문자열로 변환
+		SSHPublicKey:  publicKey,
+		SSHUsername:   "ubuntu", // GCP 기본 사용자명
 	}
 
 	// Terraform 작업공간 생성
@@ -450,6 +453,9 @@ func (s *AggregatorService) deployWithTerraformContext(ctx context.Context, aggr
 
 	// 배포 완료 후 workspace 디렉토리 정리 (성공/실패 상관없이)
 	defer func() {
+		// Terraform 상태 파일도 함께 정리
+		utils.CleanupTerraformState(workspaceDir)
+		
 		if cleanupErr := os.RemoveAll(workspaceDir); cleanupErr != nil {
 			log.Printf("Failed to cleanup workspace directory %s: %v", workspaceDir, cleanupErr)
 		} else {
