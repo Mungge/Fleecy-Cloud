@@ -3,6 +3,8 @@ package aggregator
 import (
 	"context"
 	"net/http"
+	"regexp"
+	"strings"
 	"time"
 
 	"github.com/gin-gonic/gin"
@@ -11,6 +13,98 @@ import (
 	"github.com/Mungge/Fleecy-Cloud/utils"
 	aggregatorvalidator "github.com/Mungge/Fleecy-Cloud/validators/aggregator"
 )
+
+// sanitizeGCPName은 GCP 리소스 이름 규칙에 맞게 이름을 변환합니다
+// GCP 규칙: 소문자, 숫자, 하이픈만 허용, 1-63자, 시작과 끝은 문자나 숫자
+func sanitizeGCPName(name string) string {
+	// 소문자로 변환
+	name = strings.ToLower(name)
+	
+	// 허용되지 않는 문자를 하이픈으로 변환
+	reg := regexp.MustCompile(`[^a-z0-9-]`)
+	name = reg.ReplaceAllString(name, "-")
+	
+	// 연속된 하이픈을 하나로 변환
+	reg = regexp.MustCompile(`-+`)
+	name = reg.ReplaceAllString(name, "-")
+	
+	// 시작과 끝의 하이픈 제거
+	name = strings.Trim(name, "-")
+	
+	// 길이 제한 (63자)
+	if len(name) > 63 {
+		name = name[:63]
+		name = strings.Trim(name, "-")
+	}
+	
+	// 빈 문자열이면 기본값 사용
+	if name == "" {
+		name = "fleecy-project"
+	}
+	
+	return name
+}
+
+// sanitizeGCPServiceAccountID는 GCP Service Account ID 규칙에 맞게 이름을 변환합니다
+// GCP 규칙: ^[a-z](?:[-a-z0-9]{4,28}[a-z0-9])$ (6-30자, 시작과 끝이 문자)
+func sanitizeGCPServiceAccountID(name string) string {
+	// 소문자로 변환
+	name = strings.ToLower(name)
+	
+	// 허용되지 않는 문자를 하이픈으로 변환
+	reg := regexp.MustCompile(`[^a-z0-9-]`)
+	name = reg.ReplaceAllString(name, "-")
+	
+	// 연속된 하이픈을 하나로 변환
+	reg = regexp.MustCompile(`-+`)
+	name = reg.ReplaceAllString(name, "-")
+	
+	// 시작과 끝의 하이픈 제거
+	name = strings.Trim(name, "-")
+	
+	// 길이 제한 (30자)
+	if len(name) > 30 {
+		name = name[:30]
+		name = strings.Trim(name, "-")
+	}
+	
+	// 최소 길이 보장 (6자)
+	if len(name) < 6 {
+		name = name + "sa"
+	}
+	
+	// 시작이 문자인지 확인
+	if len(name) > 0 && !regexp.MustCompile(`^[a-z]`).MatchString(name) {
+		name = "f" + name
+	}
+	
+	// 끝이 문자나 숫자인지 확인
+	if len(name) > 0 && !regexp.MustCompile(`[a-z0-9]$`).MatchString(name) {
+		name = name + "1"
+	}
+	
+	// 빈 문자열이면 기본값 사용
+	if name == "" {
+		name = "fleecy-sa"
+	}
+	
+	return name
+}
+
+// getZoneName은 클라우드 프로바이더에 따라 올바른 존/가용영역 이름을 반환합니다
+func getZoneName(cloudProvider, region string) string {
+	switch strings.ToLower(cloudProvider) {
+	case "aws":
+		// AWS 형식: us-east-1a, us-east-1b, us-east-1c
+		return region + "a"
+	case "gcp":
+		// GCP 형식: us-central1-a, us-central1-b, us-central1-c
+		return region + "-a"
+	default:
+		// 기본값 (AWS 형식)
+		return region + "a"
+	}
+}
 
 // AggregatorHandler는 Aggregator 관련 API 핸들러입니다
 type AggregatorHandler struct {
@@ -141,8 +235,8 @@ func (h *AggregatorHandler) CreateAggregator(c *gin.Context) {
 		InstanceType:  request.InstanceType,
 		UserID:        userID,
 		CloudProvider: request.CloudProvider,
-		ProjectName:   request.Name + "-project",
-		Zone:          request.Region + "a",
+		ProjectName:   sanitizeGCPName(request.Name + "-project"),
+		Zone:          getZoneName(request.CloudProvider, request.Region),
 		EstimatedCost: request.EstimatedCost,
 	}
 
