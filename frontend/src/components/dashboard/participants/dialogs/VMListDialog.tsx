@@ -96,7 +96,6 @@ export function VMListDialog({
                           스펙 (CPU/RAM/Disk)
                         </TableHead>
                         <TableHead className="w-[220px]">IP 주소</TableHead>
-                        <TableHead className="w-[140px]">최적 VM</TableHead>
                       </TableRow>
                     </TableHeader>
                     <TableBody>
@@ -189,19 +188,6 @@ export function VMListDialog({
                                   </span>
                                 )}
                               </div>
-                            </TableCell>
-                            <TableCell className="align-top">
-                              {isOptimalVM ? (
-                                <Badge
-                                  variant="secondary"
-                                  className="bg-green-100 text-green-800 border-green-300"
-                                >
-                                  <CheckCircle className="h-3 w-3 mr-1" />
-                                  최적 VM
-                                </Badge>
-                              ) : (
-                                <span className="text-sm text-gray-400">-</span>
-                              )}
                             </TableCell>
                           </TableRow>
                         );
