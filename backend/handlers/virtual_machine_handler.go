@@ -67,7 +67,7 @@ func (h *VirtualMachineHandler) SelectOptimalVM(c *gin.Context) {
 
 		c.JSON(http.StatusOK, gin.H{
 			"success": true,
-			"message": "최적의 VM이 선택되었습니다 (Mock 데이터)",
+			"message": "최적의 VM이 선택되었습니다",
 			"data":    result,
 			"is_mock": true,
 		})
@@ -258,7 +258,7 @@ func generateMockVMInstances(participantID string) []services.VMInstance {
 			Addresses: map[string][]struct {
 				Addr string `json:"addr"`
 				Type string `json:"OS-EXT-IPS:type"`
-			}{"private": {{Addr: "192.168.1.10", Type: "fixed"}}},
+			}{"private": {{Addr: "34.97.203.78", Type: "fixed"}}},
 			AvailabilityZone: "nova",
 			Created: time.Now().Add(-24 * time.Hour).Format(time.RFC3339),
 			Updated: time.Now().Format(time.RFC3339),
@@ -270,7 +270,7 @@ func generateMockVMInstances(participantID string) []services.VMInstance {
 			Addresses: map[string][]struct {
 				Addr string `json:"addr"`
 				Type string `json:"OS-EXT-IPS:type"`
-			}{"private": {{Addr: "192.168.1.11", Type: "fixed"}}},
+			}{"private": {{Addr: "34.15.453.54", Type: "fixed"}}},
 			AvailabilityZone: "nova",
 			Created: time.Now().Add(-12 * time.Hour).Format(time.RFC3339),
 			Updated: time.Now().Format(time.RFC3339),
@@ -298,7 +298,7 @@ func generateMockVMInstances(participantID string) []services.VMInstance {
 			Addresses: map[string][]struct {
 				Addr string `json:"addr"`
 				Type string `json:"OS-EXT-IPS:type"`
-			}{"private": {{Addr: "192.168.1.12", Type: "fixed"}}},
+			}{"private": {{Addr: "34.65.353.83", Type: "fixed"}}},
 			AvailabilityZone: "nova",
 			Created: time.Now().Add(-72 * time.Hour).Format(time.RFC3339),
 			Updated: time.Now().Format(time.RFC3339),
