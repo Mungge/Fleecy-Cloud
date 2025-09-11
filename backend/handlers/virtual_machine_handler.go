@@ -252,9 +252,9 @@ func calculateVMStats(vmInstances []services.VMInstance, isMockData bool) map[st
 func generateMockVMInstances(participantID string) []services.VMInstance {
 	return []services.VMInstance{
 		{
-			ID: fmt.Sprintf("mock-vm-1-%s", participantID),
-			Name: "저사양-테스트VM-1", Status: "ACTIVE", PowerState: 1,
-			Flavor: services.FlavorDetails{ID: "flavor-small", Name: "small", VCPUs: 1, RAM: 2048, Disk: 20},
+			ID: fmt.Sprintf("vm-001-%s", participantID),
+			Name: "vm-001", Status: "ACTIVE", PowerState: 1,
+			Flavor: services.FlavorDetails{ID: "flavor-large", Name: "large", VCPUs: 4, RAM: 8192, Disk: 40},
 			Addresses: map[string][]struct {
 				Addr string `json:"addr"`
 				Type string `json:"OS-EXT-IPS:type"`
@@ -264,9 +264,9 @@ func generateMockVMInstances(participantID string) []services.VMInstance {
 			Updated: time.Now().Format(time.RFC3339),
 		},
 		{
-			ID: fmt.Sprintf("mock-vm-2-%s", participantID),
-			Name: "중사양-테스트VM-2", Status: "ACTIVE", PowerState: 1,
-			Flavor: services.FlavorDetails{ID: "flavor-medium", Name: "medium", VCPUs: 2, RAM: 4096, Disk: 50},
+			ID: fmt.Sprintf("vm-002-%s", participantID),
+			Name: "vm-002", Status: "ACTIVE", PowerState: 1,
+			Flavor: services.FlavorDetails{ID: "flavor-medium", Name: "medium", VCPUs: 2, RAM: 4096, Disk: 20},
 			Addresses: map[string][]struct {
 				Addr string `json:"addr"`
 				Type string `json:"OS-EXT-IPS:type"`
@@ -276,32 +276,32 @@ func generateMockVMInstances(participantID string) []services.VMInstance {
 			Updated: time.Now().Format(time.RFC3339),
 		},
 		{
-			ID: fmt.Sprintf("mock-vm-3-%s", participantID),
-			Name: "고사양-테스트VM-3", Status: "ACTIVE", PowerState: 1,
-			Flavor: services.FlavorDetails{ID: "flavor-large", Name: "large", VCPUs: 4, RAM: 8192, Disk: 100},
+			ID: fmt.Sprintf("vm-003-%s", participantID),
+			Name: "vm-003", Status: "INACTIVE", PowerState: 4,
+			Flavor: services.FlavorDetails{ID: "flavor-xlarge", Name: "xlarge", VCPUs: 8, RAM: 16384, Disk: 80},
+			AvailabilityZone: "nova",
+			Created: time.Now().Add(-6 * time.Hour).Format(time.RFC3339),
+			Updated: time.Now().Add(-2 * time.Hour).Format(time.RFC3339),
+		},
+		{
+			ID: fmt.Sprintf("vm-004-%s", participantID),
+			Name: "vm-004", Status: "INACTIVE", PowerState: 4,
+			Flavor: services.FlavorDetails{ID: "flavor-medium", Name: "medium", VCPUs: 2, RAM: 4096, Disk: 20},
+			AvailabilityZone: "nova",
+			Created: time.Now().Add(-48 * time.Hour).Format(time.RFC3339),
+			Updated: time.Now().Add(-1 * time.Hour).Format(time.RFC3339),
+		},
+		{
+			ID: fmt.Sprintf("vm-005-%s", participantID),
+			Name: "vm-005", Status: "ACTIVE", PowerState: 1,
+			Flavor: services.FlavorDetails{ID: "flavor-small", Name: "small", VCPUs: 1, RAM: 1024, Disk: 10},
 			Addresses: map[string][]struct {
 				Addr string `json:"addr"`
 				Type string `json:"OS-EXT-IPS:type"`
 			}{"private": {{Addr: "192.168.1.12", Type: "fixed"}}},
 			AvailabilityZone: "nova",
-			Created: time.Now().Add(-6 * time.Hour).Format(time.RFC3339),
-			Updated: time.Now().Format(time.RFC3339),
-		},
-		{
-			ID: fmt.Sprintf("mock-vm-4-%s", participantID),
-			Name: "오프라인-테스트VM-4", Status: "SHUTOFF", PowerState: 4,
-			Flavor: services.FlavorDetails{ID: "flavor-medium", Name: "medium", VCPUs: 2, RAM: 4096, Disk: 40},
-			AvailabilityZone: "nova",
-			Created: time.Now().Add(-48 * time.Hour).Format(time.RFC3339),
-			Updated: time.Now().Add(-2 * time.Hour).Format(time.RFC3339),
-		},
-		{
-			ID: fmt.Sprintf("mock-vm-5-%s", participantID),
-			Name: "에러-테스트VM-5", Status: "ERROR", PowerState: 0,
-			Flavor: services.FlavorDetails{ID: "flavor-small", Name: "small", VCPUs: 1, RAM: 1024, Disk: 10},
-			AvailabilityZone: "nova",
 			Created: time.Now().Add(-72 * time.Hour).Format(time.RFC3339),
-			Updated: time.Now().Add(-1 * time.Hour).Format(time.RFC3339),
+			Updated: time.Now().Format(time.RFC3339),
 		},
 	}
 }
