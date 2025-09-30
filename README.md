@@ -313,7 +313,7 @@ npm run dev:all
 
 ## 6. 소개 자료 및 시연 영상
 ### 6.1. 프로젝트 소개 자료
-[📑뭉게구름 발표자료](docs/03.발표자료/발표자료.pdf)
+[📑뭉게구름 발표자료](docs/presentation/presentation.pdf)
 
 ### 6.2 시연 영상
 [![🎥뭉게구름 졸업과제 영상](http://img.youtube.com/vi/KugrTo0gUVo/0.jpg)](https://youtu.be/KugrTo0gUVo)
